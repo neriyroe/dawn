@@ -66,9 +66,10 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
 SharedTextureMemory::SharedTextureMemory(Device* device,
                                          StringView label,
                                          SharedTextureMemoryProperties properties,
+                                         wgpu::TextureDimension dimension,
                                          ComPtr<ID3D12Resource> resource,
                                          Ref<d3d::KeyedMutex> keyedMutex)
-    : d3d::SharedTextureMemory(device, label, properties),
+    : d3d::SharedTextureMemory(device, label, properties, dimension),
       mResource(std::move(resource)),
       mKeyedMutex(std::move(keyedMutex)) {}
 
@@ -80,27 +81,40 @@ SharedTextureMemory::CreateSharedTextureMemoryFromD3D12Resource(
     ComPtr<ID3D12Resource> d3d12Resource,
     Ref<d3d::KeyedMutex> keyedMutex) {
     D3D12_RESOURCE_DESC desc = d3d12Resource->GetDesc();
-    DAWN_INVALID_IF(desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-                    "Resource dimension (%d) was not Texture2D", desc.Dimension);
-    DAWN_INVALID_IF(desc.DepthOrArraySize != 1, "Resource DepthOrArraySize (%d) was not 1",
+    DAWN_INVALID_IF(desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D &&
+                        desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE3D,
+                    "Resource dimension (%d) was not Texture2D or Texture3D", desc.Dimension);
+
+    // A Texture3D's DepthOrArraySize is its depth and becomes the texture's depthOrArrayLayers; a
+    // Texture2D is still restricted to a single array layer.
+    const bool is3D = desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D;
+    const uint32_t depthOrArrayLayers = is3D ? uint32_t{desc.DepthOrArraySize} : 1u;
+    DAWN_INVALID_IF(!is3D && desc.DepthOrArraySize != 1, "Resource DepthOrArraySize (%d) was not 1",
                     desc.DepthOrArraySize);
     DAWN_INVALID_IF(desc.MipLevels != 1, "Resource MipLevels (%d) was not 1", desc.MipLevels);
     DAWN_INVALID_IF(desc.SampleDesc.Count != 1, "Resource SampleDesc.Count (%d) was not 1",
                     desc.SampleDesc.Count);
 
+    // A 3D resource is bounded by maxTextureDimension3D on every axis, a 2D one by
+    // maxTextureDimension2D.
     const CombinedLimits& limits = device->GetLimits();
-    DAWN_INVALID_IF(desc.Width > limits.v1.maxTextureDimension2D,
-                    "Resource Width (%u) exceeds maxTextureDimension2D (%u).", desc.Width,
-                    limits.v1.maxTextureDimension2D);
-    DAWN_INVALID_IF(desc.Height > limits.v1.maxTextureDimension2D,
-                    "Resource Height (%u) exceeds maxTextureDimension2D (%u).", desc.Height,
-                    limits.v1.maxTextureDimension2D);
+    const uint32_t maxDimension =
+        is3D ? limits.v1.maxTextureDimension3D : limits.v1.maxTextureDimension2D;
+    const char* maxDimensionName = is3D ? "maxTextureDimension3D" : "maxTextureDimension2D";
+    DAWN_INVALID_IF(desc.Width > maxDimension, "Resource Width (%u) exceeds %s (%u).", desc.Width,
+                    maxDimensionName, maxDimension);
+    DAWN_INVALID_IF(desc.Height > maxDimension, "Resource Height (%u) exceeds %s (%u).",
+                    desc.Height, maxDimensionName, maxDimension);
+    DAWN_INVALID_IF(depthOrArrayLayers > maxDimension,
+                    "Resource DepthOrArraySize (%u) exceeds %s (%u).", depthOrArrayLayers,
+                    maxDimensionName, maxDimension);
 
     DAWN_INVALID_IF(!(desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS),
                     "Resource did not have D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS flag");
 
     SharedTextureMemoryProperties properties;
-    properties.size = {static_cast<uint32_t>(desc.Width), static_cast<uint32_t>(desc.Height), 1};
+    properties.size = {static_cast<uint32_t>(desc.Width), static_cast<uint32_t>(desc.Height),
+                       depthOrArrayLayers};
 
     DAWN_TRY_ASSIGN(properties.format, d3d::FromUncompressedColorDXGITextureFormat(desc.Format));
 
@@ -122,7 +136,9 @@ SharedTextureMemory::CreateSharedTextureMemoryFromD3D12Resource(
                        renderAttachmentUsage;
 
     auto result = AcquireRef(new SharedTextureMemory(
-        device, label, properties, std::move(d3d12Resource), std::move(keyedMutex)));
+        device, label, properties,
+        is3D ? wgpu::TextureDimension::e3D : wgpu::TextureDimension::e2D,
+        std::move(d3d12Resource), std::move(keyedMutex)));
     result->Initialize();
     return result;
 }

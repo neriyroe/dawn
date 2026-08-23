@@ -37,7 +37,10 @@ class Device;
 
 class SharedTextureMemory : public SharedTextureMemoryBase {
   protected:
-    SharedTextureMemory(Device* device, StringView label, SharedTextureMemoryProperties properties);
+    SharedTextureMemory(Device* device,
+                        StringView label,
+                        SharedTextureMemoryProperties properties,
+                        wgpu::TextureDimension dimension = wgpu::TextureDimension::e2D);
 
     MaybeError BeginAccessImpl(TextureBase* texture,
                                const UnpackedPtr<BeginAccessDescriptor>& descriptor) override;

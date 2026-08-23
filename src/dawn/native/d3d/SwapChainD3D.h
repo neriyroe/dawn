@@ -30,6 +30,7 @@
 
 #include <vector>
 
+#include "src/dawn/common/SystemHandle.h"
 #include "src/dawn/native/IntegerTypes.h"
 #include "src/dawn/native/SwapChain.h"
 #include "src/dawn/native/d3d/d3d_platform.h"
@@ -45,6 +46,11 @@ class Texture;
 // D3D11 manages buffers and we can only read and write the buffer with index 0, but for D3D12
 // we need to manage all buffers by ourselves.
 class SwapChain : public SwapChainBase {
+  public:
+    // The DXGI frame-latency waitable object, or nullptr when the swapchain wasn't created with
+    // DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT. Stays owned by this swapchain.
+    HANDLE GetFrameLatencyWaitableObject() const;
+
   protected:
     using SwapChainBase::SwapChainBase;
     ~SwapChain() override;
@@ -57,7 +63,7 @@ class SwapChain : public SwapChainBase {
     virtual MaybeError CollectSwapChainBuffers() = 0;
     // Calls DetachFromSurface but also synchronously waits until all references to the
     // swapchain and buffers are removed, as that's a constraint for some DXGI operations.
-    virtual MaybeError DetachAndWaitForDeallocation() = 0;
+    MaybeError DetachAndWaitForDeallocation() override = 0;
 
     MaybeError PresentDXGISwapChain();
     void ReleaseDXGISwapChain();
@@ -79,6 +85,8 @@ class SwapChain : public SwapChainBase {
 
     Config mConfig;
     ComPtr<IDXGISwapChain3> mDXGISwapChain;
+    // Acquired with the DXGI swapchain and closed with it.
+    SystemHandle mFrameLatencyWaitableObject;
 };
 
 }  // namespace dawn::native::d3d

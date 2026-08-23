@@ -98,6 +98,12 @@ void SwapChainBase::DetachFromSurface() {
     }
 }
 
+MaybeError SwapChainBase::DetachAndWaitForDeallocation() {
+    // Backends that must wait for the GPU before the surface can be reconfigured override this.
+    DetachFromSurface();
+    return {};
+}
+
 void SwapChainBase::SetIsAttached() {
     mAttached = true;
 }

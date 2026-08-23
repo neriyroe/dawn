@@ -85,8 +85,9 @@ SharedTextureMemoryBase::SharedTextureMemoryBase(DeviceBase* device,
 
 SharedTextureMemoryBase::SharedTextureMemoryBase(DeviceBase* device,
                                                  StringView label,
-                                                 const SharedTextureMemoryProperties& properties)
-    : SharedResourceMemory(device, label) {
+                                                 const SharedTextureMemoryProperties& properties,
+                                                 wgpu::TextureDimension dimension)
+    : SharedResourceMemory(device, label), mDimension(dimension) {
     SetProperties(properties);
     GetObjectTrackingList()->Track(this);
 }
@@ -159,6 +160,7 @@ TextureBase* SharedTextureMemoryBase::APICreateTexture(const TextureDescriptor* 
         defaultDescriptor.format = mProperties.format;
         defaultDescriptor.size = mProperties.size;
         defaultDescriptor.usage = mProperties.usage;
+        defaultDescriptor.dimension = mDimension;
         descriptor = &defaultDescriptor;
     }
 
@@ -179,10 +181,9 @@ ResultOrError<Ref<TextureBase>> SharedTextureMemoryBase::CreateTexture(
     UnpackedPtr<TextureDescriptor> descriptor;
     DAWN_TRY_ASSIGN(descriptor, ValidateAndUnpack(&reifiedDescriptor));
 
-    // Validate that there is one 2D, single-sampled subresource
-    DAWN_INVALID_IF(descriptor->dimension != wgpu::TextureDimension::e2D,
-                    "Texture dimension (%s) is not %s.", descriptor->dimension,
-                    wgpu::TextureDimension::e2D);
+    // Validate that there is one single-sampled subresource, of the memory's own dimension.
+    DAWN_INVALID_IF(descriptor->dimension != mDimension, "Texture dimension (%s) is not %s.",
+                    descriptor->dimension, mDimension);
     DAWN_INVALID_IF(descriptor->mipLevelCount != 1, "Mip level count (%u) is not 1.",
                     descriptor->mipLevelCount);
     DAWN_INVALID_IF(descriptor->sampleCount != 1, "Sample count (%u) is not 1.",

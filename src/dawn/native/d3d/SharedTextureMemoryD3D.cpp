@@ -41,8 +41,9 @@ namespace dawn::native::d3d {
 
 SharedTextureMemory::SharedTextureMemory(d3d::Device* device,
                                          StringView label,
-                                         SharedTextureMemoryProperties properties)
-    : SharedTextureMemoryBase(device, label, properties) {}
+                                         SharedTextureMemoryProperties properties,
+                                         wgpu::TextureDimension dimension)
+    : SharedTextureMemoryBase(device, label, properties, dimension) {}
 
 MaybeError SharedTextureMemory::BeginAccessImpl(
     TextureBase* texture,

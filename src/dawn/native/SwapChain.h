@@ -67,6 +67,10 @@ class SwapChainBase : public RefCounted {
     // destructor.
     void DetachFromSurface();
 
+    // Like DetachFromSurface, but also synchronously waits until all references to the swapchain
+    // and its buffers are gone, as some backends require that before the window can be reused.
+    virtual MaybeError DetachAndWaitForDeallocation();
+
     void SetIsAttached();
 
     // TODO(crbug.com/dawn/831):

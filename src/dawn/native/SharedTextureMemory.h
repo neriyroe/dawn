@@ -64,9 +64,12 @@ class SharedTextureMemoryBase : public SharedResourceMemory {
     ObjectType GetType() const override;
 
   protected:
+    // `dimension` is the dimension of the textures created from this memory. Backends that only
+    // ever import 2D resources take the default.
     SharedTextureMemoryBase(DeviceBase* device,
                             StringView label,
-                            const SharedTextureMemoryProperties& properties);
+                            const SharedTextureMemoryProperties& properties,
+                            wgpu::TextureDimension dimension = wgpu::TextureDimension::e2D);
     SharedTextureMemoryBase(DeviceBase* device,
                             const SharedTextureMemoryDescriptor* descriptor,
                             ObjectBase::ErrorTag tag);
@@ -89,6 +92,8 @@ class SharedTextureMemoryBase : public SharedResourceMemory {
     }
 
     SharedTextureMemoryProperties mProperties;
+    // Kept separately because SharedTextureMemoryProperties has no dimension member.
+    wgpu::TextureDimension mDimension = wgpu::TextureDimension::e2D;
 };
 
 }  // namespace dawn::native

@@ -71,11 +71,15 @@ uint32_t PresentModeToSwapInterval(wgpu::PresentMode mode) {
     DAWN_UNREACHABLE();
 }
 
-UINT PresentModeToSwapChainFlags(wgpu::PresentMode mode) {
+UINT PresentModeToSwapChainFlags(wgpu::BackendType backendType, wgpu::PresentMode mode) {
     UINT flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
     if (mode == wgpu::PresentMode::Immediate) {
         flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+    } else if (mode == wgpu::PresentMode::Fifo && backendType == wgpu::BackendType::D3D12) {
+        // Only a vsync'd present has a queue worth waiting on, and the flag is unsupported in
+        // full-screen outside of D3D12.
+        flags |= DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
     }
 
     return flags;
@@ -138,7 +142,7 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
     // Precompute the configuration parameters we want for the DXGI swapchain.
     mConfig.bufferCount = PresentModeToBufferCount(GetPresentMode());
     mConfig.format = d3d::DXGITextureFormat(GetDevice(), GetFormat());
-    mConfig.swapChainFlags = PresentModeToSwapChainFlags(GetPresentMode());
+    mConfig.swapChainFlags = PresentModeToSwapChainFlags(GetBackendType(), GetPresentMode());
     mConfig.usage = ToDXGIUsage(GetDevice(), GetFormat(), GetUsage());
 
     // There is no previous swapchain so we can create one directly and don't have anything else
@@ -163,11 +167,14 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
                     "D3D SwapChain cannot switch between D3D Devices");
 
     // The previous swapchain is on the same device so we want to reuse it but it is still not
-    // always possible. Because DXGI requires that a new swapchain be created if the
-    // DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING flag is changed.
+    // always possible. Because DXGI requires that a new swapchain be created if either
+    // DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING or DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT is
+    // changed: neither can be toggled by ResizeBuffers.
+    constexpr UINT kCreationOnlySwapChainFlags =
+        DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING | DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
     bool canReuseSwapChain =
         ((mConfig.swapChainFlags ^ previousD3DSwapChain->mConfig.swapChainFlags) &
-         DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) == 0;
+         kCreationOnlySwapChainFlags) == 0;
 
     // We can't reuse the previous swapchain, so we destroy it and wait for all of its reference
     // to be forgotten (otherwise DXGI complains that there are outstanding references).
@@ -179,6 +186,8 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
     // After all this we know we can reuse the swapchain, see if it is possible to also reuse
     // the buffers.
     mDXGISwapChain = std::move(previousD3DSwapChain->mDXGISwapChain);
+    // The waitable object belongs to the swapchain we just took over, so take it as well.
+    mFrameLatencyWaitableObject = std::move(previousD3DSwapChain->mFrameLatencyWaitableObject);
 
     bool canReuseBuffers = GetWidth() == previousSwapChain->GetWidth() &&
                            GetHeight() == previousSwapChain->GetHeight() &&
@@ -286,6 +295,15 @@ MaybeError SwapChain::InitializeSwapChainFromScratch() {
 
     DAWN_TRY(CheckHRESULT(swapChain1.As(&mDXGISwapChain), "Gettting IDXGISwapChain1"));
 
+    // With the waitable object the app absorbs the present queue's wait itself, so queue no more
+    // frames than there are back buffers to rotate through.
+    if (mConfig.swapChainFlags & DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT) {
+        DAWN_TRY(CheckHRESULT(mDXGISwapChain->SetMaximumFrameLatency(mConfig.bufferCount - 1),
+                              "IDXGISwapChain2::SetMaximumFrameLatency"));
+        mFrameLatencyWaitableObject =
+            SystemHandle::Acquire(mDXGISwapChain->GetFrameLatencyWaitableObject());
+    }
+
     return CollectSwapChainBuffers();
 }
 
@@ -307,11 +325,18 @@ MaybeError SwapChain::PresentDXGISwapChain() {
 }
 
 void SwapChain::ReleaseDXGISwapChain() {
+    if (mFrameLatencyWaitableObject.IsValid()) {
+        mFrameLatencyWaitableObject.Close();
+    }
     mDXGISwapChain = nullptr;
 }
 
 IDXGISwapChain3* SwapChain::GetDXGISwapChain() const {
     return mDXGISwapChain.Get();
+}
+
+HANDLE SwapChain::GetFrameLatencyWaitableObject() const {
+    return mFrameLatencyWaitableObject.Get();
 }
 
 const SwapChain::Config& SwapChain::GetConfig() const {

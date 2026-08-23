@@ -73,6 +73,10 @@ DAWN_NATIVE_EXPORT Microsoft::WRL::ComPtr<ID3D11On12Device> GetOrCreateD3D11On12
 DAWN_NATIVE_EXPORT Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetD3D12CommandQueue(
     WGPUDevice device);
 
+// The surface swapchain's DXGI frame-latency waitable object, or nullptr if it has none. Owned by
+// the swapchain: never close it, and re-fetch it after every wgpuSurfaceConfigure.
+DAWN_NATIVE_EXPORT HANDLE GetFrameLatencyWaitableObject(WGPUSurface surface);
+
 DAWN_NATIVE_EXPORT uint64_t SetExternalMemoryReservation(WGPUDevice device,
                                                          uint64_t requestedReservationSize,
                                                          MemorySegment memorySegment);

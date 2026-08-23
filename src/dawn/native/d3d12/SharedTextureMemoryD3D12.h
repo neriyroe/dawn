@@ -61,6 +61,7 @@ class SharedTextureMemory final : public d3d::SharedTextureMemory {
     SharedTextureMemory(Device* device,
                         StringView label,
                         SharedTextureMemoryProperties properties,
+                        wgpu::TextureDimension dimension,
                         ComPtr<ID3D12Resource> resource,
                         Ref<d3d::KeyedMutex> keyedMutex);
 

@@ -369,11 +369,6 @@ Surface::~Surface() {
     if (mSwapChain != nullptr) {
         [[maybe_unused]] bool error = mInstance->ConsumedError(Unconfigure());
     }
-
-    if (mRecycledSwapChain != nullptr) {
-        mRecycledSwapChain->DetachFromSurface();
-        mRecycledSwapChain = nullptr;
-    }
 }
 
 InstanceBase* Surface::GetInstance() const {
@@ -382,6 +377,10 @@ InstanceBase* Surface::GetInstance() const {
 
 DeviceBase* Surface::GetCurrentDevice() const {
     return mCurrentDevice.Get();
+}
+
+SwapChainBase* Surface::GetCurrentSwapChain() const {
+    return mSwapChain.Get();
 }
 
 Surface::Type Surface::GetType() const {
@@ -484,23 +483,14 @@ MaybeError Surface::Configure(const SurfaceConfiguration* configIn) {
             return ValidateSurfaceConfiguration(GetCurrentDevice(), caps, &config, this);
         }));
 
-    // Reuse either the current swapchain, or the recycled swap chain
+    // Reuse the swapchain of the previous Configure, if any. Unconfigure() releases its swapchain
+    // synchronously so there is never one left over from it.
     SwapChainBase* previousSwapChain = mSwapChain.Get();
-    if (previousSwapChain == nullptr && mRecycledSwapChain != nullptr &&
-        mRecycledSwapChain->GetDevice() == config.device) {
-        previousSwapChain = mRecycledSwapChain.Get();
-    }
 
     {
         auto deviceGuard = GetCurrentDevice()->GetGuard();
         ResultOrError<Ref<SwapChainBase>> maybeNewSwapChain =
             GetCurrentDevice()->CreateSwapChain(this, previousSwapChain, &config);
-
-        // Don't keep swap chains older than 1 call to Configure
-        if (mRecycledSwapChain) {
-            mRecycledSwapChain->DetachFromSurface();
-            mRecycledSwapChain = nullptr;
-        }
 
         if (mSwapChain && maybeNewSwapChain.IsSuccess()) {
             mSwapChain->DetachFromSurface();
@@ -522,16 +512,25 @@ MaybeError Surface::Unconfigure() {
     mCurrentDevice = nullptr;
     DAWN_INVALID_IF(!mSwapChain.Get(), "%s is not configured.", this);
 
-    if (mSwapChain != nullptr) {
-        if (mRecycledSwapChain != nullptr) {
-            mRecycledSwapChain->DetachFromSurface();
-            mRecycledSwapChain = nullptr;
+    // Detach synchronously instead of keeping the swapchain around for a later Configure, so the
+    // window is handed back to the application by the time Unconfigure() returns.
+    Ref<SwapChainBase> swapChain = std::move(mSwapChain);
+    // The swapchain holds its own Ref to the device, so its guard is still safe to take even
+    // though mCurrentDevice was just cleared.
+    DeviceBase* device = swapChain->GetDevice();
+
+    MaybeError result;
+    {
+        auto deviceGuard = device->GetGuard();
+        // A lost or destroyed device can neither flush commands nor wait for a serial.
+        if (!device->IsLost()) {
+            result = swapChain->DetachAndWaitForDeallocation();
         }
-        mRecycledSwapChain = mSwapChain;
-        mSwapChain = nullptr;
+        // Detach even if the wait failed: ~SwapChainBase requires a detached swapchain.
+        swapChain->DetachFromSurface();
     }
 
-    return {};
+    return result;
 }
 
 MaybeError Surface::GetCapabilities(AdapterBase* adapter, SurfaceCapabilities* capabilities) const {

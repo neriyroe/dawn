@@ -89,6 +89,8 @@ class Surface final : public ErrorMonad {
     Type GetType() const;
     InstanceBase* GetInstance() const;
     DeviceBase* GetCurrentDevice() const;
+    // The swapchain backing the surface while it is configured, nullptr otherwise.
+    SwapChainBase* GetCurrentSwapChain() const;
 
     // Valid to call if the type is MetalLayer
     void* GetMetalLayer() const;
@@ -147,9 +149,6 @@ class Surface final : public ErrorMonad {
     // The swapchain is created when configuring the surface (but may still be
     // null even if it's in the "configured" state).
     Ref<SwapChainBase> mSwapChain;
-
-    // We keep on storing the previous swap chain after Unconfigure in case we could reuse it
-    Ref<SwapChainBase> mRecycledSwapChain;
 
     // A cache is mutable because potentially modified in const-qualified getters
     std::unique_ptr<AdapterSurfaceCapCache> mCapabilityCache;

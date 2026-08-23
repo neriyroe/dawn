@@ -34,8 +34,10 @@
 #include <utility>
 
 #include "src/dawn/common/Math.h"
+#include "src/dawn/native/Surface.h"
 #include "src/dawn/native/d3d12/DeviceD3D12.h"
 #include "src/dawn/native/d3d12/ResidencyManagerD3D12.h"
+#include "src/dawn/native/d3d12/SwapChainD3D12.h"
 #include "src/dawn/native/d3d12/TextureD3D12.h"
 #include "src/utils/log.h"
 
@@ -51,6 +53,16 @@ Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetD3D12CommandQueue(WGPUDevice devic
 
 Microsoft::WRL::ComPtr<ID3D12Device> GetD3D12Device(WGPUDevice device) {
     return ToBackend(FromAPI(device))->GetD3D12Device();
+}
+
+// Lets the app take the present queue's wait at the top of its frame instead of inside
+// wgpuSurfaceGetCurrentTexture.
+HANDLE GetFrameLatencyWaitableObject(WGPUSurface surface) {
+    SwapChainBase* swapChain = FromAPI(surface)->GetCurrentSwapChain();
+    if (swapChain == nullptr || swapChain->GetBackendType() != wgpu::BackendType::D3D12) {
+        return nullptr;
+    }
+    return ToBackend(swapChain)->GetFrameLatencyWaitableObject();
 }
 
 uint64_t SetExternalMemoryReservation(WGPUDevice device,
