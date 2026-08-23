@@ -53,6 +53,10 @@ DAWN_NATIVE_EXPORT id<MTLDevice> GetMTLDevice(WGPUDevice device);
 // Return the MTLCommandQueue the WGPUDevice's default queue submits on, so that work submitted
 // alongside Dawn's is ordered by submission rather than by a cross-queue fence.
 DAWN_NATIVE_EXPORT id<MTLCommandQueue> GetMTLCommandQueue(WGPUDevice device);
+
+// Return Dawn's open command buffer with any open encoder closed, so interop work can be encoded
+// into it and ride the next submit instead of splitting the frame into more command buffers.
+DAWN_NATIVE_EXPORT id<MTLCommandBuffer> GetPendingMTLCommandBuffer(WGPUDevice device);
 #endif
 
 }  // namespace dawn::native::metal

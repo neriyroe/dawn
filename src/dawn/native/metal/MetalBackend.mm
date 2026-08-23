@@ -52,4 +52,13 @@ id<MTLCommandQueue> GetMTLCommandQueue(WGPUDevice device) {
     return ToBackend(backendDevice->GetQueue())->GetMTLCommandQueue();
 }
 
+id<MTLCommandBuffer> GetPendingMTLCommandBuffer(WGPUDevice device) {
+    Device* backendDevice = ToBackend(FromAPI(device));
+    auto deviceGuard = backendDevice->GetGuard();
+    CommandRecordingContext* commandContext =
+        ToBackend(backendDevice->GetQueue())->GetPendingCommandContext();
+    commandContext->EndBlit();
+    return commandContext->GetCommands();
+}
+
 }  // namespace dawn::native::metal
