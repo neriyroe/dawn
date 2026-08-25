@@ -46,6 +46,7 @@
 #include "src/dawn/native/vulkan/BufferVk.h"
 #include "src/dawn/native/vulkan/CommandBufferVk.h"
 #include "src/dawn/native/vulkan/ComputePipelineVk.h"
+#include "src/dawn/native/vulkan/ExtraExtensionsVk.h"
 #include "src/dawn/native/vulkan/FencedDeleter.h"
 #include "src/dawn/native/vulkan/FramebufferCache.h"
 #include "src/dawn/native/vulkan/FramebufferFetchHelper.h"
@@ -455,6 +456,21 @@ ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysica
     for (DeviceExt ext : usedKnobs.extensions) {
         const DeviceExtInfo& info = GetDeviceExtInfo(ext);
         extensionNames.push_back(info.name);
+    }
+
+    // The embedder's own, checked against the raw enumeration rather than against mDeviceInfo, whose
+    // known-name map has already dropped everything Dawn has no enum for.
+    {
+        uint32_t count = 0;
+        if (fn.EnumerateDeviceExtensionProperties(vkPhysicalDevice, nullptr, &count, nullptr) ==
+            VK_SUCCESS) {
+            std::vector<VkExtensionProperties> advertised(count);
+            if (fn.EnumerateDeviceExtensionProperties(vkPhysicalDevice, nullptr, &count,
+                                                      advertised.data()) == VK_SUCCESS) {
+                advertised.resize(count);
+                AppendExtraExtensions(MutableExtraDeviceExtensions(), advertised, &extensionNames);
+            }
+        }
     }
 
     // Some device features can only be enabled using a VkPhysicalDeviceFeatures2 struct, which

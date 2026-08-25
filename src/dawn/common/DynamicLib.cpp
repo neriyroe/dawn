@@ -95,6 +95,12 @@ bool DynamicLib::Open(const std::string& filename, std::string* error) {
         LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS;
 #endif
     mHandle = LoadLibraryExA(filename.c_str(), nullptr, loadLibraryFlags);
+    // LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR is documented to need an absolute path and answers a bare name
+    // with ERROR_INVALID_PARAMETER, so a system library named on its own -- vulkan-1.dll -- never loads.
+    // System32 only, which is the same directory OpenSystemLibrary trusts and is not user-writable.
+    if (mHandle == nullptr && filename.find_first_of("/\\") == std::string::npos) {
+        mHandle = LoadLibraryExA(filename.c_str(), nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    }
 #endif
     if (mHandle == nullptr && error != nullptr) {
         *error =

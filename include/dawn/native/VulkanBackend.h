@@ -31,6 +31,7 @@
 #include <vulkan/vulkan.h>
 
 #include <array>
+#include <cstddef>
 #include <vector>
 
 #include "dawn/native/DawnNative.h"
@@ -40,6 +41,44 @@ namespace dawn::native::vulkan {
 DAWN_NATIVE_EXPORT VkInstance GetInstance(WGPUDevice device);
 
 DAWN_NATIVE_EXPORT PFN_vkVoidFunction GetInstanceProcAddr(WGPUDevice device, const char* pName);
+
+// The handles behind a Dawn device, for an SDK that runs its own passes on it. Each answers null on a
+// device from another backend, so an app that chooses its backend at run time may ask without checking.
+DAWN_NATIVE_EXPORT VkDevice GetVkDevice(WGPUDevice device);
+DAWN_NATIVE_EXPORT VkQueue GetVkQueue(WGPUDevice device);
+DAWN_NATIVE_EXPORT VkPhysicalDevice GetVkPhysicalDevice(WGPUDevice device);
+DAWN_NATIVE_EXPORT uint32_t GetQueueFamilyIndex(WGPUDevice device);
+
+// The same, from the adapter -- which is what an SDK needs to answer for its own extension
+// requirements, since the device that must enable them does not exist yet.
+DAWN_NATIVE_EXPORT VkInstance GetVkInstance(WGPUAdapter adapter);
+DAWN_NATIVE_EXPORT VkPhysicalDevice GetVkPhysicalDevice(WGPUAdapter adapter);
+DAWN_NATIVE_EXPORT PFN_vkVoidFunction GetAdapterInstanceProcAddr(WGPUAdapter adapter,
+                                                                 const char* pName);
+
+// Dawn's own open command buffer, to encode into until its next submit commits it. One queue and one
+// command stream is what lets an outside pass order itself against the renderer with ordinary barriers.
+DAWN_NATIVE_EXPORT VkCommandBuffer GetPendingVkCommandBuffer(WGPUDevice device);
+
+// The image behind a wgpu texture, and the layout Dawn believes each of its subresources is in.
+DAWN_NATIVE_EXPORT ::VkImage GetVkImage(WGPUTexture texture);
+DAWN_NATIVE_EXPORT VkImageLayout GetVkImageLayout(WGPUTexture texture);
+// The layout Dawn would put the texture in for that usage. Asked rather than assumed: the answer
+// depends on the whole usage set the texture was created with, not on `usage` alone.
+DAWN_NATIVE_EXPORT VkImageLayout GetVkImageLayoutForUsage(WGPUTexture texture,
+                                                          WGPUTextureUsage usage);
+// Tells Dawn about a layout an outside barrier already moved the image to, so its next transition
+// starts from the truth rather than from what it last recorded.
+DAWN_NATIVE_EXPORT void SetVkImageLayoutUsage(WGPUTexture texture, WGPUTextureUsage usage);
+// An image written outside Dawn's sight is not uninitialised, whatever its lazy-clear bookkeeping
+// believes -- and a lazy clear would land on top of the very output the pass exists to produce.
+DAWN_NATIVE_EXPORT void SetTextureInitialized(WGPUTexture texture);
+
+// Extension names to enable on the instance and on the device Dawn creates, registered before either
+// exists. A name the driver does not advertise is dropped rather than refused, so a machine without
+// the vendor's extensions still boots and only loses the feature that wanted them.
+DAWN_NATIVE_EXPORT void RequestExtraInstanceExtensions(const char* const* names, size_t count);
+DAWN_NATIVE_EXPORT void RequestExtraDeviceExtensions(const char* const* names, size_t count);
 
 enum class NeedsDedicatedAllocation {
     Yes,

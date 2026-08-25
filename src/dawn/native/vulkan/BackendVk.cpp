@@ -37,6 +37,7 @@
 #include "src/dawn/native/ChainUtils.h"
 #include "src/dawn/native/Instance.h"
 #include "src/dawn/native/vulkan/DeviceVk.h"
+#include "src/dawn/native/vulkan/ExtraExtensionsVk.h"
 #include "src/dawn/native/vulkan/PhysicalDeviceVk.h"
 #include "src/dawn/native/vulkan/UtilsVulkan.h"
 #include "src/dawn/native/vulkan/VulkanError.h"
@@ -466,6 +467,20 @@ ResultOrError<VulkanGlobalKnobs> VulkanInstance::CreateVkInstance(const Instance
     for (InstanceExt ext : extensionsToRequest) {
         const InstanceExtInfo& info = GetInstanceExtInfo(ext);
         extensionNames.push_back(info.name);
+    }
+
+    // The embedder's own, checked against the raw enumeration rather than against mGlobalInfo, whose
+    // known-name map has already dropped everything Dawn has no enum for.
+    {
+        uint32_t count = 0;
+        if (mFunctions.EnumerateInstanceExtensionProperties(nullptr, &count, nullptr) == VK_SUCCESS) {
+            std::vector<VkExtensionProperties> advertised(count);
+            if (mFunctions.EnumerateInstanceExtensionProperties(nullptr, &count, advertised.data()) ==
+                VK_SUCCESS) {
+                advertised.resize(count);
+                AppendExtraExtensions(MutableExtraInstanceExtensions(), advertised, &extensionNames);
+            }
+        }
     }
 
     VkApplicationInfo appInfo;

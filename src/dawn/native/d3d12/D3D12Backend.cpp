@@ -34,6 +34,7 @@
 #include <utility>
 
 #include "src/dawn/common/Math.h"
+#include "src/dawn/native/PhysicalDevice.h"
 #include "src/dawn/native/Surface.h"
 #include "src/dawn/native/d3d12/DeviceD3D12.h"
 #include "src/dawn/native/d3d12/ResidencyManagerD3D12.h"
@@ -43,16 +44,39 @@
 
 namespace dawn::native::d3d12 {
 
+namespace {
+
+// ToBackend below is an unchecked downcast, so a device from another backend would be read as a
+// D3D12 one. An app that can pick its backend at run time asks these on every boot.
+bool IsD3D12(DeviceBase* device) {
+    return device != nullptr &&
+           device->GetPhysicalDevice()->GetBackendType() == wgpu::BackendType::D3D12;
+}
+
+}  // namespace
+
 Microsoft::WRL::ComPtr<ID3D11On12Device> GetOrCreateD3D11On12Device(WGPUDevice device) {
-    return ToBackend(FromAPI(device))->GetOrCreateD3D11On12Device();
+    DeviceBase* base = FromAPI(device);
+    if (!IsD3D12(base)) {
+        return nullptr;
+    }
+    return ToBackend(base)->GetOrCreateD3D11On12Device();
 }
 
 Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetD3D12CommandQueue(WGPUDevice device) {
-    return ToBackend(FromAPI(device))->GetD3D12CommandQueue();
+    DeviceBase* base = FromAPI(device);
+    if (!IsD3D12(base)) {
+        return nullptr;
+    }
+    return ToBackend(base)->GetD3D12CommandQueue();
 }
 
 Microsoft::WRL::ComPtr<ID3D12Device> GetD3D12Device(WGPUDevice device) {
-    return ToBackend(FromAPI(device))->GetD3D12Device();
+    DeviceBase* base = FromAPI(device);
+    if (!IsD3D12(base)) {
+        return nullptr;
+    }
+    return ToBackend(base)->GetD3D12Device();
 }
 
 // Lets the app take the present queue's wait at the top of its frame instead of inside

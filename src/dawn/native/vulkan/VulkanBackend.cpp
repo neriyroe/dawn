@@ -36,10 +36,50 @@
 
 // Must be after vulkan_platform
 #include "dawn/native/VulkanBackend.h"
+#include "src/dawn/native/Adapter.h"
+#include "src/dawn/native/PhysicalDevice.h"
+#include "src/dawn/native/vulkan/BackendVk.h"
+#include "src/dawn/native/vulkan/CommandRecordingContextVk.h"
 #include "src/dawn/native/vulkan/DeviceVk.h"
+#include "src/dawn/native/vulkan/ExtraExtensionsVk.h"
+#include "src/dawn/native/vulkan/PhysicalDeviceVk.h"
+#include "src/dawn/native/vulkan/QueueVk.h"
 #include "src/dawn/native/vulkan/TextureVk.h"
 
 namespace dawn::native::vulkan {
+
+namespace {
+
+// ToBackend is an unchecked downcast, so everything below asks first: these are the entry points an
+// app that can pick D3D12 or Vulkan at run time calls on whichever device it ended up with.
+Device* AsVulkan(WGPUDevice device) {
+    DeviceBase* base = FromAPI(device);
+    if (base == nullptr ||
+        base->GetPhysicalDevice()->GetBackendType() != wgpu::BackendType::Vulkan) {
+        return nullptr;
+    }
+    return ToBackend(base);
+}
+
+PhysicalDevice* AsVulkan(WGPUAdapter adapter) {
+    AdapterBase* base = FromAPI(adapter);
+    if (base == nullptr ||
+        base->GetPhysicalDevice()->GetBackendType() != wgpu::BackendType::Vulkan) {
+        return nullptr;
+    }
+    return ToBackend(base->GetPhysicalDevice());
+}
+
+Texture* AsVulkan(WGPUTexture texture) {
+    TextureBase* base = FromAPI(texture);
+    if (base == nullptr ||
+        base->GetDevice()->GetPhysicalDevice()->GetBackendType() != wgpu::BackendType::Vulkan) {
+        return nullptr;
+    }
+    return ToBackend(base);
+}
+
+}  // namespace
 
 VkInstance GetInstance(WGPUDevice device) {
     Device* backendDevice = ToBackend(FromAPI(device));
@@ -47,13 +87,119 @@ VkInstance GetInstance(WGPUDevice device) {
 }
 
 VkDevice GetVkDevice(WGPUDevice device) {
-    Device* backendDevice = ToBackend(FromAPI(device));
-    return backendDevice->GetVkDevice();
+    Device* backendDevice = AsVulkan(device);
+    return backendDevice == nullptr ? VK_NULL_HANDLE : backendDevice->GetVkDevice();
+}
+
+VkQueue GetVkQueue(WGPUDevice device) {
+    Device* backendDevice = AsVulkan(device);
+    return backendDevice == nullptr ? VK_NULL_HANDLE
+                                    : ToBackend(backendDevice->GetQueue())->GetVkQueue();
+}
+
+VkPhysicalDevice GetVkPhysicalDevice(WGPUDevice device) {
+    Device* backendDevice = AsVulkan(device);
+    if (backendDevice == nullptr) {
+        return VK_NULL_HANDLE;
+    }
+    return ToBackend(backendDevice->GetPhysicalDevice())->GetVkPhysicalDevice();
+}
+
+uint32_t GetQueueFamilyIndex(WGPUDevice device) {
+    Device* backendDevice = AsVulkan(device);
+    return backendDevice == nullptr ? 0 : backendDevice->GetGraphicsQueueFamily();
+}
+
+VkInstance GetVkInstance(WGPUAdapter adapter) {
+    PhysicalDevice* physical = AsVulkan(adapter);
+    return physical == nullptr ? VK_NULL_HANDLE
+                               : physical->GetVulkanInstance()->GetVkInstance();
+}
+
+VkPhysicalDevice GetVkPhysicalDevice(WGPUAdapter adapter) {
+    PhysicalDevice* physical = AsVulkan(adapter);
+    return physical == nullptr ? VK_NULL_HANDLE : physical->GetVkPhysicalDevice();
+}
+
+PFN_vkVoidFunction GetAdapterInstanceProcAddr(WGPUAdapter adapter, const char* pName) {
+    PhysicalDevice* physical = AsVulkan(adapter);
+    if (physical == nullptr) {
+        return nullptr;
+    }
+    const VulkanFunctions& fn = physical->GetVulkanInstance()->GetFunctions();
+    return (*fn.GetInstanceProcAddr)(physical->GetVulkanInstance()->GetVkInstance(), pName);
 }
 
 DAWN_NATIVE_EXPORT PFN_vkVoidFunction GetInstanceProcAddr(WGPUDevice device, const char* pName) {
     Device* backendDevice = ToBackend(FromAPI(device));
     return (*backendDevice->fn.GetInstanceProcAddr)(backendDevice->GetVkInstance(), pName);
+}
+
+// No EndBlit analogue is needed the way the Metal peer needs one: Vulkan render passes begin and end
+// inside RecordCommands, so the pending buffer is always found recording with no pass open.
+VkCommandBuffer GetPendingVkCommandBuffer(WGPUDevice device) {
+    Device* backendDevice = AsVulkan(device);
+    if (backendDevice == nullptr) {
+        return VK_NULL_HANDLE;
+    }
+    auto deviceGuard = backendDevice->GetGuard();
+    CommandRecordingContext* recordingContext =
+        ToBackend(backendDevice->GetQueue())->GetPendingRecordingContext();
+    return recordingContext->commandBuffer;
+}
+
+::VkImage GetVkImage(WGPUTexture texture) {
+    Texture* backendTexture = AsVulkan(texture);
+    return backendTexture == nullptr ? VK_NULL_HANDLE : backendTexture->GetHandle();
+}
+
+VkImageLayout GetVkImageLayout(WGPUTexture texture) {
+    Texture* backendTexture = AsVulkan(texture);
+    if (backendTexture == nullptr) {
+        return VK_IMAGE_LAYOUT_UNDEFINED;
+    }
+    return backendTexture->GetCurrentLayout(backendTexture->GetDisjointVulkanAspects());
+}
+
+VkImageLayout GetVkImageLayoutForUsage(WGPUTexture texture, WGPUTextureUsage usage) {
+    Texture* backendTexture = AsVulkan(texture);
+    if (backendTexture == nullptr) {
+        return VK_IMAGE_LAYOUT_UNDEFINED;
+    }
+    return backendTexture->VulkanImageLayout(static_cast<wgpu::TextureUsage>(usage));
+}
+
+void SetVkImageLayoutUsage(WGPUTexture texture, WGPUTextureUsage usage) {
+    Texture* backendTexture = AsVulkan(texture);
+    if (backendTexture == nullptr) {
+        return;
+    }
+    backendTexture->UpdateUsage(static_cast<wgpu::TextureUsage>(usage), wgpu::ShaderStage::Compute,
+                                backendTexture->GetAllSubresources());
+}
+
+void SetTextureInitialized(WGPUTexture texture) {
+    Texture* backendTexture = AsVulkan(texture);
+    if (backendTexture == nullptr) {
+        return;
+    }
+    backendTexture->SetIsSubresourceContentInitialized(true, backendTexture->GetAllSubresources());
+}
+
+void RequestExtraInstanceExtensions(const char* const* names, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+        if (names[i] != nullptr) {
+            MutableExtraInstanceExtensions().push_back(names[i]);
+        }
+    }
+}
+
+void RequestExtraDeviceExtensions(const char* const* names, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+        if (names[i] != nullptr) {
+            MutableExtraDeviceExtensions().push_back(names[i]);
+        }
+    }
 }
 
 #if DAWN_PLATFORM_IS(LINUX)
