@@ -80,10 +80,39 @@ DAWN_NATIVE_EXPORT void SetTextureInitialized(WGPUTexture texture);
 DAWN_NATIVE_EXPORT void RequestExtraInstanceExtensions(const char* const* names, size_t count);
 DAWN_NATIVE_EXPORT void RequestExtraDeviceExtensions(const char* const* names, size_t count);
 
+// Timeline semaphores, which the extension alone does not switch on -- a feature promoted to core is inert
+// until it is asked for by name. Granted only where the driver advertises it, because a feature the device
+// does not have fails device creation and takes the renderer with it: ask, then read back what was given.
+DAWN_NATIVE_EXPORT void RequestTimelineSemaphores();
+DAWN_NATIVE_EXPORT bool HasTimelineSemaphores();
+
 // A loader to open in place of the platform's own, registered before the instance exists. An interposer
 // has to sit under vkCreateInstance and vkCreateDevice to add queues and hooks of its own; one that will
 // not open is skipped, and the platform loader brings the backend up without it.
 DAWN_NATIVE_EXPORT void RequestVulkanLoader(const char* libraryName);
+
+// Queues beyond the one universal queue Dawn creates for itself, registered before the device exists. A
+// runtime that presents on our behalf submits from queues of its own and will not share the renderer's.
+// The count granted may be smaller than the one asked for, on a card with no more queues to give.
+DAWN_NATIVE_EXPORT void RequestExtraQueues(uint32_t count);
+DAWN_NATIVE_EXPORT uint32_t GetExtraQueueCount();
+DAWN_NATIVE_EXPORT VkQueue GetExtraQueue(uint32_t index);
+DAWN_NATIVE_EXPORT uint32_t GetExtraQueueFamily(uint32_t index);
+
+// The swapchain entry points Dawn drives its surface through, offered to an embedder that stands in front
+// of them -- a frame generator presenting more frames than the renderer drew. The struct arrives holding
+// the driver's own, so whatever replaces them keeps a way to fall through for the frames it does not touch.
+struct VulkanSwapchainProcs {
+    PFN_vkCreateSwapchainKHR CreateSwapchainKHR = nullptr;
+    PFN_vkDestroySwapchainKHR DestroySwapchainKHR = nullptr;
+    PFN_vkGetSwapchainImagesKHR GetSwapchainImagesKHR = nullptr;
+    PFN_vkAcquireNextImageKHR AcquireNextImageKHR = nullptr;
+    PFN_vkQueuePresentKHR QueuePresentKHR = nullptr;
+};
+
+using VulkanSwapchainInterposer = void (*)(VulkanSwapchainProcs* procs);
+
+DAWN_NATIVE_EXPORT void RequestSwapchainInterposer(VulkanSwapchainInterposer hook);
 
 enum class NeedsDedicatedAllocation {
     Yes,

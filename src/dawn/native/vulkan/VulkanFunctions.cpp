@@ -31,6 +31,7 @@
 #include <utility>
 
 #include "src/dawn/common/DynamicLib.h"
+#include "src/dawn/native/vulkan/SwapchainHooksVk.h"
 #include "src/dawn/native/vulkan/VulkanInfo.h"
 
 namespace dawn::native::vulkan {
@@ -428,6 +429,21 @@ MaybeError VulkanFunctions::LoadDeviceProcs(VkInstance instance,
         GET_DEVICE_PROC(GetSwapchainImagesKHR);
         GET_DEVICE_PROC(AcquireNextImageKHR);
         GET_DEVICE_PROC(QueuePresentKHR);
+
+#if !DAWN_NO_SANITIZE_VK_FN
+        // Whatever the embedder puts in their place presents this device from here on. It is handed the
+        // driver's own so it has something to fall through to on the frames it does not stand in for.
+        if (VulkanSwapchainInterposer interpose = MutableSwapchainInterposer()) {
+            VulkanSwapchainProcs procs{CreateSwapchainKHR, DestroySwapchainKHR, GetSwapchainImagesKHR,
+                                       AcquireNextImageKHR, QueuePresentKHR};
+            interpose(&procs);
+            CreateSwapchainKHR = procs.CreateSwapchainKHR;
+            DestroySwapchainKHR = procs.DestroySwapchainKHR;
+            GetSwapchainImagesKHR = procs.GetSwapchainImagesKHR;
+            AcquireNextImageKHR = procs.AcquireNextImageKHR;
+            QueuePresentKHR = procs.QueuePresentKHR;
+        }
+#endif
     }
 
 #if defined(VK_USE_PLATFORM_FUCHSIA)

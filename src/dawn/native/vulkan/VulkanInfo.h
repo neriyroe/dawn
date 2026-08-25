@@ -85,6 +85,8 @@ struct VulkanDeviceKnobs {
     VkPhysicalDeviceShaderMaximalReconvergenceFeaturesKHR shaderMaximalReconvergenceFeatures;
     VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR
         shaderSubgroupUniformControlFlowFeatures;
+    // Never gathered, only ever set: Dawn wants nothing of it, and an embedder that does asks for it.
+    VkPhysicalDeviceTimelineSemaphoreFeaturesKHR timelineSemaphoreFeatures;
 
     bool HasExt(DeviceExt ext) const;
     DeviceExtSet extensions;

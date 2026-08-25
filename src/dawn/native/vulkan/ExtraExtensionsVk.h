@@ -30,6 +30,19 @@ inline std::string& MutableVulkanLoader() {
     return name;
 }
 
+// Timeline semaphores, which the extension name alone does not switch on: a feature is inert until it is
+// asked for by its own struct. Wanted by the embedder, granted only where the driver advertises it -- one
+// the device does not have would fail device creation outright, and the renderer with it.
+inline bool& MutableWantTimelineSemaphores() {
+    static bool wanted = false;
+    return wanted;
+}
+
+inline bool& MutableGotTimelineSemaphores() {
+    static bool granted = false;
+    return granted;
+}
+
 // Appends the wanted names the driver actually advertises and Dawn has not already asked for. A name
 // no driver offers is dropped rather than refused: the embedder loses the feature, the device still boots.
 inline void AppendExtraExtensions(const std::vector<std::string>& wanted,

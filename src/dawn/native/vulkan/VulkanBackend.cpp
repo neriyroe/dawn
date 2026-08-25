@@ -42,8 +42,10 @@
 #include "src/dawn/native/vulkan/CommandRecordingContextVk.h"
 #include "src/dawn/native/vulkan/DeviceVk.h"
 #include "src/dawn/native/vulkan/ExtraExtensionsVk.h"
+#include "src/dawn/native/vulkan/ExtraQueuesVk.h"
 #include "src/dawn/native/vulkan/PhysicalDeviceVk.h"
 #include "src/dawn/native/vulkan/QueueVk.h"
+#include "src/dawn/native/vulkan/SwapchainHooksVk.h"
 #include "src/dawn/native/vulkan/TextureVk.h"
 
 namespace dawn::native::vulkan {
@@ -202,8 +204,38 @@ void RequestExtraDeviceExtensions(const char* const* names, size_t count) {
     }
 }
 
+void RequestTimelineSemaphores() {
+    MutableWantTimelineSemaphores() = true;
+}
+
+bool HasTimelineSemaphores() {
+    return MutableGotTimelineSemaphores();
+}
+
 void RequestVulkanLoader(const char* libraryName) {
     MutableVulkanLoader() = libraryName != nullptr ? libraryName : "";
+}
+
+void RequestExtraQueues(uint32_t count) {
+    MutableExtraQueueRequest() = count;
+}
+
+uint32_t GetExtraQueueCount() {
+    return static_cast<uint32_t>(MutableExtraQueues().size());
+}
+
+VkQueue GetExtraQueue(uint32_t index) {
+    const std::vector<ExtraQueue>& made = MutableExtraQueues();
+    return index < made.size() ? made[index].queue : VK_NULL_HANDLE;
+}
+
+uint32_t GetExtraQueueFamily(uint32_t index) {
+    const std::vector<ExtraQueue>& made = MutableExtraQueues();
+    return index < made.size() ? made[index].family : 0;
+}
+
+void RequestSwapchainInterposer(VulkanSwapchainInterposer hook) {
+    MutableSwapchainInterposer() = hook;
 }
 
 #if DAWN_PLATFORM_IS(LINUX)

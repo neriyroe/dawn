@@ -28,6 +28,7 @@
 #include "src/dawn/native/vulkan/DeviceVk.h"
 
 #include <algorithm>
+#include <cstring>
 #include <utility>
 
 #include "dawn/dawn_version.h"
@@ -47,6 +48,7 @@
 #include "src/dawn/native/vulkan/CommandBufferVk.h"
 #include "src/dawn/native/vulkan/ComputePipelineVk.h"
 #include "src/dawn/native/vulkan/ExtraExtensionsVk.h"
+#include "src/dawn/native/vulkan/ExtraQueuesVk.h"
 #include "src/dawn/native/vulkan/FencedDeleter.h"
 #include "src/dawn/native/vulkan/FramebufferCache.h"
 #include "src/dawn/native/vulkan/FramebufferFetchHelper.h"
@@ -133,6 +135,11 @@ MaybeError Device::Initialize(const UnpackedPtr<DeviceDescriptor>& descriptor) {
         *static_cast<VulkanDeviceKnobs*>(&mDeviceInfo) = usedDeviceKnobs;
 
         DAWN_TRY(functions->LoadDeviceProcs(GetVkInstance(), mVkDevice, mDeviceInfo));
+
+        // The embedder's queues, now that there are device procs to fetch them with.
+        for (ExtraQueue& extra : MutableExtraQueues()) {
+            functions->GetDeviceQueue(mVkDevice, extra.family, extra.index, &extra.queue);
+        }
 
         mDeleter = AcquireRef(new FencedDeleter(this));
     }
@@ -473,6 +480,16 @@ ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysica
         }
     }
 
+    MutableGotTimelineSemaphores() = false;
+    if (MutableWantTimelineSemaphores()) {
+        for (const char* named : extensionNames) {
+            if (std::strcmp(named, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME) == 0) {
+                MutableGotTimelineSemaphores() = true;
+                break;
+            }
+        }
+    }
+
     // Some device features can only be enabled using a VkPhysicalDeviceFeatures2 struct, which
     // is promoted as a core API in Vulkan 1.1.
     VkPhysicalDeviceFeatures2 features2 = {};
@@ -744,6 +761,13 @@ ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysica
         featuresChain.Add(&usedKnobs.extendedDynamicStateFeatures);
     }
 
+    if (MutableGotTimelineSemaphores()) {
+        usedKnobs.timelineSemaphoreFeatures.sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES_KHR;
+        usedKnobs.timelineSemaphoreFeatures.timelineSemaphore = VK_TRUE;
+        featuresChain.Add(&usedKnobs.timelineSemaphoreFeatures);
+    }
+
     // Find a universal queue family
     {
         // Note that GRAPHICS and COMPUTE imply TRANSFER so we don't need to check for it.
@@ -764,17 +788,29 @@ ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysica
         mMainQueueFamily = universalQueueFamily;
     }
 
-    // Choose to create a single universal queue
+    // One universal queue for Dawn, and whatever the embedder asked for beyond it. Where nothing did, this
+    // is the single queue of one family it has always been.
+    MutableExtraQueues() = ChooseExtraQueues(mDeviceInfo.queueFamilies, mMainQueueFamily,
+                                             MutableExtraQueueRequest());
+    std::vector<uint32_t> perFamily(mDeviceInfo.queueFamilies.size(), 0);
+    perFamily[mMainQueueFamily] = 1;
+    for (const ExtraQueue& extra : MutableExtraQueues()) {
+        perFamily[extra.family] = std::max(perFamily[extra.family], extra.index + 1);
+    }
+
     std::vector<VkDeviceQueueCreateInfo> queuesToRequest;
-    float zero = 0.0f;
-    {
+    std::vector<float> priorities(*std::max_element(perFamily.begin(), perFamily.end()), 0.0f);
+    for (uint32_t family = 0; family < perFamily.size(); ++family) {
+        if (perFamily[family] == 0) {
+            continue;
+        }
         VkDeviceQueueCreateInfo queueCreateInfo;
         queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queueCreateInfo.pNext = nullptr;
         queueCreateInfo.flags = 0;
-        queueCreateInfo.queueFamilyIndex = static_cast<uint32_t>(mMainQueueFamily);
-        queueCreateInfo.queueCount = 1;
-        queueCreateInfo.pQueuePriorities = &zero;
+        queueCreateInfo.queueFamilyIndex = family;
+        queueCreateInfo.queueCount = perFamily[family];
+        queueCreateInfo.pQueuePriorities = priorities.data();
 
         queuesToRequest.push_back(queueCreateInfo);
     }
