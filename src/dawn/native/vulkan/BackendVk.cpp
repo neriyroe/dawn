@@ -371,7 +371,12 @@ MaybeError VulkanInstance::Initialize(const InstanceBase* instance, ICD icd) {
 
     switch (icd) {
         case ICD::None: {
-            DAWN_TRY(LoadVulkan(kVulkanLibName));
+            // An interposer the embedder asked for goes first, and its absence is not fatal: the platform
+            // loader still brings the backend up, only without whatever the interposer was carrying.
+            const std::string& interposer = MutableVulkanLoader();
+            if (interposer.empty() || !mVulkanLib.Open(interposer, searchPaths)) {
+                DAWN_TRY(LoadVulkan(kVulkanLibName));
+            }
             // Succesfully loaded driver; break.
             break;
         }

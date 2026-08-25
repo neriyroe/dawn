@@ -202,6 +202,10 @@ void RequestExtraDeviceExtensions(const char* const* names, size_t count) {
     }
 }
 
+void RequestVulkanLoader(const char* libraryName) {
+    MutableVulkanLoader() = libraryName != nullptr ? libraryName : "";
+}
+
 #if DAWN_PLATFORM_IS(LINUX)
 ExternalImageDescriptorOpaqueFD::ExternalImageDescriptorOpaqueFD()
     : ExternalImageDescriptorFD(ExternalImageType::OpaqueFD) {}

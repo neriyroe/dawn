@@ -23,6 +23,13 @@ inline std::vector<std::string>& MutableExtraDeviceExtensions() {
     return names;
 }
 
+// The loader to open instead of the platform's own. An interposer -- Streamline, for DLSS frame generation
+// -- has to sit under vkCreateInstance and vkCreateDevice to add the queues and hooks its feature needs.
+inline std::string& MutableVulkanLoader() {
+    static std::string name;
+    return name;
+}
+
 // Appends the wanted names the driver actually advertises and Dawn has not already asked for. A name
 // no driver offers is dropped rather than refused: the embedder loses the feature, the device still boots.
 inline void AppendExtraExtensions(const std::vector<std::string>& wanted,

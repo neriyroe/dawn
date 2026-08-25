@@ -80,6 +80,11 @@ DAWN_NATIVE_EXPORT void SetTextureInitialized(WGPUTexture texture);
 DAWN_NATIVE_EXPORT void RequestExtraInstanceExtensions(const char* const* names, size_t count);
 DAWN_NATIVE_EXPORT void RequestExtraDeviceExtensions(const char* const* names, size_t count);
 
+// A loader to open in place of the platform's own, registered before the instance exists. An interposer
+// has to sit under vkCreateInstance and vkCreateDevice to add queues and hooks of its own; one that will
+// not open is skipped, and the platform loader brings the backend up without it.
+DAWN_NATIVE_EXPORT void RequestVulkanLoader(const char* libraryName);
+
 enum class NeedsDedicatedAllocation {
     Yes,
     No,
