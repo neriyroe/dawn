@@ -480,15 +480,23 @@ ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysica
         }
     }
 
-    MutableGotTimelineSemaphores() = false;
-    if (MutableWantTimelineSemaphores()) {
+    // What the embedder asked for is granted only where every name it needs made it into the list above.
+    auto enabling = [&extensionNames](const char* name) {
         for (const char* named : extensionNames) {
-            if (std::strcmp(named, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME) == 0) {
-                MutableGotTimelineSemaphores() = true;
-                break;
+            if (std::strcmp(named, name) == 0) {
+                return true;
             }
         }
-    }
+        return false;
+    };
+    MutableGotTimelineSemaphores() =
+        MutableWantTimelineSemaphores() && enabling(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
+    MutableGotRayQuery() = MutableWantRayQuery() &&
+                           enabling(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) &&
+                           enabling(VK_KHR_RAY_QUERY_EXTENSION_NAME) &&
+                           enabling(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME) &&
+                           enabling(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME) &&
+                           enabling(VK_KHR_SPIRV_1_4_EXTENSION_NAME);
 
     // Some device features can only be enabled using a VkPhysicalDeviceFeatures2 struct, which
     // is promoted as a core API in Vulkan 1.1.
@@ -766,6 +774,24 @@ ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysica
             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES_KHR;
         usedKnobs.timelineSemaphoreFeatures.timelineSemaphore = VK_TRUE;
         featuresChain.Add(&usedKnobs.timelineSemaphoreFeatures);
+    }
+
+    // Only the three the embedder's tracer uses; the capture-replay and update-after-bind halves of these
+    // structs stay off, so a driver that offers the extensions but not those is still a device that boots.
+    if (MutableGotRayQuery()) {
+        usedKnobs.accelerationStructureFeatures.sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+        usedKnobs.accelerationStructureFeatures.accelerationStructure = VK_TRUE;
+        featuresChain.Add(&usedKnobs.accelerationStructureFeatures);
+
+        usedKnobs.rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+        usedKnobs.rayQueryFeatures.rayQuery = VK_TRUE;
+        featuresChain.Add(&usedKnobs.rayQueryFeatures);
+
+        usedKnobs.bufferDeviceAddressFeatures.sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR;
+        usedKnobs.bufferDeviceAddressFeatures.bufferDeviceAddress = VK_TRUE;
+        featuresChain.Add(&usedKnobs.bufferDeviceAddressFeatures);
     }
 
     // Find a universal queue family

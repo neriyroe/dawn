@@ -74,7 +74,10 @@ PhysicalDevice* AsVulkan(WGPUAdapter adapter) {
 
 Texture* AsVulkan(WGPUTexture texture) {
     TextureBase* base = FromAPI(texture);
-    if (base == nullptr ||
+    // An error texture answers every getter from the descriptor it was refused for, so an embedder cannot
+    // tell one apart -- and it is not a backend texture at all, which makes ToBackend read someone else's
+    // memory. Null here is what turns a failed creation into a sentence instead of a fault in the driver.
+    if (base == nullptr || base->IsError() ||
         base->GetDevice()->GetPhysicalDevice()->GetBackendType() != wgpu::BackendType::Vulkan) {
         return nullptr;
     }
@@ -210,6 +213,45 @@ void RequestTimelineSemaphores() {
 
 bool HasTimelineSemaphores() {
     return MutableGotTimelineSemaphores();
+}
+
+void RequestRayQuery() {
+    MutableWantRayQuery() = true;
+}
+
+bool HasRayQuery() {
+    return MutableGotRayQuery();
+}
+
+// Lock free: the pending serial is an atomic, and the completed one takes the queue's own mutex. Neither
+// wants the device guard, which a caller holding it across a submit would deadlock on.
+uint64_t GetPendingCommandSerial(WGPUDevice device) {
+    Device* backendDevice = AsVulkan(device);
+    return backendDevice == nullptr
+               ? 0
+               : static_cast<uint64_t>(backendDevice->GetQueue()->GetPendingCommandSerial());
+}
+
+uint64_t GetCompletedCommandSerial(WGPUDevice device) {
+    Device* backendDevice = AsVulkan(device);
+    return backendDevice == nullptr
+               ? 0
+               : static_cast<uint64_t>(backendDevice->GetQueue()->GetCompletedCommandSerial());
+}
+
+bool WaitForCommandSerial(WGPUDevice device, uint64_t serial, uint64_t timeoutNs) {
+    Device* backendDevice = AsVulkan(device);
+    if (backendDevice == nullptr) {
+        return false;
+    }
+    QueueBase* queue = backendDevice->GetQueue();
+    // A serial not yet submitted is flushed by the wait itself, which is what makes this usable on the
+    // pending one. What the caller needs back is whether it actually passed, not what went wrong.
+    if (backendDevice->ConsumedError(
+            queue->WaitForQueueSerial(static_cast<ExecutionSerial>(serial), Nanoseconds(timeoutNs)))) {
+        return false;
+    }
+    return static_cast<uint64_t>(queue->GetCompletedCommandSerial()) >= serial;
 }
 
 void RequestVulkanLoader(const char* libraryName) {

@@ -43,6 +43,19 @@ inline bool& MutableGotTimelineSemaphores() {
     return granted;
 }
 
+// Ray query, the same way: acceleration structures, the query itself and the buffer device addresses their
+// builds are fed through. Dawn has no ray tracing of its own, so nothing here is ever asked for by Dawn --
+// an embedder that traces on Dawn's device wants the features switched on and reads back what it got.
+inline bool& MutableWantRayQuery() {
+    static bool wanted = false;
+    return wanted;
+}
+
+inline bool& MutableGotRayQuery() {
+    static bool granted = false;
+    return granted;
+}
+
 // Appends the wanted names the driver actually advertises and Dawn has not already asked for. A name
 // no driver offers is dropped rather than refused: the embedder loses the feature, the device still boots.
 inline void AppendExtraExtensions(const std::vector<std::string>& wanted,

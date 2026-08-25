@@ -86,6 +86,21 @@ DAWN_NATIVE_EXPORT void RequestExtraDeviceExtensions(const char* const* names, s
 DAWN_NATIVE_EXPORT void RequestTimelineSemaphores();
 DAWN_NATIVE_EXPORT bool HasTimelineSemaphores();
 
+// Ray query, the same ask-then-read-back. Dawn traces nothing itself: this switches on acceleration
+// structures, the query, and the buffer device addresses their builds are fed through, for an embedder
+// that records ray tracing into Dawn's own command buffer.
+DAWN_NATIVE_EXPORT void RequestRayQuery();
+DAWN_NATIVE_EXPORT bool HasRayQuery();
+
+// Dawn's own place in the queue's timeline, for an embedder whose resources a frame in flight still names.
+// The pending serial is the one the work being recorded now will be submitted under; the completed one is
+// the last that has retired, so anything stamped at or below it is nobody's any more. Zero off Vulkan.
+DAWN_NATIVE_EXPORT uint64_t GetPendingCommandSerial(WGPUDevice device);
+DAWN_NATIVE_EXPORT uint64_t GetCompletedCommandSerial(WGPUDevice device);
+// Blocks until that serial retires, or the timeout passes. False when it did not, which is the only answer
+// a caller about to reuse the memory behind it may act on.
+DAWN_NATIVE_EXPORT bool WaitForCommandSerial(WGPUDevice device, uint64_t serial, uint64_t timeoutNs);
+
 // A loader to open in place of the platform's own, registered before the instance exists. An interposer
 // has to sit under vkCreateInstance and vkCreateDevice to add queues and hooks of its own; one that will
 // not open is skipped, and the platform loader brings the backend up without it.
