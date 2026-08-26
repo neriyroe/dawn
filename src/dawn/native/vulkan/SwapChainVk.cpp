@@ -43,6 +43,7 @@
 #include "src/dawn/native/vulkan/QueueVk.h"
 #include "src/dawn/native/vulkan/TextureVk.h"
 #include "src/dawn/native/vulkan/VulkanError.h"
+#include "src/utils/log.h"
 #include "vulkan/vulkan_core.h"
 
 #if defined(DAWN_USE_X11)
@@ -192,7 +193,9 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
     createInfo.preTransform = mConfig.transform;
     createInfo.compositeAlpha = mConfig.alphaMode;
     createInfo.presentMode = mConfig.presentMode;
-    createInfo.clipped = VK_FALSE;
+    // Nothing here reads back a region another window covered: a presented frame is either scanned out or
+    // sampled whole in the frame that drew it, so the driver may discard obscured fragments.
+    createInfo.clipped = VK_TRUE;
     createInfo.oldSwapchain = previousVkSwapChain;
 
     DAWN_TRY(CheckVkSuccess(
@@ -277,6 +280,15 @@ ResultOrError<SwapChain::Config> SwapChain::ChooseConfig(
     } else {
         config.usage = targetUsages;
         config.wgpuUsage = GetUsage();
+    }
+
+    // A blit costs a full-frame read and write on every present, plus a texture built and destroyed with it.
+    // Said out loud once per swapchain, because silently paying that is the worst of the outcomes here.
+    if (config.needsBlit) {
+        dawn::WarningLog() << absl::StrFormat(
+            "swapchain falls back to a per-frame blit: the surface refuses the asked-for extent or usage "
+            "(wanted usage 0x%x, surface offers 0x%x)",
+            targetUsages, supportedUsages);
     }
 
     // Only support BGRA8Unorm (and RGBA8Unorm on android) with SRGB color space for now.
