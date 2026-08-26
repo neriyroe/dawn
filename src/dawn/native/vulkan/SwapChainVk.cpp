@@ -261,10 +261,11 @@ ResultOrError<SwapChain::Config> SwapChain::ChooseConfig(
     }
 
     // Choose the target width or do a blit.
-    if (GetWidth() < surfaceInfo.capabilities.minImageExtent.width ||
-        GetWidth() > surfaceInfo.capabilities.maxImageExtent.width ||
-        GetHeight() < surfaceInfo.capabilities.minImageExtent.height ||
-        GetHeight() > surfaceInfo.capabilities.maxImageExtent.height) {
+    const bool extentRefused = GetWidth() < surfaceInfo.capabilities.minImageExtent.width ||
+                               GetWidth() > surfaceInfo.capabilities.maxImageExtent.width ||
+                               GetHeight() < surfaceInfo.capabilities.minImageExtent.height ||
+                               GetHeight() > surfaceInfo.capabilities.maxImageExtent.height;
+    if (extentRefused) {
         config.needsBlit = true;
     } else {
         config.extent.width = GetWidth();
@@ -275,7 +276,8 @@ ResultOrError<SwapChain::Config> SwapChain::ChooseConfig(
     VkImageUsageFlags targetUsages =
         VulkanImageUsage(GetDevice(), GetUsage(), GetDevice()->GetValidInternalFormat(GetFormat()));
     VkImageUsageFlags supportedUsages = surfaceInfo.capabilities.supportedUsageFlags;
-    if (!IsSubset(targetUsages, supportedUsages)) {
+    const bool usageRefused = !IsSubset(targetUsages, supportedUsages);
+    if (usageRefused) {
         config.needsBlit = true;
     } else {
         config.usage = targetUsages;
@@ -284,10 +286,17 @@ ResultOrError<SwapChain::Config> SwapChain::ChooseConfig(
 
     // A blit costs a full-frame read and write on every present, plus a texture built and destroyed with it.
     // Said out loud once per swapchain, because silently paying that is the worst of the outcomes here.
-    if (config.needsBlit) {
+    if (extentRefused) {
         dawn::WarningLog() << absl::StrFormat(
-            "swapchain falls back to a per-frame blit: the surface refuses the asked-for extent or usage "
-            "(wanted usage 0x%x, surface offers 0x%x)",
+            "swapchain falls back to a per-frame blit: the surface caps %ux%u to between %ux%u and %ux%u",
+            GetWidth(), GetHeight(), surfaceInfo.capabilities.minImageExtent.width,
+            surfaceInfo.capabilities.minImageExtent.height,
+            surfaceInfo.capabilities.maxImageExtent.width,
+            surfaceInfo.capabilities.maxImageExtent.height);
+    }
+    if (usageRefused) {
+        dawn::WarningLog() << absl::StrFormat(
+            "swapchain falls back to a per-frame blit: usage 0x%x asks for more than the surface's 0x%x",
             targetUsages, supportedUsages);
     }
 
@@ -498,9 +507,18 @@ ResultOrError<SwapChainTextureInfo> SwapChain::GetCurrentTextureInternal(bool is
     UniqueVkHandle<VkSemaphore> acquireSemaphore;
     DAWN_TRY_ASSIGN(acquireSemaphore, CreateSemaphore(device));
 
-    // Likewise create a fence that will be signaled, so we can wait on it later for frame pacing.
+    // Likewise a fence that will be signaled, so we can wait on it later for frame pacing. Recycled where a
+    // previous frame's has already been waited on: the image it belongs to is only known after the acquire
+    // below, so these are pooled on the swapchain rather than held per image.
     UniqueVkHandle<VkFence> acquireFence;
-    DAWN_TRY_ASSIGN(acquireFence, CreateFence(device));
+    if (!mSpareFences.empty()) {
+        acquireFence = std::move(mSpareFences.back());
+        mSpareFences.pop_back();
+        DAWN_TRY(CheckVkSuccess(
+            device->fn.ResetFences(device->GetVkDevice(), 1, &*acquireFence.Get()), "vkResetFences"));
+    } else {
+        DAWN_TRY_ASSIGN(acquireFence, CreateFence(device));
+    }
 
     VkResult result = VkResult::WrapUnsafe(device->fn.AcquireNextImageKHR(
         device->GetVkDevice(), mSwapChain, std::numeric_limits<uint64_t>::max(),
@@ -560,6 +578,8 @@ ResultOrError<SwapChainTextureInfo> SwapChain::GetCurrentTextureInternal(bool is
             device->fn.WaitForFences(device->GetVkDevice(), 1,
                                      &*lastImage.lastAcquireDoneFence.Get(), true, UINT64_MAX),
             "SwapChain WaitForFences"));
+        // The wait has returned, so nothing is using it: back to the pool rather than to the deleter.
+        mSpareFences.push_back(std::move(lastImage.lastAcquireDoneFence));
     }
     lastImage.lastAcquireDoneFence = std::move(acquireFence);
 
@@ -599,6 +619,8 @@ void SwapChain::DetachFromSurfaceImpl() {
     }
 
     mImages.clear();
+    // Retired with the images they paced, so a surface handed back does not hold a pool of the old one's.
+    mSpareFences.clear();
 
     // The swapchain images are destroyed with the swapchain.
     if (mSwapChain != VK_NULL_HANDLE) {

@@ -284,6 +284,9 @@ add_dependencies(webgpu_upstream_cpp_headers webgpu_upstream_cpp_headers_gen)
 
 if (DAWN_ENABLE_INSTALL)
     install(TARGETS webgpu_upstream_cpp_headers EXPORT DawnTargets)
-    install(FILES ${WEBGPU_UPSTREAM_CPP_HEADERS}
+    # OPTIONAL: only the bitmasks header above is actually produced here -- the other three in this list are
+    # generated for this flavour in some configurations and not in others, and a hard install of a file
+    # nothing wrote fails the whole step, which is what was leaving the import library a build behind.
+    install(FILES ${WEBGPU_UPSTREAM_CPP_HEADERS} OPTIONAL
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/webgpu_upstream/webgpu")
 endif ()

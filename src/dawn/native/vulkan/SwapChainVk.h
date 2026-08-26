@@ -97,6 +97,9 @@ class SwapChain : public SwapChainBase {
         UniqueVkHandle<VkFence> lastAcquireDoneFence;
     };
     std::vector<PerImage> mImages;
+    // Acquire fences come back here once their wait has returned, instead of being created and fence-deleted
+    // once per frame for the life of the process. Reset on the way out, since a waited fence is signalled.
+    std::vector<UniqueVkHandle<VkFence>> mSpareFences;
     uint32_t mLastImageIndex = 0;
 
     Ref<Texture> mBlitTexture;
