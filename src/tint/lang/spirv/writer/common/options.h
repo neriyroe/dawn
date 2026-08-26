@@ -146,6 +146,10 @@ struct Options {
         /// Set to `true` to replace atomicStore in workgroup memory with atomicExchange.
         bool replace_workgroup_atomic_store_with_exchange = false;
 
+        /// Set to `true` to replace unsigned equality comparisons with zero by relational
+        /// comparisons against one.
+        bool replace_unsigned_compare_zero = false;
+
         TINT_REFLECT(Workarounds,
                      polyfill_case_switch,
                      scalarize_max_min_clamp,
@@ -162,7 +166,8 @@ struct Options {
                      polyfill_saturate_as_min_max_f16,
                      cooperative_matrix_stride_is_matrix_elements,
                      collapse_subgroup_min_max,
-                     replace_workgroup_atomic_store_with_exchange);
+                     replace_workgroup_atomic_store_with_exchange,
+                     replace_unsigned_compare_zero);
     };
 
     /// Any options which are controlled by the presence/absence of a vulkan extension.
@@ -193,6 +198,11 @@ struct Options {
         /// transform.
         bool disable_runtime_sized_array_index_clamping = false;
 
+        /// Set to `true` to disable bounds checks on subgroup matrix load/store in the storage
+        /// address space. Set by
+        /// VkCooperativeMatrixFeaturesKHR::cooperativeMatrixRobustBufferAccess.
+        bool disable_storage_subgroup_matrix_clamping = false;
+
         /// Set to `true` to generate polyfill for `dot4I8Packed` and `dot4U8Packed` builtins
         bool dot_4x8_packed = false;
 
@@ -215,6 +225,7 @@ struct Options {
                      use_vulkan_memory_model,
                      disable_image_robustness,
                      disable_runtime_sized_array_index_clamping,
+                     disable_storage_subgroup_matrix_clamping,
                      dot_4x8_packed,
                      use_uniform_buffers,
                      use_maximal_reconvergence,

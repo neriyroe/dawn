@@ -903,10 +903,10 @@ MaybeError Texture::ReadStaging(const ScopedCommandRecordingContext* commandCont
                 // If there is no padding in the rows, we can upload the whole image
                 // in one read.
                 DAWN_TRY(callback(pSrcData, checked_cast<size_t>(dstOffset),
-                                  dstBytesPerRow * rowsPerImage));
+                                  size_t{dstBytesPerRow} * rowsPerImage));
             } else if (hasStencil) {
                 // We need to read texel by texel for depth-stencil formats.
-                std::vector<uint8_t> depthOrStencilData(size.width * blockInfo.byteSize);
+                std::vector<uint8_t> depthOrStencilData(size_t{size.width} * blockInfo.byteSize);
                 const auto aspectLayout = DepthStencilAspectLayout(
                     d3d::DXGITextureFormat(GetDevice(), GetFormat().format), subresources.aspects);
                 DAWN_ASSERT(blockInfo.byteSize == aspectLayout.componentSize);
@@ -950,12 +950,12 @@ MaybeError Texture::ReadStaging(const ScopedCommandRecordingContext* commandCont
     for (uint32_t z = 0; z < size.depthOrArrayLayers; ++z) {
         uint64_t dstOffset = static_cast<uint64_t>(dstBytesPerRow) * dstRowsPerImage * z;
         uint8_t* pSrcData = DAWN_UNSAFE_TODO(static_cast<uint8_t*>(mappedResource.pData) +
-                                             z * mappedResource.DepthPitch);
+                                             size_t{z} * mappedResource.DepthPitch);
         if (dstBytesPerRow == bytesPerRow && mappedResource.RowPitch == bytesPerRow) {
             // If there is no padding in the rows, we can upload the whole image
             // in one read.
-            DAWN_TRY(
-                callback(pSrcData, checked_cast<size_t>(dstOffset), bytesPerRow * size.height));
+            DAWN_TRY(callback(pSrcData, checked_cast<size_t>(dstOffset),
+                              size_t{bytesPerRow} * size.height));
         } else {
             // Otherwise, we need to read each row separately.
             for (uint32_t y = 0; y < size.height; ++y) {
@@ -1332,7 +1332,8 @@ ResultOrError<ID3D11RenderTargetView*> TextureView::GetOrCreateD3D11RenderTarget
 ResultOrError<ID3D11DepthStencilView*> TextureView::GetOrCreateD3D11DepthStencilView(
     bool depthReadOnly,
     bool stencilReadOnly) {
-    // TODO: figure out if it is necessary to cache DSV for different properties.
+    // TODO(https://crbug.com/40930969): figure out if it is necessary to cache
+    // DSV for different properties.
     if (mD3d11DepthStencilView && mD3d11DepthStencilViewDepthReadOnly == depthReadOnly &&
         mD3d11DepthStencilViewStencilReadOnly == stencilReadOnly) {
         return mD3d11DepthStencilView.Get();

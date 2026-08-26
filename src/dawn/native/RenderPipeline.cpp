@@ -268,7 +268,7 @@ ResultOrError<ShaderModuleEntryPoint> ValidateVertexState(
         return DAWN_VALIDATION_ERROR(
             "Vertex attribute slot %u used in (%s, %s) is not present in the "
             "VertexState.",
-            uint8_t(firstMissing), descriptor->module, entryPoint);
+            uint8_t{firstMissing}, descriptor->module, entryPoint);
     }
 
     return entryPoint;
@@ -508,7 +508,7 @@ MaybeError ValidateColorTargetState(
         DAWN_INVALID_IF(!device->HasFeature(Feature::DawnLoadResolveTexture),
                         "The ColorTargetStateExpandResolveTextureDawn struct is used while the "
                         "%s feature is not enabled.",
-                        ToAPI(Feature::DawnLoadResolveTexture));
+                        ToCppAPI(Feature::DawnLoadResolveTexture));
 
         DAWN_INVALID_IF(
             multisample.count <= 1,
@@ -662,7 +662,8 @@ ResultOrError<ShaderModuleEntryPoint> ValidateFragmentState(DeviceBase* device,
                         depthStencil->format, descriptor->module, entryPoint);
     }
 
-    ColorAttachmentIndex maxColorAttachments{uint8_t(device->GetLimits().v1.maxColorAttachments)};
+    auto maxColorAttachments =
+        checked_cast<ColorAttachmentIndex>(device->GetLimits().v1.maxColorAttachments);
     DAWN_INVALID_IF(
         descriptor->targets.size() > maxColorAttachments,
         "Number of targets (%u) exceeds the maximum (%u).%s", descriptor->targets.size(),
@@ -710,7 +711,7 @@ ResultOrError<ShaderModuleEntryPoint> ValidateFragmentState(DeviceBase* device,
         DAWN_INVALID_IF(!usesBlendSrc1,
                         "One of the blend factor uses `blend_src(1)` while `blend_src(1)` is "
                         "missing from the fragment shader outputs.");
-        DAWN_INVALID_IF(descriptor->targets.size() != ColorAttachmentIndex{uint8_t{1u}},
+        DAWN_INVALID_IF(descriptor->targets.size() != ColorAttachmentIndex{uint8_t{1}},
                         "One of the blend factor uses `blend_src(1)` but the color targets count "
                         "is not 1.");
     }
@@ -999,7 +1000,7 @@ RenderPipelineBase::RenderPipelineBase(DeviceBase* device,
             // cause no overflow.
             uint32_t formatByteSize = GetVertexFormatInfo(attribute.format).byteSize;
             DAWN_CHECK(attribute.offset <= 2048);
-            uint16_t accessBoundary = uint16_t(attribute.offset) + uint16_t(formatByteSize);
+            uint16_t accessBoundary = checked_cast<uint16_t>(attribute.offset + formatByteSize);
             mVertexBufferInfos[slot].usedBytesInStride =
                 std::max(mVertexBufferInfos[slot].usedBytesInStride, accessBoundary);
             mVertexBufferInfos[slot].lastStride =

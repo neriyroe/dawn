@@ -184,8 +184,10 @@ struct State {
     /// The type manager.
     core::type::Manager& ty{ir.Types()};
 
-    /// Module-scoped variable for subgroup size mask.
-    core::ir::Var* subgroup_size_mask_ = nullptr;
+    /// Module-scoped variable for subgroup invocation id.
+    core::ir::Var* subgroup_invocation_id_ = nullptr;
+    /// Module-scoped variable for the last active subgroup id.
+    core::ir::Var* subgroup_last_id_ = nullptr;
 
     /// Process the module.
     void Process() {
@@ -248,11 +250,14 @@ struct State {
                     case core::BuiltinFn::kSubgroupBroadcast:
                         worklist.push_back([this, builtin] { SubgroupBroadcast(builtin); });
                         break;
-                    case core::BuiltinFn::kSubgroupShuffle:
+                    case core::BuiltinFn::kSubgroupShuffle: {
+                        worklist.push_back([this, builtin] { SubgroupShuffle(builtin); });
+                        break;
+                    }
                     case core::BuiltinFn::kSubgroupShuffleDown:
                     case core::BuiltinFn::kSubgroupShuffleUp:
                     case core::BuiltinFn::kSubgroupShuffleXor: {
-                        worklist.push_back([this, builtin] { SubgroupShuffle(builtin); });
+                        worklist.push_back([this, builtin] { SubgroupShuffleDirection(builtin); });
                         break;
                     }
                     case core::BuiltinFn::kTextureDimensions:
@@ -324,6 +329,9 @@ struct State {
                     case core::BuiltinFn::kAddSat:
                         worklist.push_back([this, builtin] { AddSat(builtin); });
                         break;
+                    case core::BuiltinFn::kMulSat:
+                        worklist.push_back([this, builtin] { MulSat(builtin); });
+                        break;
                     default:
                         break;
                 }
@@ -368,46 +376,60 @@ struct State {
             construct->SetArg(0, value);
         }
 
-        if (subgroup_size_mask_) {
+        if (subgroup_invocation_id_ || subgroup_last_id_) {
             for (auto func : ir.functions) {
-                if (func->IsEntryPoint()) {
-                    SetSubgroupSizeMaskForEntryPoint(func);
+                if (!func->IsEntryPoint()) {
+                    continue;
+                }
+
+                if (subgroup_invocation_id_) {
+                    SetSubgroupInvocationIdForEntryPoint(func);
+                }
+                if (subgroup_last_id_) {
+                    SetSubgroupLastIdForEntryPoint(func);
                 }
             }
         }
     }
 
-    /// Set the subgroup_size_mask variable from an entry point.
-    void SetSubgroupSizeMaskForEntryPoint(core::ir::Function* ep) {
+    /// Set the subgroup_invocation_id variable from an entry point.
+    void SetSubgroupInvocationIdForEntryPoint(core::ir::Function* ep) {
         b.InsertBefore(ep->Block()->Front(), [&] {
-            core::ir::Value* subgroup_size = nullptr;
+            core::ir::Value* subgroup_invocation_id = nullptr;
             for (auto* param : ep->Params()) {
-                if (param->Attributes().builtin == core::BuiltinValue::kSubgroupSize) {
-                    subgroup_size = param;
+                if (param->Attributes().builtin == core::BuiltinValue::kSubgroupInvocationId) {
+                    subgroup_invocation_id = param;
                     break;
                 }
                 if (auto* str = param->Type()->As<core::type::Struct>()) {
                     for (auto* member : str->Members()) {
-                        if (member->Attributes().builtin == core::BuiltinValue::kSubgroupSize) {
-                            subgroup_size =
+                        if (member->Attributes().builtin ==
+                            core::BuiltinValue::kSubgroupInvocationId) {
+                            subgroup_invocation_id =
                                 b.Access(ty.u32(), param, u32(member->Index()))->Result();
                             break;
                         }
                     }
-                    if (subgroup_size) {
+                    if (subgroup_invocation_id) {
                         break;
                     }
                 }
             }
-            if (!subgroup_size) {
-                auto* param = b.FunctionParam("tint_subgroup_size", ty.u32());
-                param->SetBuiltin(core::BuiltinValue::kSubgroupSize);
+            if (!subgroup_invocation_id) {
+                auto* param = b.FunctionParam("tint_subgroup_invocation_id", ty.u32());
+                param->SetBuiltin(core::BuiltinValue::kSubgroupInvocationId);
                 ep->AppendParam(param);
-                subgroup_size = param;
+                subgroup_invocation_id = param;
             }
+            b.Store(subgroup_invocation_id_, subgroup_invocation_id);
+        });
+    }
 
-            auto* mask = b.Subtract(subgroup_size, 1_u);
-            b.Store(subgroup_size_mask_, mask);
+    /// Set the subgroup_last_id_ variable from an entry point.
+    void SetSubgroupLastIdForEntryPoint(core::ir::Function* ep) {
+        b.InsertBefore(ep->Block()->Front(), [&] {
+            core::ir::Instruction* count = b.Call(ty.u32(), core::BuiltinFn::kSubgroupAdd, 1_u);
+            b.Store(subgroup_last_id_, b.Subtract(count, 1_u));
         });
     }
 
@@ -1300,8 +1322,26 @@ struct State {
         ir.properties.Add(core::ir::Property::kAllowAnyInputAttachmentIndexType);
     }
 
-    /// Handles SubgroupShuffle(), SubgroupShuffleDown(), SubgroupShuffleUp(), SubgroupShuffleXor()
-    /// builtins.
+    void CreateSubgroupLastIdIfNeeded() {
+        if (subgroup_last_id_) {
+            return;
+        }
+        b.Append(ir.root_block, [&] {
+            subgroup_last_id_ = b.Var<core::AddressSpace::kPrivate, u32>("tint_subgroup_last_id");
+        });
+    }
+
+    void CreateSubgroupInvocationIdIfNeeded() {
+        if (subgroup_invocation_id_) {
+            return;
+        }
+        b.Append(ir.root_block, [&] {
+            subgroup_invocation_id_ =
+                b.Var<core::AddressSpace::kPrivate, u32>("tint_subgroup_invocation_id");
+        });
+    }
+
+    /// Handles SubgroupShuffle() builtin.
     /// @param builtin the builtin call instruction
     void SubgroupShuffle(core::ir::CoreBuiltinCall* builtin) {
         TINT_IR_ASSERT(ir, builtin->Args().size() == 2);
@@ -1317,17 +1357,64 @@ struct State {
 
         /// Polyfill a `subgroupShuffleX` builtin call with one that has clamped the arg2 param
         auto* shuffle_id = builtin->Args()[1];
-        if (!subgroup_size_mask_) {
-            b.Append(ir.root_block, [&] {
-                subgroup_size_mask_ =
-                    b.Var<core::AddressSpace::kPrivate, u32>("tint_subgroup_size_mask");
-            });
-        }
+        CreateSubgroupLastIdIfNeeded();
+
         b.InsertBefore(builtin, [&] {
-            auto* subgroup_size_mask = b.Load(subgroup_size_mask_);
-            auto* clamp_via_masking_and = b.And(shuffle_id, subgroup_size_mask);
-            builtin->SetArg(1, clamp_via_masking_and->Result());
+            auto* last_id = b.Load(subgroup_last_id_);
+            auto* clamp_via_min = b.Min(shuffle_id, last_id);
+            builtin->SetArg(1, clamp_via_min->Result());
         });
+    }
+
+    /// Handles SubgroupShuffleDown(), SubgroupShuffleUp(), SubgroupShuffleXor() builtins.
+    /// @param builtin the builtin call instruction
+    void SubgroupShuffleDirection(core::ir::CoreBuiltinCall* builtin) {
+        TINT_IR_ASSERT(ir, builtin->Args().size() == 2);
+        // The second argument is either 'id' , 'delta', or 'mask'.
+        // All must be bound by [0, subgroup_size)
+        auto* arg2 = builtin->Args()[1];
+        // arg2 must be an unsigned integer scalar, so bitcast if necessary.
+        if (arg2->Type()->IsSignedIntegerScalar()) {
+            auto* cast = b.Bitcast(ty.u32(), arg2);
+            cast->InsertBefore(builtin);
+            builtin->SetArg(1, cast->Result());
+        }
+
+        auto* delta = builtin->Args()[1];
+
+        CreateSubgroupLastIdIfNeeded();
+        CreateSubgroupInvocationIdIfNeeded();
+
+        core::ir::CoreBuiltinCall* call = nullptr;
+        b.InsertAfter(builtin, [&] {
+            auto* ret_ty = builtin->Result()->Type();
+            auto* result = b.InstructionResult(ret_ty);
+
+            // Replace the uses before we create the new usage.
+            builtin->Result()->ReplaceAllUsesWith(result);
+
+            core::ir::Instruction* id = nullptr;
+            auto* subgroup_invocation_id = b.Load(subgroup_invocation_id_);
+            switch (builtin->Func()) {
+                case core::BuiltinFn::kSubgroupShuffleUp:
+                    id = b.Subtract(subgroup_invocation_id, delta);
+                    break;
+                case core::BuiltinFn::kSubgroupShuffleDown:
+                    id = b.Add(subgroup_invocation_id, delta);
+                    break;
+                case core::BuiltinFn::kSubgroupShuffleXor:
+                    id = b.Xor(subgroup_invocation_id, delta);
+                    break;
+                default:
+                    TINT_IR_UNREACHABLE(ir);
+            }
+
+            auto* cmp = b.LessThanEqual(id, b.Load(subgroup_last_id_));
+            call = b.CallWithResult(result, core::BuiltinFn::kSelect, b.Zero(ret_ty), builtin, cmp);
+        });
+
+        // Make sure the select gets converted to proper SPIR-V select
+        Select(call);
     }
 
     /// Handle a SubgroupBroadcast() builtin.
@@ -1339,8 +1426,26 @@ struct State {
 
         // For const signed int IDs, compile-time convert to u32 to maintain constness.
         if (id->Type()->IsSignedIntegerScalar()) {
-            builtin->SetArg(1, b.Constant(id->As<core::ir::Constant>()->Value()->ValueAs<u32>()));
+            id = b.Constant(id->As<core::ir::Constant>()->Value()->ValueAs<u32>());
         }
+        builtin->SetArg(1, id);
+
+        CreateSubgroupLastIdIfNeeded();
+
+        core::ir::CoreBuiltinCall* call = nullptr;
+        b.InsertAfter(builtin, [&] {
+            auto* ret_ty = builtin->Result()->Type();
+            auto* result = b.InstructionResult(ret_ty);
+
+            // Replace the uses before we create the new usage.
+            builtin->Result()->ReplaceAllUsesWith(result);
+
+            auto* cmp = b.LessThanEqual(id, b.Load(subgroup_last_id_));
+            call = b.CallWithResult(result, core::BuiltinFn::kSelect, b.Zero(ret_ty), builtin, cmp);
+        });
+
+        // Make sure the select gets converted to proper SPIR-V select
+        Select(call);
     }
 
     /// Handle a QuadBroadcast() builtin.
@@ -1360,24 +1465,19 @@ struct State {
     /// @param builtin the builtin call instruction
     void SubgroupMatrixLoad(core::ir::CoreBuiltinCall* builtin) {
         b.InsertBefore(builtin, [&] {
-            const bool majorness_template = builtin->ExplicitTemplateParams().Length() == 2;
+            TINT_IR_ASSERT(ir, builtin->ExplicitTemplateParams().Length() == 2);
             auto* result_ty = builtin->Result()->Type()->As<core::type::SubgroupMatrix>();
             auto* p = builtin->Args()[0];
             auto* offset = builtin->Args()[1];
-            auto* stride = builtin->Args()[majorness_template ? 2 : 3];
+            auto* stride = builtin->Args()[2];
 
             auto* ptr = p->Type()->As<core::type::Pointer>();
             auto* arr = ptr->StoreType()->As<core::type::Array>();
 
-            bool col_major = true;
-            if (majorness_template) {
-                TINT_IR_ASSERT(ir, std::holds_alternative<core::Majorness>(
-                                       builtin->ExplicitTemplateParams()[1]));
-                col_major = std::get<core::Majorness>(builtin->ExplicitTemplateParams()[1]) ==
-                            core::Majorness::kColMajor;
-            } else {
-                col_major = builtin->Args()[2]->As<core::ir::Constant>()->Value()->ValueAs<bool>();
-            }
+            TINT_IR_ASSERT(
+                ir, std::holds_alternative<core::Majorness>(builtin->ExplicitTemplateParams()[1]));
+            bool col_major = std::get<core::Majorness>(builtin->ExplicitTemplateParams()[1]) ==
+                             core::Majorness::kColMajor;
             auto* layout = b.Constant(u32(col_major ? SpvCooperativeMatrixLayoutColumnMajorKHR
                                                     : SpvCooperativeMatrixLayoutRowMajorKHR));
             uint32_t mask = static_cast<uint32_t>(SpvMemoryAccessMaskNone);
@@ -1390,35 +1490,13 @@ struct State {
             }
             auto* memory_operand = Literal(u32(mask));
 
-            // In SPIR-V `stride` and `offset` are related to the type of the input pointer, while
-            // in WGSL they both mean the number of elements. When the subgroup matrix element type
-            // is `i8` or `u8`, and the input array type is `i32` or `u32`, we need to convert the
-            // `stride` and `offset` in WGSL into the ones in SPIR-V by dividing them with 4.
-            // Note: the majorness templated variants match SPIR-V
-            auto* applied_stride = stride;
-            auto* applied_offset = offset;
-            if (!majorness_template && result_ty->Type()->Size() == 1u &&
-                arr->ElemType()->Size() == 4u) {
-                if (!config.cooperative_matrix_stride_is_matrix_elements) {
-                    stride = b.InsertBitcastIfNeeded(ty.u32(), stride);
-                    auto* applied_stride_binary =
-                        b.Binary(core::BinaryOp::kDivide, stride->Type(), stride, u32(4));
-                    applied_stride = applied_stride_binary->Result();
-                }
-
-                offset = b.InsertBitcastIfNeeded(ty.u32(), offset);
-                auto* applied_offset_binary =
-                    b.Binary(core::BinaryOp::kDivide, offset->Type(), offset, u32(4));
-                applied_offset = applied_offset_binary->Result();
-            }
-
             // Make a pointer to the first element of the array that we will load from.
             auto* elem_ptr = ty.ptr(ptr->AddressSpace(), arr->ElemType(), ptr->Access());
-            auto* src = b.Access(elem_ptr, p, applied_offset);
+            auto* src = b.Access(elem_ptr, p, offset);
 
             auto* call = b.CallWithResult<spirv::ir::BuiltinCall>(
                 builtin->DetachResult(), spirv::BuiltinFn::kCooperativeMatrixLoad, src, layout,
-                applied_stride, memory_operand);
+                stride, memory_operand);
             if (ptr->AddressSpace() == core::AddressSpace::kStorage &&
                 builtin->Alignment().has_value()) {
                 call->PushOperand(Literal(u32(builtin->Alignment().value())));
@@ -1432,53 +1510,25 @@ struct State {
     /// @param builtin the builtin call instruction
     void SubgroupMatrixStore(core::ir::CoreBuiltinCall* builtin) {
         b.InsertBefore(builtin, [&] {
-            const bool majorness_template = builtin->ExplicitTemplateParams().Length() == 1;
+            TINT_IR_ASSERT(ir, builtin->ExplicitTemplateParams().Length() == 1);
             auto* p = builtin->Args()[0];
             auto* offset = builtin->Args()[1];
             auto* value = builtin->Args()[2];
-            auto* value_type = value->Type()->As<core::type::SubgroupMatrix>();
 
-            bool col_major = true;
-            if (majorness_template) {
-                TINT_IR_ASSERT(ir, std::holds_alternative<core::Majorness>(
-                                       builtin->ExplicitTemplateParams()[0]));
-                col_major = std::get<core::Majorness>(builtin->ExplicitTemplateParams()[0]) ==
-                            core::Majorness::kColMajor;
-            } else {
-                col_major = builtin->Args()[3]->As<core::ir::Constant>()->Value()->ValueAs<bool>();
-            }
+            TINT_IR_ASSERT(
+                ir, std::holds_alternative<core::Majorness>(builtin->ExplicitTemplateParams()[0]));
+            bool col_major = std::get<core::Majorness>(builtin->ExplicitTemplateParams()[0]) ==
+                             core::Majorness::kColMajor;
             auto* layout = b.Constant(u32(col_major ? SpvCooperativeMatrixLayoutColumnMajorKHR
                                                     : SpvCooperativeMatrixLayoutRowMajorKHR));
-            auto* stride = builtin->Args()[majorness_template ? 3 : 4];
+            auto* stride = builtin->Args()[3];
 
             auto* ptr = p->Type()->As<core::type::Pointer>();
             auto* arr = ptr->StoreType()->As<core::type::Array>();
 
-            // In SPIR-V `stride` and `offset` are related to the type of the input pointer, while
-            // in WGSL they both mean the number of elements. When the subgroup matrix element type
-            // is `i8` or `u8`, and the input array type is `i32` or `u32`, we need to convert the
-            // `stride` and `offset` in WGSL into the ones in SPIR-V by dividing them with 4.
-            // Note: the majorness templated variants match SPIR-V
-            auto* applied_stride = stride;
-            auto* applied_offset = offset;
-            if (!majorness_template && value_type->Type()->Size() == 1u &&
-                arr->ElemType()->Size() == 4u) {
-                if (!config.cooperative_matrix_stride_is_matrix_elements) {
-                    stride = b.InsertBitcastIfNeeded(ty.u32(), stride);
-                    auto* applied_stride_binary =
-                        b.Binary(core::BinaryOp::kDivide, stride->Type(), stride, u32(4));
-                    applied_stride = applied_stride_binary->Result();
-                }
-
-                offset = b.InsertBitcastIfNeeded(ty.u32(), offset);
-                auto* applied_offset_binary =
-                    b.Binary(core::BinaryOp::kDivide, offset->Type(), offset, u32(4));
-                applied_offset = applied_offset_binary->Result();
-            }
-
             // Make a pointer to the first element of the array that we will write to.
             auto* elem_ptr = ty.ptr(ptr->AddressSpace(), arr->ElemType(), ptr->Access());
-            auto* dst = b.Access(elem_ptr, p, applied_offset);
+            auto* dst = b.Access(elem_ptr, p, offset);
 
             uint32_t mask = static_cast<uint32_t>(SpvMemoryAccessNonPrivatePointerMask);
             if (ptr->AddressSpace() == core::AddressSpace::kStorage &&
@@ -1487,9 +1537,9 @@ struct State {
             }
             auto* memory_operand = Literal(u32(mask));
 
-            auto* call = b.Call<spirv::ir::BuiltinCall>(
-                ty.void_(), spirv::BuiltinFn::kCooperativeMatrixStore, dst, value, layout,
-                applied_stride, memory_operand);
+            auto* call = b.Call<spirv::ir::BuiltinCall>(ty.void_(),
+                                                        spirv::BuiltinFn::kCooperativeMatrixStore,
+                                                        dst, value, layout, stride, memory_operand);
             if (ptr->AddressSpace() == core::AddressSpace::kStorage &&
                 builtin->Alignment().has_value()) {
                 call->PushOperand(Literal(u32(builtin->Alignment().value())));
@@ -1594,6 +1644,23 @@ struct State {
                                                                    : b.Constant(u32(0xffffffff)));
             b.CallWithResult<spirv::ir::BuiltinCall>(builtin->DetachResult(),
                                                      spirv::BuiltinFn::kSelect, eq, res, sat);
+        });
+        builtin->Destroy();
+    }
+
+    void MulSat(core::ir::CoreBuiltinCall* builtin) {
+        auto* type = builtin->Result()->Type();
+        auto* str_ty = core::type::CreateUMulExtendedResult(ty, ir.symbols, type);
+        b.InsertBefore(builtin, [&] {
+            auto* call = b.Call<spirv::ir::BuiltinCall>(str_ty, BuiltinFn::kUmulExtended,
+                                                        builtin->Args()[0], builtin->Args()[1]);
+            auto* lower = b.Access(type, call, 0_u);
+            auto* upper = b.Access(type, call, 1_u);
+            auto* eq = b.Equal(upper, b.Zero(type));
+            core::ir::Value* sat = (type->Is<core::type::Vector>() ? b.Splat(type, u32(0xffffffff))
+                                                                   : b.Constant(u32(0xffffffff)));
+            b.CallWithResult<spirv::ir::BuiltinCall>(builtin->DetachResult(),
+                                                     spirv::BuiltinFn::kSelect, eq, lower, sat);
         });
         builtin->Destroy();
     }

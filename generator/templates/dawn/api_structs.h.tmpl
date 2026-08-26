@@ -33,7 +33,7 @@
 //* or aliased as such, i.e. an object of type "buffer" will expect a
 //* corresponding "Buffer" type either forward declared directly or aliased.
 
-{%- from 'dawn/cpp_macros.tmpl' import wgpu_string_members with context -%}
+{%- from 'dawn/cpp_macros.tmpl' import as_annotated_dawnType, as_dawnType, wgpu_string_members with context -%}
 {%- macro render_cpp_default_value(member, forced_default_value="") -%}
     //* Apply default values over undefined when dealing with the internal Dawn
     //* headers to avoid needing to do the additional step of
@@ -41,9 +41,9 @@
     {%- if forced_default_value -%}
         {{" "}}= {{forced_default_value}};
     {%- elif member.annotation in ["*", "const*", "const*const*"] or member.default_value == "nullptr" -%}
-        {{" "}}= nullptr;
+        {{" "}}= {};
     {%- elif member.type.category == "object" and member.optional -%}
-        {{" "}}= nullptr;
+        {{" "}}= {};
     {%- elif member.type.category == "callback info" -%}
         {{" "}}= WGPU_{{member.name.SNAKE_CASE()}}_INIT;
     {%- elif member.type.category == "enum" -%}
@@ -95,9 +95,9 @@ struct StringView {
 
 // NOLINTBEGIN(bugprone-invalid-enum-default-initialization)
 
+{% set enable_free_members = enable_free_members | default(True) %}
 {% for type in by_category["structure"] if type.name.get() not in SpecialStructures %}
     {% set CppType = as_cppType(type.name) %}
-    {% set spanify = not CppType in structure_spanification_blocklist %}
     {% if type.chained %}
         {% set chainedStructType = "ChainedStructOut" if type.chained == "out" else "ChainedStruct" %}
         struct {{CppType}} : {{chainedStructType}} {
@@ -106,11 +106,11 @@ struct StringView {
             }
     {% else %}
         struct {{CppType}} {
-            {% if type.has_free_members_function %}
+            {% if enable_free_members and type.has_free_members_function %}
                 {{CppType}}() = default;
             {% endif %}
     {% endif %}
-        {% if type.has_free_members_function %}
+        {% if enable_free_members and type.has_free_members_function %}
             ~{{CppType}}();
             {{CppType}}(const {{CppType}}&) = delete;
             {{CppType}}& operator=(const {{CppType}}&) = delete;
@@ -141,24 +141,8 @@ struct StringView {
                     {% set forced_default_value = "{ nullptr, wgpu::StorageTextureAccess::BindingNotUsed, wgpu::TextureFormat::Undefined, wgpu::TextureViewDimension::e2D }" %}
                 {% endif %}
             {% endif %}
-            {%- if spanify %}
-                {% if member.is_length %}
-                    //* Skip as it's included in the span just below.
-                {% elif member.length and member.constant_length != 1 %}
-                    {% set index_type = structure_span_index_type_override.get(CppType + "::" + as_varName(member.name), "size_t") %}
-                    {% set length = "dawn::detail::DynamicExtent<" + index_type + ">" %}
-                    {% if member.length == "constant" %}
-                        {% set length = index_type + "{" ~ member.constant_length + "}" %}
-                    {% endif %}
-                    {% if member.type.name.canonical_case() == "void" %}
-                        {% set element_type = "const std::byte" %}
-                    {% else %}
-                        {% set element_type = "std::remove_pointer_t<" + decorate(as_dawnType(member.type), member) + ">" %}
-                    {% endif %}
-                    ityp::span<{{index_type}}, {{element_type}}, {{length}}> {{as_varName(member.name)}};
-                {% else %}
-                    {{as_annotated_dawnType(member)}}{{render_cpp_default_value(member, forced_default_value)}}
-                {% endif %}
+            {%- if (member.spanify | default(True)) and member.is_length %}
+                //* Skip as it's included in the span just below.
             {% else %}
                 {{as_annotated_dawnType(member)}}{{render_cpp_default_value(member, forced_default_value)}}
             {% endif %}
@@ -167,7 +151,7 @@ struct StringView {
         // Equality operators, mostly for testing. Note that this tests
         // strict pointer-pointer equality if the struct contains member pointers.
         bool operator==(const {{CppType}}& rhs) const;
-        {% if type.has_free_members_function %}
+        {% if enable_free_members and type.has_free_members_function %}
 
             private:
               inline void FreeMembers();
@@ -177,14 +161,16 @@ struct StringView {
 {% endfor %}
 // NOLINTEND(bugprone-invalid-enum-default-initialization)
 
-// Fully qualify FreeMember function names for the generated code.
-{% for type in by_category["structure"] if type.has_free_members_function %}
-    void API{{as_MethodSuffix(type.name, Name("free members"))}}({{as_cType(type.name)}});
-{% endfor %}
+{% if enable_free_members %}
+    // Fully qualify FreeMember function names for the generated code.
+    {% for type in by_category["structure"] if type.has_free_members_function %}
+        void API{{as_MethodSuffix(type.name, Name("free members"))}}({{as_cType(type.name)}});
+    {% endfor %}
 
-// Aliased FreeMember functions for templated code.
-{% for type in by_category["structure"] if type.has_free_members_function %}
-    inline void APIFreeMembers({{as_cType(type.name)}} s) {
-        API{{as_MethodSuffix(type.name, Name("free members"))}}(s);
-    }
-{% endfor %}
+    // Aliased FreeMember functions for templated code.
+    {% for type in by_category["structure"] if type.has_free_members_function %}
+        inline void APIFreeMembers({{as_cType(type.name)}} s) {
+            API{{as_MethodSuffix(type.name, Name("free members"))}}(s);
+        }
+    {% endfor %}
+{% endif %}

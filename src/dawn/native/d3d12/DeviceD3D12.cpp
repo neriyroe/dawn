@@ -329,10 +329,7 @@ MaybeError Device::CreateZeroBuffer() {
         zeroBufferDescriptor.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::MapWrite;
 
         DAWN_TRY_ASSIGN(zeroBufferBase, CreateBuffer(&zeroBufferDescriptor));
-
-        auto mapping = zeroBufferBase->GetCurrentMapping();
-        DAWN_ASSERT(!mapping.mappedSpan.empty());
-        std::ranges::fill(mapping.mappedSpan, std::byte{0});
+        std::ranges::fill(zeroBufferBase->GetMappedRange(), std::byte{0});
         DAWN_TRY(zeroBufferBase->Unmap());
     } else {
         zeroBufferDescriptor.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst;
@@ -343,12 +340,10 @@ MaybeError Device::CreateZeroBuffer() {
         CommandRecordingContext* commandContext =
             ToBackend(GetQueue())->GetPendingCommandContext(QueueBase::SubmitMode::Passive);
 
-        // TODO(https://crbug.com/534203108): Spanify WithUploadReservation.
         DAWN_TRY(GetDynamicUploader()->WithUploadReservation(
             kZeroBufferSize, kCopyBufferToBufferOffsetAlignment,
             [&](UploadReservation reservation) -> MaybeError {
-                DAWN_UNSAFE_TODO(memset(reservation.mappedPointer, 0u, kZeroBufferSize));
-
+                std::ranges::fill(reservation.mappedData, std::byte{0u});
                 CopyFromStagingToBufferHelper(commandContext, reservation.buffer.Get(),
                                               reservation.offsetInBuffer, zeroBufferBase.Get(), 0,
                                               kZeroBufferSize);

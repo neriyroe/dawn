@@ -794,6 +794,10 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
      {"vulkan_use_extended_dynamic_state",
       "Makes use of VK_EXT_extended_dynamic_state to improve pipeline caching.",
       "https://crbug.com/chromium/463893793", ToggleStage::Device}},
+    {Toggle::VulkanUseRasterizationOrderAttachmentAccess,
+     {"vulkan_use_rasterization_order_attachment_access",
+      "Use VK_EXT_rasterization_order_attachment_access when it is available.",
+      "https://crbug.com/42241389", ToggleStage::Device}},
     {Toggle::VulkanForceStaticSamplersForExternalTextures,
      {"vulkan_force_static_samplers_for_external_textures",
       "Enables the code path to take static samplers for external textures. While static YCbCr "
@@ -824,6 +828,16 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "Reject NPOT depth/stencil textures with mipLevelCount > 1. Workaround for mip level "
       "miscomputation in PowerVR proprietary driver.",
       "https://crbug.com/540087398", ToggleStage::Device}},
+    {Toggle::VulkanReplaceUnsignedCompareZero,
+     {"vulkan_rewrite_unsigned_compare_zero",
+      "Workaround for a driver bug where unsigned equality comparisons with zero trigger a buggy "
+      "peephole optimization on Samsung Xclipse GPUs.",
+      "https://crbug.com/543420711", ToggleStage::Device}},
+    {Toggle::VulkanUseCooperativeMatrixRobustBufferAccess,
+     {"vulkan_use_cooperative_matrix_robust_access",
+      "Disable clamping of subgroupMatrixLoad/Store on storage buffers if "
+      "cooperativeMatrixRobustBufferAccess == VK_TRUE",
+      "https://crbug.com/548005877", ToggleStage::Device}},
     {Toggle::WaitIsThreadSafe,
      {"wait_is_thread_safe",
       "WaitFor* functions are thread-safe and can be called without the device-lock if implicit "

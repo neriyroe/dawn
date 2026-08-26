@@ -211,7 +211,7 @@ struct State {
     void ReplaceGetResourceCallUsage(const Usage& usage,
                                      const type::Type* binding_type,
                                      ir::Value* idx) {
-        ir::CoreBuiltinCall* call = usage.instruction->As<ir::CoreBuiltinCall>();
+        auto* call = usage.instruction->As<ir::CoreBuiltinCall>();
         TINT_IR_ASSERT(ir, call);
 
         switch (call->Func()) {
@@ -349,8 +349,7 @@ struct State {
 
     // We have a bind-ful texture/sampler, get the ResourceKind the API reported
     ir::Value* GetBindfulKind(ir::CoreBuiltinCall* call, size_t idx) {
-        core::ir::InstructionResult* operand_inst_result =
-            call->Operands()[idx]->As<core::ir::InstructionResult>();
+        auto* operand_inst_result = call->Operands()[idx]->As<core::ir::InstructionResult>();
         TINT_IR_ASSERT(ir, operand_inst_result);
 
         core::ir::Var* var = RootVarFor(operand_inst_result);
@@ -377,7 +376,7 @@ struct State {
             value = tint::Switch(
                 inst,
                 [&](Load* l) {
-                    ir::InstructionResult* from = l->From()->As<core::ir::InstructionResult>();
+                    auto* from = l->From()->As<core::ir::InstructionResult>();
                     TINT_IR_ASSERT(ir, from);
 
                     result = from->Instruction()->As<core::ir::Var>();  // Final var to return
@@ -452,7 +451,7 @@ struct State {
 
     // Returns a `true` constant if the texture is filterable
     ir::Value* ConstructTextureFilterableCheck(const type::Type* tex_ty, ir::Value* texture_kind) {
-        const type::SampledTexture* samp_ty = tex_ty->As<type::SampledTexture>();
+        const auto* samp_ty = tex_ty->As<type::SampledTexture>();
         // Only sampled texture types can be filterable
         if (!samp_ty) {
             return b.Constant(false);
@@ -465,8 +464,8 @@ struct State {
         // The default resource type for all f32 sampled textures is `filterable`
         ResourceType res_type = core::type::DefaultResourceTypeFor(tex_ty);
         if (texture_kind->Is<ir::Constant>()) {
-            uint32_t val = texture_kind->As<ir::Constant>()->Value()->ValueAs<uint32_t>();
-            return b.Constant(val == uint32_t(res_type));
+            auto val = texture_kind->As<ir::Constant>()->Value()->ValueAs<uint32_t>();
+            return b.Constant(val == static_cast<uint32_t>(res_type));
         }
         return b.Equal(texture_kind, u32(res_type))->Result();
     }
@@ -487,9 +486,7 @@ struct State {
         auto var = var_for_type.Get(binding_type);
         TINT_IR_ASSERT(ir, var);
 
-        const core::type::Pointer* ptr_ty = ty.ptr(handle, binding_type, read);
-        auto* access = b.Access(ptr_ty, (*var)->Result(), idx);
-        return b.Load(access);
+        return helper->LoadResource(b, *var, idx, binding_type);
     }
 
     ir::Value* GetDefaultIndexForResourceType(ResourceType resource_type) {
@@ -534,7 +531,7 @@ struct State {
         // we know it isn't filtering.
         if (sampler_kind->Is<core::ir::Constant>() &&
             sampler_kind->As<core::ir::Constant>()->Value()->ValueAs<uint32_t>() ==
-                uint32_t(ResourceType::kSampler_non_filtering)) {
+                static_cast<uint32_t>(ResourceType::kSampler_non_filtering)) {
             return;
         }
 
@@ -578,7 +575,7 @@ struct State {
             const core::type::Type* result_ty = call->Result()->Type();
 
             // If the samp_res is statically known we can just pick the right branch
-            if (ir::Constant* res = samp_res->As<ir::Constant>()) {
+            if (auto* res = samp_res->As<ir::Constant>()) {
                 if (res->Value()->ValueAs<bool>() == false) {
                     call->Result()->ReplaceAllUsesWith(b.Zero(result_ty));
                     call->Destroy();
@@ -646,6 +643,14 @@ Result<SuccessType> ResourceTable(core::ir::Module& ir,
     AssertValid(ir, "before core.ResourceTable");
 
     return State{config, ir, helper}.Process();
+}
+
+Instruction* ResourceTableHelper::LoadResource(core::ir::Builder& b,
+                                               core::ir::Instruction* from,
+                                               core::ir::Value* idx,
+                                               const core::type::Type* ty) const {
+    auto* access = b.Access(b.ir.Types().ptr(handle, ty, read), from->Result(), idx);
+    return b.Load(access);
 }
 
 }  // namespace tint::core::ir::transform

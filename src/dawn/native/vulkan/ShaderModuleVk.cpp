@@ -305,6 +305,8 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
         GetDevice()->IsToggleEnabled(Toggle::VulkanUseBufferRobustAccess2);
     req.tintOptions.extensions.disable_image_robustness =
         GetDevice()->IsToggleEnabled(Toggle::VulkanUseImageRobustAccess2);
+    req.tintOptions.extensions.disable_storage_subgroup_matrix_clamping =
+        GetDevice()->IsToggleEnabled(Toggle::VulkanUseCooperativeMatrixRobustBufferAccess);
     // The only possible alternative for the vulkan demote to helper extension is
     // "OpTerminateInvocation" which remains unimplemented in dawn/tint.
     req.tintOptions.extensions.use_demote_to_helper_invocation =
@@ -358,6 +360,8 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
         GetDevice()->IsToggleEnabled(Toggle::VulkanCooperativeMatrixStrideIsMatrixElements);
     req.tintOptions.workarounds.replace_workgroup_atomic_store_with_exchange =
         GetDevice()->IsToggleEnabled(Toggle::VulkanReplaceWorkgroupAtomicStoreWithExchange);
+    req.tintOptions.workarounds.replace_unsigned_compare_zero =
+        GetDevice()->IsToggleEnabled(Toggle::VulkanReplaceUnsignedCompareZero);
 
     // Pass matrices to user functions by pointer on Qualcomm devices to workaround a known bug.
     // See crbug.com/tint/2045.

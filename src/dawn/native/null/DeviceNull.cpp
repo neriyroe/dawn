@@ -170,9 +170,9 @@ struct CopyFromStagingToBufferOperation : PendingOperation {
 
     Ref<BufferBase> staging;
     Ref<Buffer> destination;
-    uint64_t sourceOffset;
-    uint64_t destinationOffset;
-    uint64_t size;
+    uint64_t sourceOffset = 0;
+    uint64_t destinationOffset = 0;
+    uint64_t size = 0;
 };
 
 // Device
@@ -390,10 +390,9 @@ void Buffer::CopyFromStaging(BufferBase* staging,
                              uint64_t sourceOffset,
                              uint64_t destinationOffset,
                              uint64_t size) {
-    // TODO(https://crbug.com/524406299): Use Span::CopyFrom.
-    std::ranges::copy(staging->GetCurrentMapping().GetMappedSubspan(
-                          checked_cast<size_t>(sourceOffset), checked_cast<size_t>(size)),
-                      mBackingData.begin() + sign_cast(checked_cast<size_t>(destinationOffset)));
+    mBackingData.subspan(checked_cast<size_t>(destinationOffset), checked_cast<size_t>(size))
+        .CopyFrom(staging->GetMappedRange(checked_cast<size_t>(sourceOffset),
+                                          checked_cast<size_t>(size)));
 }
 
 void Buffer::DoWriteBuffer(uint64_t bufferOffset, Span<const std::byte> data) {
@@ -412,8 +411,8 @@ MaybeError Buffer::FinalizeMapImpl(BufferState newState) {
     return {};
 }
 
-void* Buffer::GetMappedPointerImpl() {
-    return mBackingData.data();
+Span<std::byte> Buffer::GetMappedRangeImpl(size_t offset, size_t size) {
+    return mBackingData.subspan(offset, size);
 }
 
 void Buffer::UnmapImpl(BufferState oldState, BufferState newState) {}

@@ -109,15 +109,19 @@ size_t D3D12BufferSizeAlignment(wgpu::BufferUsage usage) {
     return 1;
 }
 
-ResourceHeapKind GetResourceHeapKind(wgpu::BufferUsage bufferUsage, uint32_t resourceHeapTier) {
-    if (bufferUsage == (wgpu::BufferUsage::MapWrite | wgpu::BufferUsage::CopySrc)) {
+ResourceHeapKind GetResourceHeapKind(wgpu::BufferUsage bufferUsage,
+                                     uint32_t resourceHeapTier,
+                                     bool isCacheCoherentUMA) {
+    if (bufferUsage == (wgpu::BufferUsage::MapWrite | wgpu::BufferUsage::CopySrc) ||
+        bufferUsage == wgpu::BufferUsage::MapWrite) {
         if (resourceHeapTier >= 2) {
             return ResourceHeapKind::Upload_AllBuffersAndTextures;
         } else {
             return ResourceHeapKind::Upload_OnlyBuffers;
         }
     }
-    if (bufferUsage == (wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::MapRead)) {
+    if (bufferUsage == (wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::MapRead) ||
+        bufferUsage == wgpu::BufferUsage::MapRead) {
         if (resourceHeapTier >= 2) {
             return ResourceHeapKind::Readback_AllBuffersAndTextures;
         } else {
@@ -125,8 +129,16 @@ ResourceHeapKind GetResourceHeapKind(wgpu::BufferUsage bufferUsage, uint32_t res
         }
     }
 
-    if (bufferUsage & (wgpu::BufferUsage::MapRead | wgpu::BufferUsage::MapWrite)) {
+    if (bufferUsage & wgpu::BufferUsage::MapRead) {
         return ResourceHeapKind::Custom_WriteBack_OnlyBuffers;
+    }
+
+    if (bufferUsage & wgpu::BufferUsage::MapWrite) {
+        if (isCacheCoherentUMA) {
+            return ResourceHeapKind::Custom_WriteBack_OnlyBuffers;
+        } else {
+            return ResourceHeapKind::Custom_WriteCombine_OnlyBuffers;
+        }
     }
 
     if (resourceHeapTier >= 2) {
@@ -179,7 +191,7 @@ Buffer::Buffer(Device* device, const UnpackedPtr<BufferDescriptor>& descriptor)
 
 MaybeError Buffer::Initialize(bool mappedAtCreation) {
     // Allocate at least 4 bytes so clamped accesses are always in bounds.
-    uint64_t size = std::max(GetSize(), uint64_t(4u));
+    uint64_t size = std::max(GetSize(), uint64_t{4});
     size_t alignment = D3D12BufferSizeAlignment(GetInternalUsage());
     if (size > std::numeric_limits<uint64_t>::max() - alignment) {
         // Alignment would overflow.
@@ -203,7 +215,8 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
     resourceDescriptor.Flags = D3D12ResourceFlags(GetInternalUsage() | wgpu::BufferUsage::CopyDst);
 
     ResourceHeapKind resourceHeapKind =
-        GetResourceHeapKind(GetInternalUsage(), ToBackend(GetDevice())->GetResourceHeapTier());
+        GetResourceHeapKind(GetInternalUsage(), ToBackend(GetDevice())->GetResourceHeapTier(),
+                            ToBackend(GetDevice())->GetDeviceInfo().isCacheCoherentUMA);
     mLastState = D3D12_RESOURCE_STATE_COMMON;
 
     switch (resourceHeapKind) {
@@ -226,6 +239,7 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
         case ResourceHeapKind::Default_AllBuffersAndTextures:
         case ResourceHeapKind::Default_OnlyBuffers:
         case ResourceHeapKind::Custom_WriteBack_OnlyBuffers:
+        case ResourceHeapKind::Custom_WriteCombine_OnlyBuffers:
             break;
         default:
             DAWN_UNREACHABLE();
@@ -244,7 +258,7 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
         auto scopedUseDuringCreation = UseInternal();
         CommandRecordingContext* commandRecordingContext =
             ToBackend(GetDevice()->GetQueue())->GetPendingCommandContext();
-        DAWN_TRY(ClearBuffer(commandRecordingContext, uint8_t(1u)));
+        DAWN_TRY(ClearBuffer(commandRecordingContext, uint8_t{1}));
     }
 
     // Initialize the padding bytes to zero.
@@ -482,16 +496,19 @@ MaybeError Buffer::MapInternal(bool isWrite, size_t offset, size_t size, const c
     }
 
     D3D12_RANGE range = {offset, offset + size};
-    // mMappedData is the pointer to the start of the resource, irrespective of offset.
+    // mappedPointer is the pointer to the start of the resource, irrespective of offset.
     // MSDN says (note the weird use of "never"):
     //
     //   When ppData is not nullptr, the pointer returned is never offset by any values in
     //   pReadRange.
     //
     // https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12resource-map
-    void* mappedData = nullptr;
-    DAWN_TRY(CheckHRESULT(GetD3D12Resource()->Map(0, &range, &mappedData), contextInfo));
-    mMappedData = mappedData;
+    void* mappedPointer = nullptr;
+    DAWN_TRY(CheckHRESULT(GetD3D12Resource()->Map(0, &range, &mappedPointer), contextInfo));
+    // SAFETY: The pointer returned is for the actual memory of the resource and contains at least
+    // GetAllocatedSize() bytes.
+    mMappedData = DAWN_UNSAFE_BUFFERS(
+        {static_cast<std::byte*>(mappedPointer), checked_cast<size_t>(GetAllocatedSize())});
 
     if (isWrite) {
         mWrittenMappedRange = range;
@@ -535,7 +552,7 @@ MaybeError Buffer::FinalizeMapImpl(BufferState newState) {
 
 void Buffer::UnmapImpl(BufferState oldState, BufferState newState) {
     GetD3D12Resource()->Unmap(0, &mWrittenMappedRange);
-    mMappedData = nullptr;
+    mMappedData = {};
     mWrittenMappedRange = {0, 0};
 
     // When buffers are mapped, they are locked to keep them in resident memory. We must unlock
@@ -547,10 +564,8 @@ void Buffer::UnmapImpl(BufferState oldState, BufferState newState) {
     }
 }
 
-void* Buffer::GetMappedPointerImpl() {
-    // The frontend asks that the pointer returned is from the start of the resource
-    // irrespective of the offset passed in MapAsyncImpl, which is what mMappedData is.
-    return mMappedData;
+Span<std::byte> Buffer::GetMappedRangeImpl(size_t offset, size_t size) {
+    return mMappedData.subspan(offset, size);
 }
 
 void Buffer::DestroyImpl(DestroyReason reason) {
@@ -561,7 +576,7 @@ void Buffer::DestroyImpl(DestroyReason reason) {
     // - It may be called when the last ref to the buffer is dropped and the buffer
     //   is implicitly destroyed. This case is thread-safe because there are no
     //   other threads using the buffer since there are no other live refs.
-    if (mMappedData != nullptr) {
+    if (!mMappedData.empty()) {
         // If the buffer is currently mapped, unmap without flushing the writes to the GPU
         // since the buffer cannot be used anymore. UnmapImpl checks mWrittenRange to know
         // which parts to flush, so we set it to an empty range to prevent flushes.
@@ -717,7 +732,7 @@ MaybeError Buffer::InitializeToZero(CommandRecordingContext* commandContext) {
 
     // TODO(crbug.com/dawn/484): skip initializing the buffer when it is created on a heap
     // that has already been zero initialized.
-    DAWN_TRY(ClearBuffer(commandContext, uint8_t(0u)));
+    DAWN_TRY(ClearBuffer(commandContext, uint8_t{0}));
     SetInitialized(true);
     GetDevice()->IncrementLazyClearCountForTesting();
 
@@ -734,20 +749,17 @@ MaybeError Buffer::ClearBuffer(CommandRecordingContext* commandContext,
     if (GetInternalUsage() & wgpu::BufferUsage::MapWrite) {
         DAWN_TRY(MapInternal(true, static_cast<size_t>(offset), static_cast<size_t>(size),
                              "D3D12 map at clear buffer"));
-        // TODO(https://crbug.com/501491697): Spanify GetMappedPointerImpl.
-        DAWN_UNSAFE_TODO(memset(mMappedData, clearValue, checked_cast<size_t>(size)));
+        std::ranges::fill(mMappedData, std::byte(clearValue));
         UnmapImpl(GetState(), BufferState::Unmapped);
     } else if (clearValue == 0u) {
         DAWN_TRY(device->ClearBufferToZero(commandContext, this, offset, size));
     } else {
         // TODO(crbug.com/dawn/852): use ClearUnorderedAccessView*() when the buffer usage
         // includes STORAGE.
-        // TODO(https://crbug.com/534203108): Spanify WithUploadReservation.
         DAWN_TRY(device->GetDynamicUploader()->WithUploadReservation(
             size, kCopyBufferToBufferOffsetAlignment,
             [&](UploadReservation reservation) -> MaybeError {
-                DAWN_UNSAFE_TODO(
-                    memset(reservation.mappedPointer, clearValue, checked_cast<size_t>(size)));
+                std::ranges::fill(reservation.mappedData, std::byte(clearValue));
                 device->CopyFromStagingToBufferHelper(commandContext, reservation.buffer.Get(),
                                                       reservation.offsetInBuffer, this, offset,
                                                       size);

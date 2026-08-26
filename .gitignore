@@ -21,6 +21,8 @@
 /third_party/catapult
 /third_party/clang-format
 /third_party/cpplint
+/third_party/cpython3/host
+/third_party/cpython3/linux-amd64
 /third_party/depot_tools
 /third_party/directx-shader-compiler/src
 /third_party/directx-headers/src
@@ -31,7 +33,6 @@
 /third_party/gpuweb
 /third_party/jdk/current
 /third_party/jinja2
-/third_party/jsoncpp
 /third_party/EGL-Registry/src
 /third_party/OpenGL-Registry/src
 /third_party/libc++/src

@@ -255,7 +255,7 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
 
     // Allocate at least 4 bytes so clamped accesses are always in bounds.
     // Also, Vulkan requires the size to be non-zero.
-    size = std::max(size, uint64_t(4u));
+    size = std::max(size, uint64_t{4});
 
     if (size > std::numeric_limits<uint64_t>::max() - kAlignment) {
         // Alignment would overlow.
@@ -275,7 +275,7 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
     // VkmemoryRequirements. See https://gitlab.khronos.org/vulkan/vulkan/issues/1904
     // Any size with one of two top bits of VkDeviceSize set is a HUGE allocation and we can
     // safely return an OOM error.
-    if (mAllocatedSize.value() & (uint64_t(3) << uint64_t(62))) {
+    if (mAllocatedSize.value() & (uint64_t{3} << uint64_t{62})) {
         return DAWN_OUT_OF_MEMORY_ERROR("Buffer size is HUGE and could cause overflows");
     }
 
@@ -583,9 +583,8 @@ MaybeError Buffer::FinalizeMapImpl(BufferState newState) {
     // The real mapped pointer is never returned for zero sized buffers. MappedAtCreation buffers
     // are initialized in BufferBase already.
     if (NeedsInitialization() && GetSize() > 0 && newState == BufferState::Mapped) {
-        // TODO(https://crbug.com/501491697): Spanify GetMappedPointerImpl.
-        DAWN_UNSAFE_TODO(
-            std::memset(GetMappedPointerImpl(), 0, checked_cast<size_t>(GetAllocatedSize())));
+        std::ranges::fill(GetMappedRangeImpl(0, checked_cast<size_t>(GetAllocatedSize())),
+                          std::byte(0u));
         GetDevice()->IncrementLazyClearCountForTesting();
         SetInitialized(true);
 
@@ -638,10 +637,8 @@ void Buffer::UnmapImpl(BufferState oldState, BufferState newState) {
     }
 }
 
-void* Buffer::GetMappedPointerImpl() {
-    std::byte* memory = mMemoryAllocation.GetMappedSpan().data();
-    DAWN_ASSERT(memory != nullptr);
-    return memory;
+Span<std::byte> Buffer::GetMappedRangeImpl(size_t offset, size_t size) {
+    return mMemoryAllocation.GetMappedSpan().subspan(offset, size);
 }
 
 MaybeError Buffer::UploadData(uint64_t bufferOffset, Span<const std::byte> data) {

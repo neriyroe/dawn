@@ -55,6 +55,27 @@ import (
 
 type TaskMode int
 
+func (t TaskMode) String() string {
+	switch t {
+	case TaskModeRun:
+		return "run"
+	case TaskModeCheck:
+		return "check"
+	case TaskModeGenerate:
+		return "generate"
+	case TaskModeTriage:
+		return "triage"
+	case TaskModeBisect:
+		return "bisect"
+	case TaskModeBisectStep:
+		return "bisect-step"
+	case TaskModeExperiment:
+		return "experiment"
+	default:
+		return fmt.Sprintf("<unknown> (%d)", t)
+	}
+}
+
 const (
 	TaskModeRun TaskMode = iota
 	TaskModeCheck
@@ -74,7 +95,7 @@ func (f FuzzMode) String() string {
 	case FuzzModeIr:
 		return "ir"
 	default:
-		return "<unknown>"
+		return fmt.Sprintf("<unknown> (%d)", f)
 	}
 }
 
@@ -89,6 +110,7 @@ const (
 type mainConfig struct {
 	verbose            bool
 	dump               bool
+	timeout            int
 	fuzzMode           FuzzMode
 	cmdMode            TaskMode // meta-task being requested by the user, may require running multiple tasks internally
 	mesaMode           bool
@@ -162,6 +184,7 @@ func main() {
 	flag.BoolVar(&c.skipInputTypeCheck, "skip-input-type-check", false, "bypass the heuristic text/binary input file type check")
 	flag.StringVar(&c.experimentPath, "experiment", "", "run an experiment using the configuration at <root> (WIP feature)")
 	flag.StringVar(&c.machineName, "machine", "", "machine name to identify results")
+	flag.IntVar(&c.timeout, "timeout", 60, "override the default timeout (in seconds) for triage and bisect modes")
 	flag.Parse()
 
 	if c.mesaMode && c.filter != "" {
@@ -206,6 +229,17 @@ func main() {
 		c.cmdMode = TaskModeExperiment
 	default:
 		c.cmdMode = TaskModeRun
+	}
+
+	timeoutSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "timeout" {
+			timeoutSet = true
+		}
+	})
+	if timeoutSet && c.cmdMode != TaskModeTriage && c.cmdMode != TaskModeBisect && c.cmdMode != TaskModeBisectStep {
+		fmt.Println("cannot set -timeout flag outside of triage and bisect modes")
+		os.Exit(1)
 	}
 
 	if irMode {
@@ -362,7 +396,7 @@ func run(c *mainConfig) error {
 
 	t, err := generateTaskConfig(c.cmdMode, c)
 	if err != nil {
-		return fmt.Errorf("failed to generate task config for command mode %d: %w", c.cmdMode, err)
+		return fmt.Errorf("failed to generate task config for command mode %v: %w", c.cmdMode, err)
 	}
 	queue = append(queue, t)
 
@@ -384,7 +418,7 @@ func run(c *mainConfig) error {
 		case TaskModeExperiment:
 			err = runExperiment(t)
 		default:
-			err = fmt.Errorf("unknown task mode %d", t.taskMode)
+			err = fmt.Errorf("unknown task mode %v", t.taskMode)
 		}
 		if err != nil {
 			return err
@@ -466,7 +500,7 @@ func checkFuzzer(t *taskConfig) error {
 	case FuzzModeWgsl:
 		files, err = glob.Glob(filepath.Join(t.inputs, "**.wgsl"), t.osWrapper)
 	default:
-		err = fmt.Errorf("unknown fuzzer mode %d", t.fuzzMode)
+		err = fmt.Errorf("unknown fuzzer mode %v", t.fuzzMode)
 	}
 	if err != nil {
 		return err

@@ -37,17 +37,33 @@
 
 // Forward declarations.
 namespace tint::core::ir {
+class Builder;
 class Module;
+class Value;
 class Var;
 }  // namespace tint::core::ir
 namespace tint::core::type {
 class Type;
 }
 
-namespace tint::core::ir::transform {
+namespace tint::core {
+
+enum InternalImmediate {
+    kStorageBufferSizes,
+    kStorageBufferOffsets,
+    kFirstInstanceOffset,
+    kFirstVertexOffset,
+    kNumWorkgroups,
+    kFragDepthMin,
+    kFragDepthMax,
+    kNonConstantZero,
+};
+
+namespace ir::transform {
 
 /// A descriptor for an internal immediate.
 struct InternalImmediateData {
+    InternalImmediate immediate;
     Symbol name;
     const core::type::Type* type = nullptr;
 };
@@ -57,26 +73,32 @@ struct ImmediateDataLayout {
     /// The immediate data variable.
     core::ir::Var* var = nullptr;
 
-    /// A map from member offset to member index.
-    Hashmap<uint32_t, uint32_t, 6> offset_to_index;
+    /// A map from immediate to member index.
+    Hashmap<InternalImmediate, uint32_t, 6> immediate_to_index;
 
-    /// @returns the member index of the constant at @p offset
-    uint32_t IndexOf(uint32_t offset) const {
-        auto itr = offset_to_index.Get(offset);
-        TINT_ASSERT(itr);
-        return *itr.value;
+    /// @returns true if the immediate data contains the specified immediate
+    bool HasImmediate(InternalImmediate immediate) const {
+        return immediate_to_index.Contains(immediate);
     }
+
+    /// @returns a pointer to the specified immediate
+    Value* GetPointer(Builder& b, InternalImmediate immediate) const;
+
+    /// @returns the value of the specified immediate
+    Value* GetValue(Builder& b, InternalImmediate immediate) const;
 };
 
 /// The internally created immediate data members.
 struct PrepareImmediateDataConfig {
     /// Add an internal immediate data to the map.
-    Result<SuccessType> AddInternalImmediateData(uint32_t offset,
+    Result<SuccessType> AddInternalImmediateData(InternalImmediate immediate,
+                                                 uint32_t offset,
                                                  Symbol name,
                                                  const core::type::Type* type) {
-        auto res = internal_immediate_data.emplace(offset, InternalImmediateData{name, type});
+        auto res =
+            internal_immediate_data.emplace(offset, InternalImmediateData{immediate, name, type});
         if (!res.second) {
-            return Failure("mutiple internal immediates created at offset " +
+            return Failure("multiple internal immediates created at offset " +
                            std::to_string(offset));
         }
         return Success;
@@ -97,6 +119,7 @@ struct PrepareImmediateDataConfig {
 Result<ImmediateDataLayout> PrepareImmediateData(Module& module,
                                                  const PrepareImmediateDataConfig& config);
 
-}  // namespace tint::core::ir::transform
+}  // namespace ir::transform
+}  // namespace tint::core
 
 #endif  // SRC_TINT_LANG_CORE_IR_TRANSFORM_PREPARE_IMMEDIATE_DATA_H_

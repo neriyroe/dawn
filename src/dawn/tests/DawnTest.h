@@ -124,6 +124,9 @@
 #define EXPECT_PIXEL_RGBA8_EQ(expected, texture, x, y) \
     AddTextureExpectation(__FILE__, __LINE__, expected, texture, {x, y})
 
+#define EXPECT_PIXEL_U32_EQ(expected, texture, x, y) \
+    AddTextureExpectation(__FILE__, __LINE__, expected, texture, {x, y})
+
 #define EXPECT_PIXEL_FLOAT_EQ(expected, texture, x, y) \
     AddTextureExpectation(__FILE__, __LINE__, expected, texture, {x, y})
 
@@ -334,7 +337,10 @@ class DawnTestBase {
     bool IsWindows11() const;
     bool IsWindowsVersionAtLeast(uint32_t buildNumber, uint32_t updateBuildRevision = 0) const;
     bool IsLinux() const;
-    bool IsMacOS(int32_t majorVersion = -1, int32_t minorVersion = -1) const;
+    bool IsMacOS() const;
+    bool IsMacOSVersionAtLeast(uint32_t majorVersion,
+                               uint32_t minorVersion = 0,
+                               uint32_t patchVersion = 0) const;
     bool IsAndroid() const;
     bool IsAndroidOlderThan(uint32_t version) const;
     bool IsChromeOS() const;
@@ -360,8 +366,8 @@ class DawnTestBase {
     static bool IsAsan();
     static bool IsTsan();
 
-    bool HasToggleEnabled(const char* workaround, const wgpu::Device& device) const;
-    bool HasToggleEnabled(const char* workaround) const;
+    bool HasToggleEnabled(const char* toggle, const wgpu::Device& device) const;
+    bool HasToggleEnabled(const char* toggle) const;
 
     void DestroyDevice(wgpu::Device device = nullptr);
     void LoseDeviceForTesting(wgpu::Device device = nullptr);
@@ -809,9 +815,9 @@ class DawnTestBase {
                                                    uint32_t width,
                                                    uint32_t height,
                                                    uint32_t componentCount,
+                                                   uint32_t sampleCount,
                                                    uint32_t arrayLayer,
                                                    uint32_t mipLevel,
-                                                   uint32_t sampleCount,
                                                    wgpu::TextureAspect aspect,
                                                    detail::Expectation* expectation);
 
@@ -832,7 +838,7 @@ class DawnTestBase {
     struct ReadbackReservation {
         wgpu::Device device;
         wgpu::Buffer buffer;
-        size_t slot;
+        size_t slot = 0;
     };
     ReadbackReservation ReserveReadback(wgpu::Device targetDevice, uint64_t readbackSize);
 

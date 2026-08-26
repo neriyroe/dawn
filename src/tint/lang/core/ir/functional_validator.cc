@@ -25,13 +25,14 @@
 
 #include "src/tint/lang/core/ir/functional_validator.h"
 
+#include <limits>
 #include <utility>
 
 #include "src/tint/lang/core/intrinsic/dialect.h"
 #include "src/tint/lang/core/ir/discard.h"
 #include "src/tint/lang/core/ir/exit_if.h"
 #include "src/tint/lang/core/ir/exit_switch.h"
-#include "src/tint/lang/core/ir/multi_in_block.h"
+#include "src/tint/lang/core/ir/multi_in_block.h"  // IWYU pragma: export
 #include "src/tint/lang/core/ir/next_iteration.h"
 #include "src/tint/lang/core/ir/phony.h"
 #include "src/tint/lang/core/ir/terminate_invocation.h"
@@ -59,6 +60,7 @@
 #include "src/tint/utils/internal_limits.h"
 #include "src/tint/utils/rtti/switch.h"
 #include "src/tint/utils/text/styled_text.h"
+#include "src/utils/numeric.h"
 
 namespace tint::core::ir::validator {
 namespace {
@@ -171,10 +173,22 @@ bool IsPositionPresent(const IOAttributes& attr, const core::type::Type* ty) {
     return attr.builtin == BuiltinValue::kPosition;
 }
 
+const constant::Value* GetConstArg(const CoreBuiltinCall* call, uint32_t param_index) {
+    if ((call->Args().size() <= param_index) || (call->Args()[param_index] == nullptr) ||
+        (!call->Args()[param_index]->Is<ir::Constant>())) {
+        return nullptr;
+    }
+    return call->Args()[param_index]->As<ir::Constant>()->Value();
+}
+
 }  // namespace
 
-Functional::Functional(const Module& ir, diag::List& diagnostics, ErrorSource error_source)
-    : ir_(ir), diag_(diagnostics), error_source_(error_source), referenced_module_vars_(ir) {}
+Functional::Functional(Module& ir, diag::List& diagnostics, ErrorSource error_source)
+    : ir_(ir),
+      diag_(diagnostics),
+      error_source_(error_source),
+      const_eval_(ir_.constant_values, diag_),
+      referenced_module_vars_(ir) {}
 
 Functional::~Functional() = default;
 
@@ -193,6 +207,10 @@ Disassembler& Functional::Disassemble() {
         disassembler_.emplace(ir::Disassembler(ir_));
     }
     return *disassembler_;
+}
+
+bool Functional::IsWGSLValidation() const {
+    return error_source_ == ErrorSource::kWgsl;
 }
 
 StyledText Functional::NameOf(const core::type::Type* ty) {
@@ -382,6 +400,9 @@ void Functional::CheckRootBlock(const Block* blk) {
     });
 
     for (auto* inst : *blk) {
+        if (auto* var = inst->As<Var>()) {
+            CheckBuffersAndMatrices(var);
+        }
         CheckInstruction(inst);
     }
 }
@@ -401,6 +422,7 @@ void Functional::CheckFunction(const Function* func) {
     }
 
     CheckBlock(func->Block());
+    CheckSubgroupSize(func);
 }
 
 void Functional::CheckEntryPoint(const Function* func) {
@@ -1084,6 +1106,61 @@ void Functional::CheckBinary(const Binary* b) {
                     << style::Instruction(b->Op()) << " result type "
                     << NameOf(overload->return_type);
     }
+
+    if (auto* c = b->As<CoreBinary>()) {
+        CheckCoreBinaryCall(c);
+    }
+}
+
+void Functional::CheckCoreBinaryCall(const CoreBinary* call) {
+    switch (call->Op()) {
+        case core::BinaryOp::kDivide:
+        case core::BinaryOp::kModulo:
+            CheckBinaryDivModCall(call);
+            break;
+        case core::BinaryOp::kShiftLeft:
+        case core::BinaryOp::kShiftRight:
+            CheckBinaryShiftCall(call);
+            break;
+        default:
+            break;
+    }
+}
+
+void Functional::CheckBinaryDivModCall(const CoreBinary* call) {
+    if (error_source_ == ErrorSource::kWgsl) {
+        // Integer division by zero should be checked for the partial evaluation case (only rhs
+        // is const). FP division by zero is only invalid when the whole expression is
+        // constant-evaluated.
+        if (call->RHS()->Type()->IsIntegerScalarOrVector()) {
+            auto rhs_constant = call->RHS()->As<ir::Constant>();
+            if (rhs_constant && rhs_constant->Value()->AnyZero()) {
+                AddError(call) << "integer division by zero is invalid";
+            }
+        }
+    }
+}
+
+void Functional::CheckBinaryShiftCall(const CoreBinary* call) {
+    if (error_source_ == ErrorSource::kWgsl) {
+        // If lhs value is a concrete type, and rhs is a const-expression greater than or equal
+        // to the bit width of lhs, then it is a shader-creation error.
+        const auto* elem_type = call->LHS()->Type()->DeepestElement();
+        const uint32_t bit_width = elem_type->Size() * 8;
+        if (auto* rhs_val_as_const = call->RHS()->As<ir::Constant>()) {
+            auto* rhs_as_value = rhs_val_as_const->Value();
+            for (size_t i = 0, n = rhs_as_value->NumElements(); i < n; i++) {
+                auto* shift_val = n == 1 ? rhs_as_value : rhs_as_value->Index(i);
+                if (shift_val->ValueAs<u32>() >= bit_width) {
+                    AddError(call)
+                        << "shift " << (call->Op() == core::BinaryOp::kShiftLeft ? "left" : "right")
+                        << " value must be less than the bit width of the lhs, which is "
+                        << bit_width;
+                    break;
+                }
+            }
+        }
+    }
 }
 
 void Functional::CheckIf(const If* if_) {
@@ -1492,7 +1569,7 @@ void Functional::CheckCoreBuiltinCall(const CoreBuiltinCall* call,
         for (uint32_t i = 0; i < overload.parameters.Length(); ++i) {
             auto& p = overload.parameters[i];
             if (p.usage == usage) {
-                return int32_t(i);
+                return i;
             }
         }
         return std::nullopt;
@@ -1538,6 +1615,137 @@ void Functional::CheckCoreBuiltinCall(const CoreBuiltinCall* call,
         call->Func() == core::BuiltinFn::kSubgroupMatrixStore) {
         CheckSubgroupMatrixOpOffset(call);
     }
+
+    if (IsWGSLValidation()) {
+        switch (call->Func()) {
+            case core::BuiltinFn::kSubgroupShuffle:
+            case core::BuiltinFn::kSubgroupShuffleXor:
+            case core::BuiltinFn::kSubgroupShuffleUp:
+            case core::BuiltinFn::kSubgroupShuffleDown:
+                CheckSubgroupCall(call);
+                break;
+            case core::BuiltinFn::kExtractBits:
+                CheckExtractBitsCall(call);
+                break;
+            case core::BuiltinFn::kInsertBits:
+                CheckInsertBitsCall(call);
+                break;
+            case core::BuiltinFn::kLdexp:
+                CheckLdexpCall(call);
+                break;
+            case core::BuiltinFn::kClamp:
+                CheckClampCall(call);
+                break;
+            case core::BuiltinFn::kSmoothstep:
+                CheckSmoothstepCall(call);
+                break;
+            case core::BuiltinFn::kQuantizeToF16:
+                CheckQuantizeToF16(call);
+                break;
+            case core::BuiltinFn::kPack2X16Float:
+                CheckPack2x16float(call);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+void Functional::CheckSubgroupCall(const CoreBuiltinCall* call) {
+    if (auto const_val = GetConstArg(call, 1)) {
+        auto as_aint = const_val->ValueAs<AInt>();
+        // User friendly param name.
+        std::string paramName = "sourceLaneIndex";
+        switch (call->Func()) {
+            case core::BuiltinFn::kSubgroupShuffleXor:
+                paramName = "mask";
+                break;
+            case core::BuiltinFn::kSubgroupShuffleUp:
+            case core::BuiltinFn::kSubgroupShuffleDown:
+                paramName = "delta";
+                break;
+            default:
+                break;
+        }
+
+        if (as_aint >= tint::internal_limits::kMaxSubgroupSize) {
+            AddError(call, 1) << "The " << paramName << " argument of " << call->FriendlyName()
+                              << " must be less than " << tint::internal_limits::kMaxSubgroupSize;
+        } else if (as_aint < 0) {
+            AddError(call, 1) << "The " << paramName << " argument of " << call->FriendlyName()
+                              << " must be greater than or equal to zero";
+        }
+    }
+}
+
+void Functional::CheckExtractBitsCall(const CoreBuiltinCall* call) {
+    // This can be u32/i32 or vector of those types.
+    auto* param0 = call->Args()[0];
+    auto* const_val_offset = GetConstArg(call, 1);
+    auto* const_val_count = GetConstArg(call, 2);
+    if (const_val_count && const_val_offset) {
+        auto* zero = const_eval_.Zero(param0->Type(), {}, Source{}).Get();
+        auto fakeArgs = Vector{zero, const_val_offset, const_val_count};
+        [[maybe_unused]] auto result =
+            const_eval_.extractBits(param0->Type(), fakeArgs, ir_.SourceOf(call));
+    }
+}
+
+void Functional::CheckInsertBitsCall(const CoreBuiltinCall* call) {
+    // This can be u32/i32 or vector of those types.
+    auto* param0 = call->Args()[0];
+    auto* const_val_offset = GetConstArg(call, 2);
+    auto* const_val_count = GetConstArg(call, 3);
+    if (const_val_count && const_val_offset) {
+        auto* zero = const_eval_.Zero(param0->Type(), {}, Source{}).Get();
+        auto fakeArgs = Vector{zero, zero, const_val_offset, const_val_count};
+        [[maybe_unused]] auto result =
+            const_eval_.insertBits(param0->Type(), fakeArgs, ir_.SourceOf(call));
+    }
+}
+
+void Functional::CheckLdexpCall(const CoreBuiltinCall* call) {
+    auto* param0 = call->Args()[0];
+    if (auto const_val = GetConstArg(call, 1)) {
+        auto* zero = const_eval_.Zero(param0->Type(), {}, Source{}).Get();
+        auto fakeArgs = Vector{zero, const_val};
+        [[maybe_unused]] auto result =
+            const_eval_.ldexp(param0->Type(), fakeArgs, ir_.SourceOf(call));
+    }
+}
+
+void Functional::CheckQuantizeToF16(const CoreBuiltinCall* call) {
+    if (auto const_val = GetConstArg(call, 0)) {
+        [[maybe_unused]] auto result = const_eval_.quantizeToF16(
+            call->Result()->Type(), Vector{const_val}, ir_.SourceOf(call));
+    }
+}
+
+void Functional::CheckPack2x16float(const CoreBuiltinCall* call) {
+    if (auto const_val = GetConstArg(call, 0)) {
+        [[maybe_unused]] auto result = const_eval_.pack2x16float(
+            call->Result()->Type(), Vector{const_val}, ir_.SourceOf(call));
+    }
+}
+
+void Functional::CheckClampCall(const CoreBuiltinCall* call) {
+    auto* const_val_low = GetConstArg(call, 1);
+    auto* const_val_high = GetConstArg(call, 2);
+    if (const_val_low && const_val_high) {
+        auto fakeArgs = Vector{const_val_low, const_val_low, const_val_high};
+        [[maybe_unused]] auto result =
+            const_eval_.clamp(call->Result()->Type(), fakeArgs, ir_.SourceOf(call));
+    }
+}
+
+void Functional::CheckSmoothstepCall(const CoreBuiltinCall* call) {
+    auto* const_val_low = GetConstArg(call, 0);
+    auto* const_val_high = GetConstArg(call, 1);
+    if (const_val_low && const_val_high) {
+        auto fakeArgs = Vector{const_val_low, const_val_high, const_val_high};
+        [[maybe_unused]] auto result =
+            const_eval_.smoothstep(call->Result()->Type(), fakeArgs, ir_.SourceOf(call));
+    }
 }
 
 void Functional::CheckSubgroupMatrixOpOffset(const CoreBuiltinCall* call) {
@@ -1555,25 +1763,18 @@ void Functional::CheckSubgroupMatrixOpOffset(const CoreBuiltinCall* call) {
         return;
     }
 
-    bool majorness_template = false;
     const core::type::SubgroupMatrix* mat_ty = nullptr;
     if (call->Func() == core::BuiltinFn::kSubgroupMatrixLoad) {
         mat_ty = call->Result()->Type()->As<core::type::SubgroupMatrix>();
-        majorness_template = call->ExplicitTemplateParams().Length() == 2;
     } else if (call->Func() == core::BuiltinFn::kSubgroupMatrixStore) {
         mat_ty = call->Args()[2]->Type()->As<core::type::SubgroupMatrix>();
-        majorness_template = call->ExplicitTemplateParams().Length() == 1;
     }
     TINT_ASSERT(mat_ty);
 
-    auto arr_stride = arr_ty->ImplicitStride();
     auto mat_comp_size = mat_ty->Type()->Size();
     TINT_ASSERT(mat_comp_size > 0);
 
-    auto limit = const_count.value() * arr_stride;
-    if (!majorness_template) {
-        limit /= mat_comp_size;
-    }
+    auto limit = const_count.value();
 
     if (auto* offset_const = offset_arg->As<ir::Constant>()) {
         auto* offset_val = offset_const->Value();
@@ -1769,6 +1970,359 @@ void Functional::CheckReturn(const Return* ret) {
         AddError(ret) << "return value type " << NameOf(ret->Value()->Type())
                       << " does not match function return type " << NameOf(func->ReturnType());
     }
+}
+
+void Functional::CheckSubgroupSize(const Function* func) {
+    // @subgroup_size is optional
+    if (!func->SubgroupSize().has_value()) {
+        return;
+    }
+
+    if (!func->IsCompute()) {
+        AddError(func) << "@subgroup_size only valid on compute entry point";
+        return;
+    }
+
+    auto subgroup_size = func->SubgroupSize().value();
+    auto* ty = subgroup_size->Type();
+    if (!ty->IsAnyOf<core::type::I32, core::type::U32>()) {
+        AddError(func) << "@subgroup_size param must be an 'i32' or 'u32', received " << NameOf(ty);
+        return;
+    }
+
+    if (auto* c = subgroup_size->As<ir::Constant>()) {
+        auto value = c->Value()->ValueAs<int64_t>();
+        if (value <= 0) {
+            AddError(func) << "@subgroup_size param must be greater than 0";
+            return;
+        }
+
+        if (!IsPowerOfTwo<int64_t>(value)) {
+            AddError(func) << "@subgroup_size param must be a power of 2";
+            return;
+        }
+    }
+}
+
+void Functional::CheckBuffersAndMatrices(const Var* var) {
+    if (error_source_ != ErrorSource::kWgsl) {
+        return;
+    }
+
+    uint32_t var_size = 0;
+    if (var->Result()->Type()->UnwrapPtr()->HasFixedFootprint()) {
+        var_size = var->Result()->Type()->UnwrapPtr()->Size();
+    }
+
+    Vector<UseInfo, 4> uses;
+    for (auto& u : var->Result()->UsagesSorted()) {
+        uses.Push({u, var_size, 0, 0});
+    }
+    while (!uses.IsEmpty()) {
+        auto info = uses.Pop();
+        diag::Diagnostic error;
+        bool errored = tint::Switch(
+            info.use.instruction,
+            [&](const Let* let) {
+                for (auto& u : let->Result()->UsagesSorted()) {
+                    uses.Push({u, info.storage_size, info.offset, info.pointer_size});
+                }
+                return false;
+            },
+            [&](const UserCall* user) {
+                // If the buffer size is decreased at a function boundary, use that size
+                // instead.
+                auto* target = user->Target();
+                auto* param = target->Params()[info.use.operand_index - user->ArgsOperandOffset()];
+                auto* param_buffer_ty = param->Type()->UnwrapPtr()->As<core::type::Buffer>();
+                uint32_t next_size = param_buffer_ty && param_buffer_ty->Size() > 0
+                                         ? param_buffer_ty->Size()
+                                         : info.storage_size;
+                for (auto& u : param->UsagesSorted()) {
+                    uses.Push({u, next_size, info.offset, info.pointer_size});
+                }
+                return false;
+            },
+            [&](const CoreBuiltinCall* call) {
+                if (call->Func() == BuiltinFn::kBufferView ||
+                    call->Func() == BuiltinFn::kBufferArrayView) {
+                    if (!CheckBufferView(call, var, info.storage_size)) {
+                        return true;
+                    }
+
+                    uint32_t offset = 0;
+                    if (auto* const_offset = call->Args()[1]->As<Constant>()) {
+                        offset = const_offset->Value()->ValueAs<uint32_t>();
+                    }
+                    uint32_t pointer_size = 0;
+                    if (call->Func() == BuiltinFn::kBufferArrayView) {
+                        if (auto* const_size = call->Args()[2]->As<Constant>()) {
+                            pointer_size = const_size->Value()->ValueAs<uint32_t>();
+                        }
+                    } else if (call->Result()->Type()->UnwrapPtr()->HasFixedFootprint()) {
+                        // Use the bufferView result size if it has a fixed size.
+                        pointer_size = call->Result()->Type()->UnwrapPtr()->Size();
+                    }
+
+                    // Keep tracing to catch subgroupMatrixLoad/Store transitive uses.
+                    for (auto& u : call->Result()->UsagesSorted()) {
+                        uses.Push({u, info.storage_size, offset, pointer_size});
+                    }
+                } else if (call->Func() == BuiltinFn::kSubgroupMatrixLoad ||
+                           call->Func() == BuiltinFn::kSubgroupMatrixStore) {
+                    if (!CheckSubgroupMatrixMemory(call, var, info)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            },
+            [&](const Access* access) {
+                auto* obj_ty = access->Object()->Type()->UnwrapPtr();
+
+                uint32_t offset = 0;
+                for (auto* idx : access->Indices()) {
+                    uint32_t idx_value = 0;
+                    if (auto* const_idx = idx->As<Constant>()) {
+                        idx_value = const_idx->Value()->ValueAs<uint32_t>();
+                    }
+                    // Matrix and vector can't be hit on the way to a subgroupMatrix and access
+                    // won't be hit at all on the way to buffer[Array]View so we only handle
+                    // structure and array here.
+                    tint::Switch(
+                        obj_ty,  //
+                        [&](const core::type::Array* ary) {
+                            obj_ty = ary->ElemType();
+                            offset += idx_value * ary->ImplicitStride();
+                        },
+                        [&](const core::type::Struct* s) {
+                            auto* mem = s->Members()[idx_value];
+                            obj_ty = mem->Type();
+                            offset += mem->Offset();
+                        },
+                        [&](Default) {});
+                }
+
+                uint32_t pointer_size = info.pointer_size;
+                if (access->Result()->Type()->UnwrapPtr()->HasFixedFootprint()) {
+                    // If the result has a fixed size, update pointer size.
+                    pointer_size = access->Result()->Type()->UnwrapPtr()->Size();
+                }
+
+                for (auto& u : access->Result()->UsagesSorted()) {
+                    // Accumulate the offset.
+                    uses.Push({u, info.storage_size, info.offset + offset, pointer_size});
+                }
+
+                return false;
+            },
+            [&](Default) { return false; });
+        if (errored) {
+            return;
+        }
+    }
+}
+
+bool Functional::CheckBufferView(const CoreBuiltinCall* call,
+                                 const Var* var,
+                                 uint32_t buffer_size) {
+    // Calculate the minimum type size.
+    auto* store_ty = call->Result()->Type()->UnwrapPtr();
+    uint64_t ty_required_size = 0;
+    uint64_t ty_offset = 0;
+    uint64_t ty_stride = 0;
+    if (store_ty->HasFixedFootprint()) {
+        ty_required_size = store_ty->Size();
+    } else if (auto* str = store_ty->As<core::type::Struct>()) {
+        auto* last = str->Members().Back();
+        auto* arr_ty = last->Type()->As<core::type::Array>();
+        ty_offset = last->Offset();
+        ty_stride = arr_ty->ImplicitStride();
+        ty_required_size = ty_offset + ty_stride;
+    } else {
+        ty_stride = store_ty->As<core::type::Array>()->ImplicitStride();
+        ty_required_size = ty_stride;
+    }
+
+    // Error conditions:
+    // For both bufferView and bufferArrayView:
+    // * ty_required_size + offset < buffer_size
+    // * offset % store_ty->Align() != 0
+    // For bufferArrayView
+    // * size + offset < buffer_size
+    // * size < ty_required_size
+    // * (size - offset) % stride != 0
+    //
+    // Also error if any addition overflows a uint32_t.
+
+    uint64_t offset_val = 0;
+    if (auto* const_offset = call->Args()[1]->As<Constant>()) {
+        if (const_offset->Type()->IsSignedIntegerScalar()) {
+            if (const_offset->Value()->ValueAs<int32_t>() < 0) {
+                AddError(call) << call->FriendlyName() << " offset must be greater than 0";
+                return false;
+            }
+        }
+        offset_val = const_offset->Value()->ValueAs<uint64_t>();
+    }
+
+    if (offset_val + ty_required_size > std::numeric_limits<uint32_t>::max()) {
+        AddError(call) << call->FriendlyName() << " requires a size beyond 32 bits";
+        return false;
+    }
+
+    if (buffer_size > 0 && buffer_size < offset_val + ty_required_size) {
+        AddError(var) << "invalid buffer size (" << buffer_size << " bytes) when used with "
+                      << call->FriendlyName() << " (" << offset_val + ty_required_size
+                      << " bytes required)";
+        return false;
+    }
+
+    if (offset_val % store_ty->Align() != 0) {
+        AddError(call) << call->FriendlyName() << " offset (" << offset_val
+                       << " bytes) must be a multiple of result alignment (" << store_ty->Align()
+                       << " bytes)";
+        return false;
+    }
+
+    if (call->Func() == BuiltinFn::kBufferView) {
+        return true;
+    }
+
+    uint64_t size_val = 0;
+    if (auto* const_size = call->Args()[2]->As<Constant>()) {
+        if (const_size->Type()->IsSignedIntegerScalar()) {
+            if (const_size->Value()->ValueAs<int32_t>() < 0) {
+                AddError(call) << call->FriendlyName() << " size must be greater than 0";
+                return false;
+            }
+        }
+        size_val = const_size->Value()->ValueAs<uint64_t>();
+        if (size_val == 0) {
+            AddError(call) << call->FriendlyName() << " cannot be 0 sized";
+            return false;
+        }
+    }
+
+    if (offset_val + size_val > std::numeric_limits<uint32_t>::max()) {
+        AddError(call) << call->FriendlyName() << " requires a size beyond 32 bits";
+        return false;
+    }
+
+    if (buffer_size > 0 && buffer_size < size_val + offset_val) {
+        AddError(var) << "invalid buffer size (" << buffer_size << " bytes) when used with "
+                      << call->FriendlyName() << " (" << size_val + offset_val
+                      << " bytes required)";
+        return false;
+    }
+
+    if (size_val > 0 && size_val < ty_required_size) {
+        AddError(call) << call->FriendlyName() << " has invalid size (" << size_val
+                       << " bytes, requires " << ty_required_size << " bytes)";
+        return false;
+    }
+
+    if (size_val > 0 && ((size_val - ty_offset) % ty_stride != 0)) {
+        AddError(call) << call->FriendlyName() << " size (" << size_val
+                       << " bytes) minus type offset (" << ty_offset
+                       << " bytes) must be a multiple of the type stride (" << ty_stride
+                       << " bytes)";
+        return false;
+    }
+
+    return true;
+}
+
+bool Functional::CheckSubgroupMatrixMemory(const CoreBuiltinCall* call,
+                                           const Var* var,
+                                           const UseInfo& info) {
+    const bool is_load = call->Func() == BuiltinFn::kSubgroupMatrixLoad;
+    bool col_major = false;
+    auto* offset_arg = call->Args()[1];
+    const Value* stride_arg = nullptr;
+    if (is_load) {
+        col_major = std::get<Majorness>(call->ExplicitTemplateParams()[1]) == Majorness::kColMajor;
+        stride_arg = call->Args()[2];
+    } else {
+        col_major = std::get<Majorness>(call->ExplicitTemplateParams()[0]) == Majorness::kColMajor;
+        stride_arg = call->Args()[3];
+    }
+    auto* ty = is_load ? call->Result()->Type() : call->Args()[2]->Type();
+    auto* mat_ty = ty->As<core::type::SubgroupMatrix>();
+    auto* ele_ty = mat_ty->Type();
+
+    auto* array_ty = call->Args()[0]->Type()->UnwrapPtr()->As<core::type::Array>();
+    const uint32_t array_stride = array_ty->ImplicitStride();
+
+    // Error conditions:
+    // * stride is less than minimal required stride
+    // * pointed to memory is smaller than matrix requires
+    // * variable memory is smaller than total required
+    //
+    // Also if any calculation overflows 32 bits.
+
+    const uint32_t major_size = col_major ? mat_ty->Columns() : mat_ty->Rows();
+    const uint32_t minor_size = col_major ? mat_ty->Rows() : mat_ty->Columns();
+
+    uint64_t offset = 0;
+    if (auto* const_offset = offset_arg->As<Constant>()) {
+        // Offset is array elements of shader scalar type.
+        offset = const_offset->Value()->ValueAs<uint64_t>() * array_stride;
+
+        if (offset > std::numeric_limits<uint32_t>::max()) {
+            AddError(call) << call->FriendlyName() << " has an offset exceeding 32 bits";
+            return false;
+        }
+    }
+    uint32_t min_stride = minor_size * ele_ty->Size();
+    uint64_t stride = 0;
+    if (auto* const_stride = stride_arg->As<Constant>()) {
+        // Stride is in array elements of shader scalar type.
+        stride = const_stride->Value()->ValueAs<uint64_t>() * array_stride;
+
+        if (stride > std::numeric_limits<uint32_t>::max()) {
+            AddError(call) << call->FriendlyName() << " has a stride exceeding 32 bits";
+            return false;
+        }
+        if (stride < min_stride) {
+            AddError(call) << call->FriendlyName() << " stride (" << stride
+                           << " bytes) must be greater or equal to " << min_stride << " bytes";
+            return false;
+        }
+    } else {
+        stride = min_stride;
+    }
+
+    // Note: Offset and stride are in bytes.
+    uint64_t mat_required_size = offset + static_cast<uint64_t>(stride) * (major_size - 1) +
+                                 static_cast<uint64_t>(minor_size) * ele_ty->Size();
+    // Round up to array element size.
+    mat_required_size = RoundUp(static_cast<uint64_t>(array_stride), mat_required_size);
+    if (mat_required_size > std::numeric_limits<uint32_t>::max()) {
+        AddError(call) << call->FriendlyName() << " has a memory requirement exceeding 32 bits";
+        return false;
+    }
+
+    if (info.pointer_size > 0 && info.pointer_size < mat_required_size) {
+        AddError(call) << call->FriendlyName() << " requires more memory (" << mat_required_size
+                       << " bytes) than pointed to (" << info.pointer_size << " bytes)";
+        return false;
+    }
+
+    uint64_t mem_required_size = mat_required_size + info.offset;
+    if (mem_required_size > std::numeric_limits<uint32_t>::max()) {
+        AddError(call) << " has a total memory requirement exceeding 32 bits";
+        return false;
+    }
+
+    if (info.storage_size > 0 && info.storage_size < mem_required_size) {
+        AddError(var) << "invalid storage size (" << info.storage_size << " bytes) when used with "
+                      << call->FriendlyName() << " (" << mem_required_size << " bytes required)";
+        AddNote(call) << call->FriendlyName() << " here";
+        return false;
+    }
+
+    return true;
 }
 
 }  // namespace tint::core::ir::validator

@@ -212,8 +212,23 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
         D3D12_FEATURE_DATA_LINEAR_ALGEBRA_SUPPORT linearAlgebraSupport = {};
         hr = mD3d12Device->CheckFeatureSupport(D3D12_FEATURE_LINEAR_ALGEBRA_SUPPORT,
                                                &linearAlgebraSupport, sizeof(linearAlgebraSupport));
-        if (mDeviceInfo.supportsWaveOps && SUCCEEDED(hr) &&
-            linearAlgebraSupport.LinearAlgebraTier >= D3D12_LINEAR_ALGEBRA_TIER_1_0) {
+        // Subgroup matrix produces incorrect results on the Intel driver 101.8974, so disable the
+        // feature on that specific driver version. Only the last two version fields participate in
+        // the comparison (see IntelWindowsDriverVersion).
+        const gpu_info::IntelWindowsDriverVersion kBuggyDriverVersion = {32, 0, 101, 8974};
+        const bool isBuggyIntelDriver =
+            gpu_info::IsIntel(GetVendorId()) &&
+            gpu_info::IntelWindowsDriverVersion(GetDriverVersion()) <= kBuggyDriverVersion;
+        // Some preview drivers do not report D3D12_LINEAR_ALGEBRA_TIER_1_0, but do return valid
+        // operation-specific wave-matrix configurations. Use those configurations as a fallback
+        // capability signal while the D3D12 linear-algebra API is still experimental.
+        // TODO(crbug.com/549226780): Remove the fallback once the D3D12 linear-algebra API is no
+        // longer experimental.
+        const bool supportsLinearAlgebra =
+            (SUCCEEDED(hr) &&
+             linearAlgebraSupport.LinearAlgebraTier >= D3D12_LINEAR_ALGEBRA_TIER_1_0) ||
+            !mDeviceInfo.linAlgWaveMatrixMultiplySupports.empty();
+        if (mDeviceInfo.supportsWaveOps && supportsLinearAlgebra && !isBuggyIntelDriver) {
             EnableFeature(Feature::ChromiumExperimentalSubgroupMatrix);
         }
     }
@@ -239,6 +254,10 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
 
     if (SupportsBufferMapExtendedUsages()) {
         EnableFeature(Feature::BufferMapExtendedUsages);
+    }
+
+    if (GetDeviceInfo().isUMA) {
+        EnableFeature(Feature::BufferMapWriteExtendedUsages);
     }
 
     // Temporarily only enable SharedBufferMemoryFromWindowsHandle on UMA.
@@ -860,8 +879,13 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
     // AMD GPUS.
     // See http://crbug.com/1237175, http://crbug.com/dawn/1628, and http://crbug.com/dawn/2032
     // for more information.
+    // Known to work fine on this AMD driver version
+    const gpu_info::DriverVersion kSubAllocWithRenderAttachmentKnownGoodAMDDriverVersion = {
+        32, 0, 13031, 8021};
     if ((gpu_info::IsIntelGen9(vendorId, deviceId) && !gpu_info::IsSkylake(deviceId)) ||
-        gpu_info::IsIntelGen11(vendorId, deviceId) || gpu_info::IsAMD(vendorId)) {
+        gpu_info::IsIntelGen11(vendorId, deviceId) ||
+        (gpu_info::IsAMD(vendorId) &&
+         GetDriverVersion() < kSubAllocWithRenderAttachmentKnownGoodAMDDriverVersion)) {
         deviceToggles->Default(
             Toggle::DisableSubAllocationFor2DTextureWithCopyDstOrRenderAttachment, true);
         // Now we don't need to force clearing depth stencil textures with CopyDst as all the depth

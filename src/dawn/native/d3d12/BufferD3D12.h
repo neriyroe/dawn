@@ -82,7 +82,7 @@ class Buffer final : public BufferBase {
 
     MaybeError Initialize(bool mappedAtCreation);
     MaybeError InitializeHostMapped(const BufferHostMappedPointer* hostMappedDesc);
-    MaybeError InitializeAsExternalBuffer(ComPtr<ID3D12Resource> d3dBuffer,
+    MaybeError InitializeAsExternalBuffer(ComPtr<ID3D12Resource> d3d12Buffer,
                                           const UnpackedPtr<BufferDescriptor>& descriptor);
     MaybeError MapAsyncImpl(wgpu::MapMode mode, size_t offset, size_t size) override;
     MaybeError FinalizeMapImpl(BufferState newState) override;
@@ -90,9 +90,9 @@ class Buffer final : public BufferBase {
     void DestroyImpl(DestroyReason reason) override;
     bool IsCPUWritableAtCreation() const override;
     MaybeError MapAtCreationImpl() override;
-    void* GetMappedPointerImpl() override;
+    Span<std::byte> GetMappedRangeImpl(size_t offset, size_t size) override;
 
-    MaybeError MapInternal(bool isWrite, size_t start, size_t end, const char* contextInfo);
+    MaybeError MapInternal(bool isWrite, size_t offset, size_t size, const char* contextInfo);
 
     MaybeError InitializeToZero(CommandRecordingContext* commandContext);
     MaybeError ClearBuffer(CommandRecordingContext* commandContext,
@@ -106,7 +106,7 @@ class Buffer final : public BufferBase {
     ExecutionSerial mLastUsedSerial = std::numeric_limits<ExecutionSerial>::max();
 
     D3D12_RANGE mWrittenMappedRange = {0, 0};
-    raw_ptr<void> mMappedData = nullptr;
+    Span<std::byte> mMappedData;
 
     std::unique_ptr<Heap> mHostMappedHeap;
     wgpu::Callback mHostMappedDisposeCallback = nullptr;

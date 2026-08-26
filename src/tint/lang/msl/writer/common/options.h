@@ -34,6 +34,7 @@
 
 #include "src/tint/api/common/binding_point.h"
 #include "src/tint/api/common/bindings.h"
+#include "src/tint/api/common/resource_table_config.h"
 #include "src/tint/api/common/substitute_overrides_config.h"
 #include "src/tint/api/common/vertex_pulling_config.h"
 #include "src/tint/utils/reflection/reflection.h"
@@ -239,8 +240,14 @@ struct Options {
     /// Offsets of the minDepth and maxDepth push constants.
     std::optional<RangeOffsets> depth_range_offsets = std::nullopt;
 
+    /// Offset of the non-constant zero immediate.
+    uint32_t non_constant_zero_offset = 0;
+
     /// The bindings.
     Bindings bindings;
+
+    /// Resource table information
+    std::optional<ResourceTableConfig> resource_table = std::nullopt;
 
     // Substitute Overrides
     SubstituteOverridesConfig substitute_overrides_config = {};
@@ -265,7 +272,9 @@ struct Options {
                  immediate_binding_point,
                  group_to_argument_buffer_info,
                  depth_range_offsets,
+                 non_constant_zero_offset,
                  bindings,
+                 resource_table,
                  substitute_overrides_config);
     TINT_REFLECT_HASH_CODE(Options);
 

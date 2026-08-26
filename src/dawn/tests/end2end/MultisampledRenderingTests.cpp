@@ -1862,9 +1862,9 @@ TEST_P(MultisampledRenderToSingleSampledTest, ES3MSAADrawWithDepthTest) {
 }
 
 struct Point {
-    uint32_t x;
-    uint32_t y;
-    wgpu::Color color;
+    uint32_t x = 0;
+    uint32_t y = 0;
+    wgpu::Color color{};
     float msaaCoverage = 1.0f;
 };
 
@@ -2675,7 +2675,7 @@ TEST_P(DawnLoadResolveTextureTest, DrawThenLoad2DArrayTextureLayer) {
     auto multiSampledTextureView = multiSampledTexture.CreateView();
 
     auto singleSampledTexture = CreateTextureForRenderAttachment(
-        kColorFormat, 1, 1, /*arrayCount=*/2, /*transientAttachment=*/false,
+        kColorFormat, 1, 1, /*arrayLayerCount=*/2, /*transientAttachment=*/false,
         /*supportsTextureBinding=*/true);
     wgpu::TextureViewDescriptor resolveViewDescriptor2;
     resolveViewDescriptor2.dimension = wgpu::TextureViewDimension::e2D;

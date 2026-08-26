@@ -176,7 +176,7 @@ ResultOrError<Extent3D> ValidateComputeStageWorkgroupSize(
     bool usesSubgroupMatrix,
     uint32_t maxSubgroupSize,
     const LimitsForCompilationRequest& limits,
-    const LimitsForCompilationRequest& adaterSupportedlimits);
+    const LimitsForCompilationRequest& adapterSupportedlimits);
 
 MaybeError ValidateSubgroupMatrixConfiguration(const tint::SubgroupMatrixInfo& smInfo,
                                                const std::vector<SubgroupMatrixConfig>& cfg);
@@ -442,7 +442,7 @@ class ShaderModuleBase : public RefCountedWithExternalCount<ApiObjectBase>,
     // The original data in the descriptor for caching.
     enum class Type : uint8_t { Undefined, Spirv, Wgsl };
     Type mType = Type::Undefined;
-    bool mAllowSpirvNonUniformDerivitives = false;
+    bool mAllowSpirvNonUniformDerivatives = false;
     std::vector<uint32_t> mOriginalSpirv;
     std::string mWgsl;
 

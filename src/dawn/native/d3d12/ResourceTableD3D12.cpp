@@ -107,7 +107,7 @@ class ResourceTable::SamplerIndexPool {
     // possible to get back a different sampler index. This should not pose a problem.
     struct SamplerEntry {
         SamplerIndex index;
-        uint32_t refCount;
+        uint32_t refCount = 0;
     };
     absl::flat_hash_map<uintptr_t, SamplerEntry> mSamplerToEntry;
 };
@@ -306,29 +306,31 @@ void ResourceTable::FreeCPUHeap(ResourceTable::Heap& heap) {
 MaybeError ResourceTable::ApplyPendingUpdates(
     CommandRecordingContext* recordingContext,
     const absl::flat_hash_set<TextureBase*>& writableTextures) {
-    Updates updates = AcquireDirtySlotUpdates(writableTextures);
+    return ApplyDirtySlotUpdatesWith(
+        writableTextures,
+        [&](const std::vector<MetadataUpdate>& metadataUpdates,
+            const std::vector<ResourceDiff>& resourceDiffs,
+            const absl::flat_hash_set<TextureBase*>& texturesToTransition) -> MaybeError {
+            // Transition and initialize all required textures
+            if (!texturesToTransition.empty()) {
+                DAWN_TRY(TransitionResources(recordingContext, texturesToTransition));
+            }
 
-    // Transition and initialize all required textures
-    if (!updates.texturesToTransition.empty()) {
-        DAWN_TRY(TransitionResources(recordingContext, updates.texturesToTransition));
-    }
-
-    // Update resource bindings before metadata to ensure mSlotToSamplerIndex is up-to-date
-    if (!updates.resourceDiffs.empty()) {
-        DAWN_TRY(UpdateResourceBindings(updates.resourceDiffs));
-    }
-    if (!updates.metadataUpdates.empty()) {
-        DAWN_TRY(UpdateMetadataBuffer(recordingContext, updates.metadataUpdates));
-    }
-
-    return {};
+            // Update resource bindings before metadata to ensure mSlotToSamplerIndex is up-to-date
+            if (!resourceDiffs.empty()) {
+                DAWN_TRY(UpdateResourceBindings(resourceDiffs));
+            }
+            if (!metadataUpdates.empty()) {
+                DAWN_TRY(UpdateMetadataBuffer(recordingContext, metadataUpdates));
+            }
+            return {};
+        });
 }
 
-MaybeError ResourceTable::TransitionResources(
-    CommandRecordingContext* recordingContext,
-    const absl::flat_hash_set<Ref<TextureBase>>& textures) {
+MaybeError ResourceTable::TransitionResources(CommandRecordingContext* recordingContext,
+                                              const absl::flat_hash_set<TextureBase*>& textures) {
     for (const auto& texture : textures) {
-        Texture* textureBackend = ToBackend(texture.Get());
+        Texture* textureBackend = ToBackend(texture);
         DAWN_TRY(textureBackend->EnsureSubresourceContentInitialized(
             recordingContext, textureBackend->GetAllSubresources()));
         textureBackend->TrackUsageAndTransitionNow(recordingContext,
@@ -345,11 +347,10 @@ MaybeError ResourceTable::UpdateMetadataBuffer(CommandRecordingContext* recordin
     Device* device = ToBackend(GetDevice());
 
     // Allocate enough space for all the data to modify and schedule the copies.
-    // TODO(https://crbug.com/534203108): Spanify WithUploadReservation.
     return device->GetDynamicUploader()->WithUploadReservation(
         sizeof(uint32_t) * updates.size(), kCopyBufferToBufferOffsetAlignment,
         [&](UploadReservation reservation) -> MaybeError {
-            uint32_t* stagedData = static_cast<uint32_t*>(reservation.mappedPointer);
+            Span<uint32_t> stagedData = ReinterpretSpan<uint32_t>(reservation.mappedData);
 
             // The metadata buffer will be copied to.
             Buffer* metadataBuffer = ToBackend(GetMetadataBuffer());
@@ -365,9 +366,9 @@ MaybeError ResourceTable::UpdateMetadataBuffer(CommandRecordingContext* recordin
                 if (SamplerIndex samplerIndex = mSlotToSamplerIndex[update.slot];
                     samplerIndex != kInvalidSamplerIndex) {
                     // Store sampler index in high 16 bits, type id in low 16 bits
-                    DAWN_UNSAFE_TODO(stagedData[i]) = update.data | (uint32_t{samplerIndex} << 16);
+                    stagedData[i] = update.data | (uint32_t{samplerIndex} << 16);
                 } else {
-                    DAWN_UNSAFE_TODO(stagedData[i]) = update.data;  // Copy to staged
+                    stagedData[i] = update.data;  // Copy to staged
                 }
 
                 // Copy staged to metadata buffer

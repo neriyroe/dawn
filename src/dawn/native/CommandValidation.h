@@ -48,7 +48,7 @@ class QuerySetBase;
 struct SyncScopeResourceUsage;
 struct TexelBlockInfo;
 
-MaybeError ValidateSyncScopeResourceUsage(const SyncScopeResourceUsage& usage);
+MaybeError ValidateSyncScopeResourceUsage(const SyncScopeResourceUsage& scope);
 
 MaybeError ValidateTimestampQuery(const DeviceBase* device,
                                   const QuerySetBase* querySet,
@@ -67,7 +67,7 @@ template <typename A, typename B>
 DAWN_FORCE_INLINE uint64_t Safe32x32(A a, B b) {
     static_assert(std::is_same<A, uint32_t>::value, "'a' must be uint32_t");
     static_assert(std::is_same<B, uint32_t>::value, "'b' must be uint32_t");
-    return uint64_t(a) * uint64_t(b);
+    return uint64_t{a} * uint64_t{b};
 }
 
 // Overload to be used before/during validation. Handles bytesPerRow and rowPerImage being
@@ -91,7 +91,7 @@ MaybeError ValidateLinearTextureData(const TexelCopyBufferLayout& layout,
                                      const TexelBlockInfo& blockInfo,
                                      const Extent3D& copyExtent);
 MaybeError ValidateTextureCopyRange(DeviceBase const* device,
-                                    const TexelCopyTextureInfo& TexelCopyTextureInfo,
+                                    const TexelCopyTextureInfo& textureCopy,
                                     const Extent3D& copySize);
 ResultOrError<Aspect> SingleAspectUsedByTexelCopyTextureInfo(const TexelCopyTextureInfo& view);
 MaybeError ValidateLinearToDepthStencilCopyRestrictions(const TexelCopyTextureInfo& dst);
@@ -99,7 +99,7 @@ MaybeError ValidateLinearToDepthStencilCopyRestrictions(const TexelCopyTextureIn
 MaybeError ValidateTexelCopyBufferInfo(DeviceBase const* device,
                                        const TexelCopyBufferInfo& texelCopyBufferInfo);
 MaybeError ValidateTexelCopyTextureInfo(DeviceBase const* device,
-                                        const TexelCopyTextureInfo& TexelCopyTextureInfo,
+                                        const TexelCopyTextureInfo& textureCopy,
                                         const Extent3D& copySize);
 
 MaybeError ValidateCopySizeFitsInBuffer(const Ref<BufferBase>& buffer,

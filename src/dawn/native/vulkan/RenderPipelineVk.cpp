@@ -521,9 +521,9 @@ ResultOrError<RenderPipeline::SpecializationResult> RenderPipeline::InitializeSp
     std::optional<uint32_t> pixelCenterPolyfillLocation = std::nullopt;
     if (NeedsPixelCenterPolyfill()) {
         const EntryPointMetadata* vtx = GetStage(SingleShaderStage::Vertex).metadata;
-        for (size_t i = 0; i < vtx->usedInterStageVariables.size(); ++i) {
+        for (uint32_t i = 0; i < vtx->usedInterStageVariables.size(); ++i) {
             if (vtx->usedInterStageVariables[i] == false) {
-                pixelCenterPolyfillLocation = uint32_t(i);
+                pixelCenterPolyfillLocation = i;
                 break;
             }
         }
@@ -664,7 +664,8 @@ ResultOrError<RenderPipeline::SpecializationResult> RenderPipeline::InitializeSp
         colorBlend.pNext = nullptr;
         colorBlend.flags = 0;
 
-        if (GetStage(SingleShaderStage::Fragment).metadata->fragmentInputMask.any()) {
+        if (UsesFramebufferFetch() &&
+            device->GetFramebufferFetchMode() == VulkanFramebufferFetchMode::kCoherentExt) {
             colorBlend.flags |=
                 VK_PIPELINE_COLOR_BLEND_STATE_CREATE_RASTERIZATION_ORDER_ATTACHMENT_ACCESS_BIT_EXT;
         }

@@ -1256,6 +1256,8 @@ std::string_view ToString(Attribute value) {
 
 std::string_view ToString(ParameterUsage usage) {
     switch (usage) {
+        case ParameterUsage::kColMajor:
+            return "col_major";
         case ParameterUsage::kNone:
             return "none";
         case ParameterUsage::kArrayIndex:
@@ -1266,8 +1268,6 @@ std::string_view ToString(ParameterUsage usage) {
             return "bias";
         case ParameterUsage::kBits:
             return "bits";
-        case ParameterUsage::kColMajor:
-            return "col_major";
         case ParameterUsage::kCompareValue:
             return "compare_value";
         case ParameterUsage::kComponent:
@@ -1658,6 +1658,9 @@ BuiltinFn ParseBuiltinFn(std::string_view name) {
     }
     if (name == "addSat") {
         return BuiltinFn::kAddSat;
+    }
+    if (name == "mulSat") {
+        return BuiltinFn::kMulSat;
     }
     if (name == "storageBarrier") {
         return BuiltinFn::kStorageBarrier;
@@ -2060,6 +2063,8 @@ const char* str(BuiltinFn i) {
             return "unpack4xU8";
         case BuiltinFn::kAddSat:
             return "addSat";
+        case BuiltinFn::kMulSat:
+            return "mulSat";
         case BuiltinFn::kStorageBarrier:
             return "storageBarrier";
         case BuiltinFn::kWorkgroupBarrier:

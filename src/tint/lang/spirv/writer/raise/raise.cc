@@ -64,6 +64,7 @@
 #include "src/tint/lang/spirv/writer/raise/merge_return.h"
 #include "src/tint/lang/spirv/writer/raise/pass_matrix_by_pointer.h"
 #include "src/tint/lang/spirv/writer/raise/remove_unreachable_in_loop_continuing.h"
+#include "src/tint/lang/spirv/writer/raise/replace_unsigned_compare_zero.h"
 #include "src/tint/lang/spirv/writer/raise/resource_table_helper.h"
 #include "src/tint/lang/spirv/writer/raise/shader_io.h"
 #include "src/tint/lang/spirv/writer/raise/unary_polyfill.h"
@@ -94,6 +95,8 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
         config.disable_runtime_sized_array_index_clamping =
             options.extensions.disable_runtime_sized_array_index_clamping;
         config.use_integer_range_analysis = !options.disable_integer_range_analysis;
+        config.clamp_storage_subgroup_matrix =
+            !options.extensions.disable_storage_subgroup_matrix_clamping;
         TINT_CHECK_RESULT(core::ir::transform::Robustness(module, config));
 
         TINT_CHECK_RESULT(core::ir::transform::PreventInfiniteLoops(module));
@@ -106,11 +109,11 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
     core::ir::transform::PrepareImmediateDataConfig immediate_data_config;
     if (options.depth_range_offsets) {
         TINT_CHECK_RESULT(immediate_data_config.AddInternalImmediateData(
-            options.depth_range_offsets.value().min, module.symbols.New("tint_frag_depth_min"),
-            module.Types().f32()));
+            core::InternalImmediate::kFragDepthMin, options.depth_range_offsets.value().min,
+            module.symbols.New("tint_frag_depth_min"), module.Types().f32()));
         TINT_CHECK_RESULT(immediate_data_config.AddInternalImmediateData(
-            options.depth_range_offsets.value().max, module.symbols.New("tint_frag_depth_max"),
-            module.Types().f32()));
+            core::InternalImmediate::kFragDepthMax, options.depth_range_offsets.value().max,
+            module.symbols.New("tint_frag_depth_max"), module.Types().f32()));
     }
     TINT_CHECK_RESULT_UNWRAP(immediate_data_layout, core::ir::transform::PrepareImmediateData(
                                                         module, immediate_data_config));
@@ -235,6 +238,10 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
         .signed_negation = true, .signed_arithmetic = true, .signed_shiftleft = true};
     TINT_CHECK_RESULT(core::ir::transform::SignedIntegerPolyfill(module, signed_integer_cfg));
 
+    if (options.workarounds.replace_unsigned_compare_zero) {
+        TINT_CHECK_RESULT(raise::ReplaceUnsignedCompareZero(module));
+    }
+
     // AMD Mesa front end optimizer bug for unary f32 and f16 negation and abs.
     // Fixed in 25.3 - See crbug.com/448294721 and crbug.com/500099471
     raise::UnaryPolyfillConfig unary_polyfill_cfg = {
@@ -258,7 +265,6 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
                     .polyfill_f16_io = !options.extensions.use_storage_input_output_16,
                     .polyfill_pixel_center = options.polyfill_pixel_center,
                     .multisampled_framebuffer_fetch = options.multisampled_framebuffer_fetch,
-                    .depth_range_offsets = options.depth_range_offsets,
                 }));
 
     // Immediate data is decomposed after ShaderIO because ShaderIO can introduce new accesses

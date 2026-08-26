@@ -386,6 +386,9 @@ MaybeError RenderPipeline::InitializeImpl() {
                                                 sizeof(ClampFragDepthArgs));
     }
 
+    mImmediateMask |=
+        GetImmediateBlockBits(offsetof(RenderImmediates, nonConstantZero), sizeof(NonConstantZero));
+
     const PerStage<ProgrammableStage>& allStages = GetAllStages();
     const ProgrammableStage& vertexStage = allStages[wgpu::ShaderStage::Vertex];
     ShaderModule::MetalFunctionData vertexData;
@@ -545,7 +548,7 @@ NSRef<MTLVertexDescriptor> RenderPipeline::MakeVertexDesc() const {
                 }
                 maxArrayStride =
                     std::max(maxArrayStride,
-                             GetVertexFormatInfo(attrib.format).byteSize + size_t(attrib.offset));
+                             GetVertexFormatInfo(attrib.format).byteSize + size_t{attrib.offset});
             }
             layoutDesc.stepFunction = MTLVertexStepFunctionConstant;
             layoutDesc.stepRate = 0;

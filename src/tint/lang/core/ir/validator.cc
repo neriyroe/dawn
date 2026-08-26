@@ -61,7 +61,8 @@ class Validator {
   public:
     /// Create a core validator
     /// @param mod the module to be validated
-    explicit Validator(const Module& mod) : mod_(mod) {}
+    /// @param source the source of the program, WGSL or IR
+    Validator(Module& mod, ErrorSource error_source) : mod_(mod), error_source_(error_source) {}
 
     /// Destructor
     ~Validator() = default;
@@ -70,42 +71,53 @@ class Validator {
     /// @returns success or failure
 
     Result<SuccessType> Run() {
-        validator::Structural s(mod_, diagnostics_);
-        s.Validate();
+        if (error_source_ == ErrorSource::kIr) {
+            validator::Structural s(mod_, diagnostics_);
+            s.Validate();
+        }
 
         // Only run the functional validation if we are structurally valid
         if (!diagnostics_.ContainsErrors()) {
-            validator::Functional f(mod_, diagnostics_, validator::Functional::ErrorSource::kIr);
+            validator::Functional f(mod_, diagnostics_, error_source_);
             f.Validate();
         }
 
         if (diagnostics_.ContainsErrors()) {
-            const StyledText disassembly = ir::Disassembler(mod_).Text();
-            diagnostics_.AddNote(Source{}) << "# Disassembly\n" << disassembly;
+            if (error_source_ == ErrorSource::kIr) {
+                const StyledText disassembly = ir::Disassembler(mod_).Text();
+                diagnostics_.AddNote(Source{}) << "# Disassembly\n" << disassembly;
+            }
             return Failure{diagnostics_.Str()};
         }
         return Success;
     }
 
   private:
-    const Module& mod_;
+    Module& mod_;
+    ErrorSource error_source_ = ErrorSource::kIr;
     diag::List diagnostics_;
 };
 
 }  // namespace
 
-Result<SuccessType> Validate(const Module& mod, std::string_view msg) {
+Result<SuccessType> Validate(Module& mod, std::string_view msg) {
     DumpIRIfEnabled(mod, msg);
-    Validator v(mod);
+    Validator v(mod, ErrorSource::kIr);
     return v.Run();
 }
 
-void AssertValid(const Module& mod, std::string_view msg) {
+Result<SuccessType> Validate(Module& mod, ErrorSource source) {
+    DumpIRIfEnabled(mod, "");
+    Validator v(mod, source);
+    return v.Run();
+}
+
+void AssertValid(Module& mod, std::string_view msg) {
     DumpIRIfEnabled(mod, msg);
 
 #if TINT_ENABLE_IR_VALIDATION_ASSERTS
     if (mod.enable_validation_asserts) {
-        Validator v(mod);
+        Validator v(mod, ErrorSource::kIr);
         auto result = v.Run();
         if (result != Success) {
             TINT_ICE() << "\n========================================================="

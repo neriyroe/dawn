@@ -132,7 +132,7 @@ MaybeError ResourceTable::Initialize() {
             .pNext = nullptr,
             .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
             .maxSets = 1,
-            .poolSizeCount = uint32_t(sizes.size()),
+            .poolSizeCount = checked_cast<uint32_t>(sizes.size()),
             .pPoolSizes = sizes.data(),
         };
 
@@ -192,28 +192,30 @@ MaybeError ResourceTable::Initialize() {
 MaybeError ResourceTable::ApplyPendingUpdates(
     CommandRecordingContext* recordingContext,
     const absl::flat_hash_set<TextureBase*>& writableTextures) {
-    Updates updates = AcquireDirtySlotUpdates(writableTextures);
+    return ApplyDirtySlotUpdatesWith(
+        writableTextures,
+        [&](const std::vector<MetadataUpdate>& metadataUpdates,
+            const std::vector<ResourceDiff>& resourceDiffs,
+            const absl::flat_hash_set<TextureBase*>& texturesToTransition) -> MaybeError {
+            // Transition and initialize all required textures
+            if (!texturesToTransition.empty()) {
+                DAWN_TRY(TransitionResources(recordingContext, texturesToTransition));
+            }
 
-    // Transition and initialize all required textures
-    if (!updates.texturesToTransition.empty()) {
-        DAWN_TRY(TransitionResources(recordingContext, updates.texturesToTransition));
-    }
-
-    if (!updates.metadataUpdates.empty()) {
-        DAWN_TRY(UpdateMetadataBuffer(recordingContext, updates.metadataUpdates));
-    }
-    if (!updates.resourceDiffs.empty()) {
-        DAWN_TRY(UpdateResourceBindings(updates.resourceDiffs));
-    }
-
-    return {};
+            if (!metadataUpdates.empty()) {
+                DAWN_TRY(UpdateMetadataBuffer(recordingContext, metadataUpdates));
+            }
+            if (!resourceDiffs.empty()) {
+                DAWN_TRY(UpdateResourceBindings(resourceDiffs));
+            }
+            return {};
+        });
 }
 
-MaybeError ResourceTable::TransitionResources(
-    CommandRecordingContext* recordingContext,
-    const absl::flat_hash_set<Ref<TextureBase>>& textures) {
+MaybeError ResourceTable::TransitionResources(CommandRecordingContext* recordingContext,
+                                              const absl::flat_hash_set<TextureBase*>& textures) {
     for (const auto& texture : textures) {
-        Texture* textureBackend = ToBackend(texture.Get());
+        Texture* textureBackend = ToBackend(texture);
         DAWN_TRY(textureBackend->EnsureSubresourceContentInitialized(
             recordingContext, textureBackend->GetAllSubresources()));
         textureBackend->TransitionUsageNow(recordingContext, wgpu::TextureUsage::TextureBinding,
@@ -232,11 +234,10 @@ MaybeError ResourceTable::UpdateMetadataBuffer(CommandRecordingContext* recordin
     Device* device = ToBackend(GetDevice());
 
     // Allocate enough space for all the data to modify and schedule the copies.
-    // TODO(https://crbug.com/534203108): Spanify WithUploadReservation.
     return device->GetDynamicUploader()->WithUploadReservation(
         sizeof(uint32_t) * updates.size(), kCopyBufferToBufferOffsetAlignment,
         [&](UploadReservation reservation) -> MaybeError {
-            uint32_t* stagedData = static_cast<uint32_t*>(reservation.mappedPointer);
+            Span<uint32_t> stagedData = ReinterpretSpan<uint32_t>(reservation.mappedData);
 
             // The metadata buffer will be copied to.
             Buffer* metadataBuffer = ToBackend(GetMetadataBuffer());
@@ -247,7 +248,7 @@ MaybeError ResourceTable::UpdateMetadataBuffer(CommandRecordingContext* recordin
             // Prepare the copies.
             std::vector<VkBufferCopy> copies(updates.size());
             for (auto [i, update] : Enumerate(updates)) {
-                DAWN_UNSAFE_TODO(stagedData[i]) = update.data;
+                stagedData[i] = update.data;
 
                 VkBufferCopy copy{
                     .srcOffset = reservation.offsetInBuffer + i * sizeof(uint32_t),

@@ -91,6 +91,7 @@
 #include "src/tint/utils/macros/scoped_assignment.h"
 #include "src/tint/utils/math/math.h"
 #include "src/tint/utils/rtti/switch.h"
+#include "src/utils/compiler.h"
 
 using namespace tint::core::fluent_types;  // NOLINT
 
@@ -99,7 +100,7 @@ namespace {
 
 class State {
   public:
-    explicit State(const core::ir::Module& m) : mod(m) {}
+    explicit State(core::ir::Module& m) : mod(m) {}
 
     Program Run(const Options& options) {
         if (auto res = Validate(mod, "before wgsl.to_program"); res != Success) {
@@ -145,7 +146,7 @@ class State {
 
   private:
     /// The source IR module
-    const core::ir::Module& mod;
+    core::ir::Module& mod;
 
     /// The target ProgramBuilder
     ProgramBuilder b;
@@ -860,8 +861,11 @@ class State {
             }
             components.Push(xyzw[i]);
         }
-        auto* swizzle =
-            b.MemberAccessor(vec, std::string_view(components.begin(), components.Length()));
+        // SAFETY: `components` contains at most 4 elements populated from the valid `xyzw` array
+        // based on the swizzle indices, which is bounds-safe for this view.
+        auto* swizzle = b.MemberAccessor(
+            vec,
+            DAWN_UNSAFE_BUFFERS(std::string_view(components.AsSpan().data(), components.Length())));
         Bind(s->Result(), swizzle);
     }
 
@@ -1412,7 +1416,7 @@ class State {
 
 }  // namespace
 
-Program IRToProgram(const core::ir::Module& i, const Options& options) {
+Program IRToProgram(core::ir::Module& i, const Options& options) {
     return State{i}.Run(options);
 }
 

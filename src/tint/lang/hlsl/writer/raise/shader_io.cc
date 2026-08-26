@@ -263,8 +263,12 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
                                 "global_invocation_id");
         }
 
+        if (needs_num_workgroups &&
+            !config.immediate_data_layout.HasImmediate(core::InternalImmediate::kNumWorkgroups)) {
+            return Failure("num_workgroups required but no immediate offset provided");
+        }
+
         Vector<MemberInfo, 4> input_data;
-        bool has_vertex_or_instance_index = false;
         for (uint32_t i = 0; i < inputs.Length(); ++i) {
             // Save the index of certain builtins for GetIndex. Although struct members will not be
             // added for these inputs, we still add entries to input_data so that other inputs with
@@ -282,10 +286,6 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
                     num_workgroups_index = i;
                 } else if (*builtin == core::BuiltinValue::kLocalInvocationIndex) {
                     local_invocation_index_index = i;
-                } else if (*builtin == core::BuiltinValue::kVertexIndex) {
-                    has_vertex_or_instance_index = true;
-                } else if (*builtin == core::BuiltinValue::kInstanceIndex) {
-                    has_vertex_or_instance_index = true;
                 } else if (*builtin == core::BuiltinValue::kGlobalInvocationIndex) {
                     global_invocation_index_index = i;
                 } else if (*builtin == core::BuiltinValue::kWorkgroupIndex) {
@@ -301,22 +301,6 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         }
 
         input_indices.Resize(input_data.Length());
-
-        if (config.first_index_offset_binding.has_value() && has_vertex_or_instance_index) {
-            // Create a FirstIndexOffset uniform buffer. GetInput will use this to offset the
-            // vertex/instance index.
-            TINT_IR_ASSERT(ir, func->IsVertex());
-            tint::Vector<tint::core::type::Manager::StructMemberDesc, 2> members;
-            auto* str = ty.Struct(ir.symbols.New("tint_first_index_offset_struct"),
-                                  {
-                                      {ir.symbols.New("vertex_index"), ty.u32(), {}},
-                                      {ir.symbols.New("instance_index"), ty.u32(), {}},
-                                  });
-            tint_first_index_offset = b.Var("tint_first_index_offset", uniform, str);
-            tint_first_index_offset->SetBindingPoint(config.first_index_offset_binding->group,
-                                                     config.first_index_offset_binding->binding);
-            ir.root_block->Append(tint_first_index_offset);
-        }
 
         // Sort the struct members to satisfy HLSL interfacing matching rules.
         // We use stable_sort so that two members with the same attributes maintain their relative
@@ -460,42 +444,6 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         return output_struct;
     }
 
-    /// Handles kNumWorkgroups builtin by emitting a UBO to hold the num_workgroups value,
-    /// along with the load of the value. Returns the loaded value.
-    core::ir::Value* GetInputForNumWorkgroups(core::ir::Builder& builder) {
-        if (tint_num_workgroups) {
-            return tint_num_workgroups;
-        }
-
-        // Create uniform var that will receive the number of workgroups
-        core::ir::Var* num_wg_var = nullptr;
-        builder.Append(ir.root_block, [&] {
-            num_wg_var = builder.Var("tint_num_workgroups", ty.ptr(uniform, ty.vec3u()));
-        });
-        if (config.num_workgroups_binding.has_value()) {
-            // If config.num_workgroups_binding holds a value, use it.
-            auto bp = *config.num_workgroups_binding;
-            num_wg_var->SetBindingPoint(bp.group, bp.binding);
-        } else {
-            // Otherwise, use the binding 0 of the largest used group plus 1, or group 0 if no
-            // resources are bound.
-            uint32_t group = 0;
-            for (auto* inst : *ir.root_block) {
-                if (auto* var = inst->As<core::ir::Var>()) {
-                    if (const auto& bp = var->BindingPoint()) {
-                        if (bp->group >= group) {
-                            group = bp->group + 1;
-                        }
-                    }
-                }
-            }
-            num_wg_var->SetBindingPoint(group, 0);
-        }
-        auto* load = builder.Load(num_wg_var);
-        tint_num_workgroups = load->Result();
-        return tint_num_workgroups;
-    }
-
     /// Create the atomic counter used to polyfill subgroup_id and num_subgroups, and add the code
     /// to increment it from each subgroup.
     void MakeSubgroupIdCounter(core::ir::Builder& builder) {
@@ -612,27 +560,15 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
             return GetSubgroupSize(builder);
         }
         if (num_workgroups_index == idx) {
-            if (config.num_workgroups_start_offset.has_value()) {
-                auto* immediate_data = config.immediate_data_layout.var;
-                auto num_workgroup_idx = u32(config.immediate_data_layout.IndexOf(
-                    config.num_workgroups_start_offset.value()));
-                // num_workgroups is stored as a struct of three u32 members (4-byte aligned); load
-                // each member and reconstruct the vec3<u32> value the builtin expects.
-                auto* immediate_struct = config.immediate_data_layout.var->Result()
-                                             ->Type()
-                                             ->As<core::type::Pointer>()
-                                             ->StoreType()
-                                             ->As<core::type::Struct>();
-                auto* num_workgroups_type = immediate_struct->Members()[num_workgroup_idx]->Type();
-                auto* str = builder.Access(ty.ptr(immediate, num_workgroups_type), immediate_data,
-                                           num_workgroup_idx);
-                auto* e0 = builder.Load(builder.Access<ptr<immediate, u32>>(str, 0_u));
-                auto* e1 = builder.Load(builder.Access<ptr<immediate, u32>>(str, 1_u));
-                auto* e2 = builder.Load(builder.Access<ptr<immediate, u32>>(str, 2_u));
-                return builder.Construct(ty.vec3u(), e0->Result(), e1->Result(), e2->Result())
-                    ->Result();
-            }
-            return GetInputForNumWorkgroups(builder);
+            // num_workgroups is stored as a struct of three u32 members (4-byte aligned); load
+            // each member and reconstruct the vec3<u32> value the builtin expects.
+            auto* str = config.immediate_data_layout.GetPointer(
+                builder, core::InternalImmediate::kNumWorkgroups);
+            auto* e0 = builder.Load(builder.Access<ptr<immediate, u32>>(str, 0_u));
+            auto* e1 = builder.Load(builder.Access<ptr<immediate, u32>>(str, 1_u));
+            auto* e2 = builder.Load(builder.Access<ptr<immediate, u32>>(str, 2_u));
+            return builder.Construct(ty.vec3u(), e0->Result(), e1->Result(), e2->Result())
+                ->Result();
         }
 
         auto index = input_indices[idx];
@@ -646,36 +582,18 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
             auto* div = builder.Divide(1.0_f, w);
             auto* swizzle = builder.Swizzle(ty.vec3f(), v, {0, 1, 2});
             v = builder.Construct(ty.vec4f(), swizzle, div)->Result();
-        } else if (config.first_index_offset_binding.has_value() &&
+        } else if (config.immediate_data_layout.HasImmediate(
+                       core::InternalImmediate::kFirstVertexOffset) &&
                    inputs[idx].attributes.builtin == core::BuiltinValue::kVertexIndex) {
-            // Apply vertex_index offset
-            TINT_IR_ASSERT(ir, tint_first_index_offset);
-            auto* vertex_index_offset =
-                builder.Access(ty.ptr<uniform, u32>(), tint_first_index_offset, 0_u);
-            v = builder.Add(v, builder.Load(vertex_index_offset))->Result();
-        } else if (config.first_index_offset_binding.has_value() &&
+            auto first_index_offset = config.immediate_data_layout.GetValue(
+                builder, core::InternalImmediate::kFirstVertexOffset);
+            v = builder.Add(v, first_index_offset)->Result();
+        } else if (config.immediate_data_layout.HasImmediate(
+                       core::InternalImmediate::kFirstInstanceOffset) &&
                    inputs[idx].attributes.builtin == core::BuiltinValue::kInstanceIndex) {
-            // Apply instance_index offset
-            TINT_IR_ASSERT(ir, tint_first_index_offset);
-            auto* instance_index_offset =
-                builder.Access(ty.ptr<uniform, u32>(), tint_first_index_offset, 1_u);
-            v = builder.Add(v, builder.Load(instance_index_offset))->Result();
-        } else if (config.first_index_offset.has_value() &&
-                   inputs[idx].attributes.builtin == core::BuiltinValue::kVertexIndex) {
-            auto* immediate_data = config.immediate_data_layout.var;
-            auto first_index_offset_idx =
-                u32(config.immediate_data_layout.IndexOf(config.first_index_offset.value()));
-            auto first_index_offset =
-                builder.Access<ptr<immediate, u32>>(immediate_data, first_index_offset_idx);
-            v = builder.Add(v, builder.Load(first_index_offset))->Result();
-        } else if (config.first_instance_offset.has_value() &&
-                   inputs[idx].attributes.builtin == core::BuiltinValue::kInstanceIndex) {
-            auto* immediate_data = config.immediate_data_layout.var;
-            auto first_instance_offset_idx =
-                u32(config.immediate_data_layout.IndexOf(config.first_instance_offset.value()));
-            auto first_instance_offset =
-                builder.Access<ptr<immediate, u32>>(immediate_data, first_instance_offset_idx);
-            v = builder.Add(v, builder.Load(first_instance_offset))->Result();
+            auto* first_instance_offset = config.immediate_data_layout.GetValue(
+                builder, core::InternalImmediate::kFirstInstanceOffset);
+            v = builder.Add(v, first_instance_offset)->Result();
         }
 
         return v;

@@ -307,6 +307,11 @@ static constexpr auto kFeatureInfo = std::to_array<FeatureEnumAndInfo>({
       "https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/dawn/features/"
       "buffer_map_extended_usages.md",
       FeatureInfo::FeatureState::Experimental}},
+    {Feature::BufferMapWriteExtendedUsages,
+     {"Support creating buffers with MapWrite and any other usage except MapRead.",
+      "https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/dawn/features/"
+      "buffer_map_write_extended_usages.md",
+      FeatureInfo::FeatureState::Experimental}},
     {Feature::AdapterPropertiesMemoryHeaps,
      {"Support querying memory heap info from the adapter.",
       "https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/dawn/features/"
@@ -496,7 +501,7 @@ void FeaturesSet::EnableFeature(Feature feature) {
 }
 
 void FeaturesSet::EnableFeature(wgpu::FeatureName feature) {
-    EnableFeature(FromAPI(feature));
+    EnableFeature(FromCppAPI(feature));
 }
 
 bool FeaturesSet::IsEnabled(Feature feature) const {
@@ -505,7 +510,7 @@ bool FeaturesSet::IsEnabled(Feature feature) const {
 }
 
 bool FeaturesSet::IsEnabled(wgpu::FeatureName feature) const {
-    Feature f = FromAPI(feature);
+    Feature f = FromCppAPI(feature);
     return f != Feature::InvalidEnum && IsEnabled(f);
 }
 
@@ -525,7 +530,7 @@ void FeaturesSet::ToSupportedFeatures(SupportedFeatures* supportedFeatures) cons
     auto features = HeapArray<wgpu::FeatureName>(count);
     uint32_t index = 0;
     for (Feature f : featuresBitSet) {
-        features[index++] = ToAPI(f);
+        features[index++] = ToCppAPI(f);
     }
     DAWN_ASSERT(index == count);
 

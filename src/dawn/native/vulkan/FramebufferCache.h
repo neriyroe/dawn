@@ -51,8 +51,8 @@ struct FramebufferCacheTextureView {
     // TODO(crbug.com/436274255): Uses a unique ID assigned at view creation rather than a WeakRef
     // due to the overhead of WeakRef promotion. Could switch back to using WeakRef if that was
     // optimized.
-    uint64_t textureViewId;
-    uint32_t depthSlice;
+    uint64_t textureViewId = 0;
+    uint32_t depthSlice = 0;
 };
 
 // A key to query the FramebufferCache
@@ -61,15 +61,15 @@ struct FramebufferCacheQuery {
     // Use these helpers to build the query, they make sure all relevant data is initialized and
     // masks set.
     void SetRenderPass(uint64_t passId, uint32_t passWidth, uint32_t passHeight);
-    MaybeError AddAttachment(TextureView* attachment,
+    MaybeError AddAttachment(TextureView* view,
                              VkClearValue clearValue = {},
                              uint32_t depthSlice = 0);
 
     // A unique ID for the render pass is used for cache lookup rather than the VkRenderPass
     // because Vulkan handles may be reused, making them unreliable as cache keys.
-    uint64_t renderPassId;
-    uint32_t width;
-    uint32_t height;
+    uint64_t renderPassId = 0;
+    uint32_t width = 0;
+    uint32_t height = 0;
 
     std::array<FramebufferCacheTextureView, kMaxFramebufferAttachments> textureViews;
 
@@ -101,7 +101,7 @@ class FramebufferCache final
     explicit FramebufferCache(Device* device, size_t capacity = kDefaultCapacity);
     ~FramebufferCache() override;
 
-    void EvictedFromCache(const VkFramebuffer& value) override;
+    void EvictedFromCache(const VkFramebuffer& framebuffer) override;
 
   private:
     // We use a raw pointer to the device here because the cache is always owned by the device

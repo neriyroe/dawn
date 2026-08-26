@@ -336,7 +336,7 @@ TEST_P(BufferMappingValidationTest, MapAsync_OffsetSizeOOB) {
     // Error case, offset + size is larger than the buffer, overflow case.
     {
         wgpu::Buffer buffer = CreateBuffer(12);
-        AssertMapAsyncError(buffer, GetParam(), 8, std::numeric_limits<size_t>::max() & ~size_t(7));
+        AssertMapAsyncError(buffer, GetParam(), 8, std::numeric_limits<size_t>::max() & ~size_t{7});
     }
 
     // The same tests, with an unmap before destroying the buffer.
@@ -375,7 +375,7 @@ TEST_P(BufferMappingValidationTest, MapAsync_OffsetSizeOOB) {
         wgpu::Buffer buffer = CreateBuffer(12);
         EXPECT_CALL(mockCb, Call(wgpu::MapAsyncStatus::Error, _)).Times(1);
         ASSERT_DEVICE_ERROR(
-            buffer.MapAsync(GetParam(), 8, std::numeric_limits<size_t>::max() & ~size_t(7),
+            buffer.MapAsync(GetParam(), 8, std::numeric_limits<size_t>::max() & ~size_t{7},
                             wgpu::CallbackMode::AllowSpontaneous, mockCb.Callback()));
         buffer.Unmap();
     }
@@ -672,7 +672,7 @@ TEST_F(BufferValidationTest, MappedAtCreationSizeAlignment) {
 
 // Test that if CreateBuffer OOMs while mapping at creation, it returns null.
 TEST_F(BufferValidationTest, MappedAtCreationOOM) {
-    uint64_t kStupidLarge = uint64_t(1) << uint64_t(63);
+    uint64_t kStupidLarge = uint64_t{1} << uint64_t{63};
 
     // Buffer would fail validation due to invalid usage combination
     {
@@ -1328,6 +1328,121 @@ class BufferMapExtendedUsagesValidationTest : public BufferValidationTest {
 // Test that MapRead or MapWrite can be combined with any other usage when creating
 // a buffer.
 TEST_F(BufferMapExtendedUsagesValidationTest, CreationMapUsageReadOrWriteNoRestrictions) {
+    constexpr wgpu::BufferUsage kNonMapUsages[] = {
+        wgpu::BufferUsage::CopySrc,  wgpu::BufferUsage::CopyDst,      wgpu::BufferUsage::Index,
+        wgpu::BufferUsage::Vertex,   wgpu::BufferUsage::Uniform,      wgpu::BufferUsage::Storage,
+        wgpu::BufferUsage::Indirect, wgpu::BufferUsage::QueryResolve,
+    };
+
+    // MapRead with anything is ok
+    {
+        wgpu::BufferDescriptor descriptor;
+        descriptor.size = 4;
+
+        for (const auto otherUsage : kNonMapUsages) {
+            descriptor.usage = wgpu::BufferUsage::MapRead | otherUsage;
+
+            device.CreateBuffer(&descriptor);
+        }
+    }
+
+    // MapWrite with anything is ok
+    {
+        wgpu::BufferDescriptor descriptor;
+        descriptor.size = 4;
+
+        for (const auto otherUsage : kNonMapUsages) {
+            descriptor.usage = wgpu::BufferUsage::MapWrite | otherUsage;
+
+            device.CreateBuffer(&descriptor);
+        }
+    }
+
+    // MapRead | MapWrite with anything is ok
+    {
+        wgpu::BufferDescriptor descriptor;
+        descriptor.size = 4;
+
+        for (const auto otherUsage : kNonMapUsages) {
+            descriptor.usage =
+                wgpu::BufferUsage::MapRead | wgpu::BufferUsage::MapWrite | otherUsage;
+
+            device.CreateBuffer(&descriptor);
+        }
+    }
+}
+
+class BufferMapWriteExtendedUsagesValidationTest : public BufferValidationTest {
+  protected:
+    void SetUp() override {
+        DAWN_SKIP_TEST_IF(UsesWire());
+        BufferValidationTest::SetUp();
+    }
+
+    std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
+        return {wgpu::FeatureName::BufferMapWriteExtendedUsages};
+    }
+
+    constexpr static wgpu::BufferUsage kBufferUsages[] = {
+        wgpu::BufferUsage::CopySrc,  wgpu::BufferUsage::CopyDst,      wgpu::BufferUsage::Index,
+        wgpu::BufferUsage::Vertex,   wgpu::BufferUsage::Uniform,      wgpu::BufferUsage::Storage,
+        wgpu::BufferUsage::Indirect, wgpu::BufferUsage::QueryResolve, wgpu::BufferUsage::MapRead,
+        wgpu::BufferUsage::MapWrite,
+    };
+};
+
+// Test that `MapWrite` can be combined with any other buffer usage except `MapRead`.
+TEST_F(BufferMapWriteExtendedUsagesValidationTest, CreationMapWriteNoRestrictionsExceptMapRead) {
+    wgpu::BufferDescriptor descriptor;
+    descriptor.size = 4;
+
+    for (const auto anotherUsage : kBufferUsages) {
+        descriptor.usage = wgpu::BufferUsage::MapWrite | anotherUsage;
+
+        if (descriptor.usage & wgpu::BufferUsage::MapRead) {
+            ASSERT_DEVICE_ERROR(device.CreateBuffer(&descriptor));
+        } else {
+            device.CreateBuffer(&descriptor);
+        }
+    }
+}
+
+// Test that `MapRead` can only be combined with `CopyDst` with `BufferMapWriteExtendedUsages`.
+TEST_F(BufferMapWriteExtendedUsagesValidationTest, CreationMapReadRestrictionsStillApply) {
+    wgpu::BufferDescriptor descriptor;
+    descriptor.size = 4;
+
+    // MapRead with CopyDst is ok
+    for (const auto anotherUsage : kBufferUsages) {
+        descriptor.usage = wgpu::BufferUsage::MapRead | anotherUsage;
+
+        if ((anotherUsage == wgpu::BufferUsage::CopyDst) ||
+            (anotherUsage == wgpu::BufferUsage::MapRead)) {
+            device.CreateBuffer(&descriptor);
+        } else {
+            ASSERT_DEVICE_ERROR(device.CreateBuffer(&descriptor));
+        }
+    }
+}
+
+class BufferMapExtendedAndWriteExtendedUsagesValidationTest : public BufferValidationTest {
+  protected:
+    void SetUp() override {
+        DAWN_SKIP_TEST_IF(UsesWire());
+        BufferValidationTest::SetUp();
+    }
+
+    std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
+        return {wgpu::FeatureName::BufferMapExtendedUsages,
+                wgpu::FeatureName::BufferMapWriteExtendedUsages};
+    }
+};
+
+// Test that enabling both `BufferMapExtendedUsages` and `BufferMapWriteExtendedUsages` has the same
+// functionality as enabling `BufferMapExtendedUsages` only: `MapRead` and/or `MapWrite` can be
+// combined with any other buffer usage.
+TEST_F(BufferMapExtendedAndWriteExtendedUsagesValidationTest,
+       CreationMapUsageReadOrWriteNoRestrictions) {
     constexpr wgpu::BufferUsage kNonMapUsages[] = {
         wgpu::BufferUsage::CopySrc,  wgpu::BufferUsage::CopyDst,      wgpu::BufferUsage::Index,
         wgpu::BufferUsage::Vertex,   wgpu::BufferUsage::Uniform,      wgpu::BufferUsage::Storage,

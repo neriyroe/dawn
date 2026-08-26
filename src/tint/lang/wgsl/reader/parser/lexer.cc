@@ -42,6 +42,7 @@
 #include "src/tint/lang/core/fluent_types.h"
 #include "src/tint/lang/core/number.h"
 #include "src/tint/utils/ice/ice.h"
+#include "src/tint/utils/memory/bitcast.h"
 #include "src/tint/utils/strconv/parse_num.h"
 #include "src/tint/utils/text/unicode.h"
 #include "src/utils/compiler.h"
@@ -162,13 +163,10 @@ const char& Lexer::at(uint32_t pos) const {
     return l[pos];
 }
 
-// This pointer is passed into std::from_chars which requires a pointer beyond the end of contiguous
-// range, not an end iterator, so will always hit this warning.
-TINT_BEGIN_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 const char* Lexer::line_end() const {
-    return &(line()[length() - 1]) + 1;
+    // SAFETY: line() is a valid string_view, so line().data() + line().size() is bounds-safe.
+    return DAWN_UNSAFE_BUFFERS(line().data() + line().size());
 }
-TINT_END_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 
 std::string_view Lexer::substr(uint32_t offset, uint32_t count) {
     return line().substr(offset, count);
@@ -459,7 +457,7 @@ std::optional<Token> Lexer::try_float() {
         return {};
     }
 
-    auto ret = tint::strconv::ParseDouble(std::string_view(&at(start), end - start));
+    auto ret = tint::strconv::ParseDouble(substr(start, end - start));
     double value = ret == Success ? ret.Get() : 0.0;
     bool overflow =
         ret != Success && ret.Failure() == tint::strconv::ParseNumberError::kResultOutOfRange;
@@ -814,8 +812,7 @@ std::optional<Token> Lexer::try_hex_float() {
     result_u64 |= (static_cast<uint64_t>(signed_exponent) & kExponentMask) << kExponentLeftShift;
 
     // Reinterpret as f16 and return
-    double result_f64;
-    DAWN_UNSAFE_TODO(std::memcpy(&result_f64, &result_u64, 8));
+    double result_f64 = tint::Bitcast<double>(result_u64);
 
     if (has_f_suffix) {
         // Check value fits in f32
@@ -867,7 +864,7 @@ std::optional<Token> Lexer::try_hex_float() {
         }
         // Check the low 52-valid_mantissa_bits mantissa bits must be 0.
         TINT_ASSERT((0 <= valid_mantissa_bits) && (valid_mantissa_bits <= 23));
-        if (result_u64 & ((uint64_t(1) << (52 - valid_mantissa_bits)) - 1)) {
+        if (result_u64 & ((uint64_t{1} << (52 - valid_mantissa_bits)) - 1)) {
             return Token{Token::Type::kError, source,
                          "value cannot be exactly represented as 'f32'"};
         }
@@ -920,7 +917,7 @@ std::optional<Token> Lexer::try_hex_float() {
         }
         // Check the low 52-valid_mantissa_bits mantissa bits must be 0.
         TINT_ASSERT((0 <= valid_mantissa_bits) && (valid_mantissa_bits <= 10));
-        if (result_u64 & ((uint64_t(1) << (52 - valid_mantissa_bits)) - 1)) {
+        if (result_u64 & ((uint64_t{1} << (52 - valid_mantissa_bits)) - 1)) {
             return Token{Token::Type::kError, source,
                          "value cannot be exactly represented as 'f16'"};
         }

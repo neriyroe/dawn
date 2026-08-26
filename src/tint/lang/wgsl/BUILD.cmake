@@ -38,16 +38,17 @@ include(lang/wgsl/ast/BUILD.cmake)
 include(lang/wgsl/inspector/BUILD.cmake)
 include(lang/wgsl/intrinsic/BUILD.cmake)
 include(lang/wgsl/ir/BUILD.cmake)
-include(lang/wgsl/ls/BUILD.cmake)
 include(lang/wgsl/program/BUILD.cmake)
 include(lang/wgsl/reader/BUILD.cmake)
 include(lang/wgsl/resolver/BUILD.cmake)
 include(lang/wgsl/sem/BUILD.cmake)
 include(lang/wgsl/writer/BUILD.cmake)
 
+if(TINT_BUILD_WGSL_READER OR TINT_BUILD_WGSL_WRITER)
 ################################################################################
 # Target:    tint_lang_wgsl
 # Kind:      lib
+# Condition: TINT_BUILD_WGSL_READER OR TINT_BUILD_WGSL_WRITER
 ################################################################################
 tint_add_target(tint_lang_wgsl lib
   lang/wgsl/allowed_features.h
@@ -77,9 +78,12 @@ tint_target_add_external_dependencies(tint_lang_wgsl lib
   "src_utils"
 )
 
+endif(TINT_BUILD_WGSL_READER OR TINT_BUILD_WGSL_WRITER)
+if(TINT_BUILD_WGSL_READER OR TINT_BUILD_WGSL_WRITER)
 ################################################################################
 # Target:    tint_lang_wgsl_test
 # Kind:      test
+# Condition: TINT_BUILD_WGSL_READER OR TINT_BUILD_WGSL_WRITER
 ################################################################################
 tint_add_target(tint_lang_wgsl_test test
   lang/wgsl/allowed_features_test.cc
@@ -138,3 +142,5 @@ if(TINT_BUILD_WGSL_WRITER)
     tint_lang_wgsl_writer_raise
   )
 endif(TINT_BUILD_WGSL_WRITER)
+
+endif(TINT_BUILD_WGSL_READER OR TINT_BUILD_WGSL_WRITER)

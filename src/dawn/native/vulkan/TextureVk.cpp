@@ -913,6 +913,7 @@ void Texture::NotifySwapChainPresent() {
     // into the GPU process at startup. We start capturing all frames right away. The user has
     // to kill the process or stop it from rendering (e.g. close or change tabs in Chrome).
     if (auto renderDocApi = dawn::native::utils::GetRenderDocApi(device)) {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast) - C cast in C header macro.
         void* renderDocDevicePtr = RENDERDOC_DEVICEPOINTER_FROM_VKINSTANCE(device->GetVkInstance());
 
         // We signal the end of the current frame and the start of the next.
@@ -1048,6 +1049,7 @@ void Texture::TransitionUsageForPassImpl(
         }
 
         imageBarriers->push_back(BuildMemoryBarrier(this, lastSyncInfo->usage, newUsage, range));
+        MarkDirtyInResourceTables();
 
         allLastUsages |= lastSyncInfo->usage;
         allNewUsages |= newUsage;
@@ -1158,6 +1160,7 @@ void Texture::TransitionUsageAndGetResourceBarrierImpl(
             }
 
             imageBarriers->push_back(BuildMemoryBarrier(this, lastSyncInfo->usage, usage, range));
+            MarkDirtyInResourceTables();
 
             allLastUsages |= lastSyncInfo->usage;
             allLastShaderStages |= lastSyncInfo->shaderStages;
@@ -1249,7 +1252,7 @@ MaybeError Texture::ClearTexture(CommandRecordingContext* recordingContext,
                 // Inherit wgpu::TextureUsage::RenderAttachment, which may be an internal usage.
                 viewDesc.usage = wgpu::TextureUsage::None;
 
-                ColorAttachmentIndex ca0(uint8_t(0));
+                ColorAttachmentIndex ca0(uint8_t{0});
                 DAWN_TRY_ASSIGN(beginCmd.colorAttachments[ca0].view,
                                 device->CreateTextureView(this, &viewDesc));
 
@@ -1338,11 +1341,9 @@ MaybeError Texture::ClearTexture(CommandRecordingContext* recordingContext,
             blocksPerRow * largestMipSize.height * largestMipSize.depthOrArrayLayers;
         uint64_t uploadSize = blockInfo.ToBytes(uploadBlocks);
 
-        // TODO(https://crbug.com/534203108): Spanify WithUploadReservation.
-        DAWN_UNSAFE_TODO(DAWN_TRY(device->GetDynamicUploader()->WithUploadReservation(
+        DAWN_TRY(device->GetDynamicUploader()->WithUploadReservation(
             uploadSize, blockInfo.byteSize, [&](UploadReservation reservation) -> MaybeError {
-                memset(reservation.mappedPointer, sign_dcast(uClearColor),
-                       checked_cast<size_t>(uploadSize));
+                std::ranges::fill(reservation.mappedData, std::byte(uClearColor));
 
                 std::vector<VkBufferImageCopy> regions;
                 for (uint32_t level = range.baseMipLevel;
@@ -1380,7 +1381,7 @@ MaybeError Texture::ClearTexture(CommandRecordingContext* recordingContext,
                     GetHandle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                     checked_cast<uint32_t>(regions.size()), regions.data());
                 return {};
-            })));
+            }));
     }
 
     if (clearValue == TextureBase::ClearValue::Zero) {

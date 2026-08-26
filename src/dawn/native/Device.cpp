@@ -387,7 +387,7 @@ DeviceBase::DeviceBase(AdapterBase* adapter,
     StreamIn(&cacheKey, adapterInfo, mEnabledFeatures.featuresBitSet, mToggles, cacheDesc);
 
     // Hash the key to make it smaller.
-    Sha3_224::Output hash = Sha3_224::Hash(cacheKey.data(), cacheKey.size());
+    Sha3_224::Output hash = Sha3_224::Hash({cacheKey});
     // Dawn Version needs to be in plain because it's used for ValidateCacheKey()
     StreamIn(&mDeviceCacheKey, kDawnVersion, hash);
 }
@@ -1265,14 +1265,7 @@ BufferBase* DeviceBase::APICreateBuffer(const BufferDescriptor* rawDescriptor) {
         // MapAtCreation requires the device lock in case it allocates staging memory.
         auto deviceGuard = UseGuardForCreateBuffer();
 
-        MaybeError mapResult =
-            fakeOOMAtNativeMap
-                ? DAWN_OUT_OF_MEMORY_ERROR("DawnFakeBufferOOMForTesting fakeOOMAtNativeMap")
-                : buffer->MapAtCreation();
-        if (mapResult.IsError()) {
-            // If we can't map, do "implementation-defined logging" and return null.
-            auto error = mapResult.AcquireError();
-            EmitLog(wgpu::LoggingType::Error, error->GetFormattedMessage());
+        if (!buffer->TryMapAtCreation(fakeOOMAtNativeMap)) {
             // deferredError is silenced because we drop it here.
             return nullptr;
         }
@@ -1732,6 +1725,9 @@ void DeviceBase::ApplyFeatures(const UnpackedPtr<DeviceDescriptor>& deviceDescri
                                                                        mToggles));
         mEnabledFeatures.EnableFeature(Feature::Subgroups);
     }
+    if (mEnabledFeatures.IsEnabled(Feature::BufferMapExtendedUsages)) {
+        mEnabledFeatures.EnableFeature(Feature::BufferMapWriteExtendedUsages);
+    }
 
     if (level == wgpu::FeatureLevel::Core) {
         // Core-defaulting adapters always support the "core-features-and-limits" feature.
@@ -1882,7 +1878,7 @@ wgpu::Status DeviceBase::APIGetAHardwareBufferProperties(void* handle,
         ConsumeError(
             DAWN_VALIDATION_ERROR("Queried APIGetAHardwareBufferProperties() on %s "
                                   "without the %s feature being set.",
-                                  this, ToAPI(Feature::SharedTextureMemoryAHardwareBuffer)));
+                                  this, ToCppAPI(Feature::SharedTextureMemoryAHardwareBuffer)));
         return wgpu::Status::Error;
     }
 
@@ -2291,13 +2287,17 @@ ResultOrError<Ref<ShaderModuleBase>> DeviceBase::CreateShaderModule(
     wgpu::SType moduleType = wgpu::SType(0u);
     DAWN_TRY_ASSIGN(
         moduleType,
-        (unpacked.ValidateBranches<Branch<ShaderSourceWGSL, ShaderModuleCompilationOptions>,
-                                   Branch<ShaderSourceSPIRV, DawnShaderModuleSPIRVOptionsDescriptor,
-                                          ShaderModuleCompilationOptions>>()));
+        (unpacked
+             .ValidateBranches<Branch<ShaderSourceWGSL, ShaderModuleCompilationOptions>,
+                               Branch<ShaderSourceSPIRV, DawnShaderModuleSPIRVOptionsDescriptor,
+                                      ShaderModuleCompilationOptions>,
+                               Branch<DawnShaderSourceSPIRV, DawnShaderModuleSPIRVOptionsDescriptor,
+                                      ShaderModuleCompilationOptions>>()));
 
     // Module type specific validation
     switch (moduleType) {
-        case wgpu::SType::ShaderSourceSPIRV: {
+        case wgpu::SType::ShaderSourceSPIRV:
+        case wgpu::SType::DawnShaderSourceSPIRV: {
             DAWN_INVALID_IF(
                 !TINT_BUILD_SPV_READER || IsToggleEnabled(Toggle::DisallowSpirv) ||
                     !GetInstance()->HasFeature(wgpu::InstanceFeatureName::ShaderSourceSPIRV),

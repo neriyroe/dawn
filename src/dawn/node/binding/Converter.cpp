@@ -40,6 +40,7 @@
 #include "src/dawn/node/binding/GPUTexture.h"
 #include "src/dawn/node/binding/GPUTextureView.h"
 #include "src/dawn/node/utils/Debug.h"
+#include "src/utils/compiler.h"
 
 namespace wgpu::binding {
 
@@ -1351,6 +1352,9 @@ bool Converter::Convert(wgpu::VertexFormat& out, const interop::GPUVertexFormat&
         case interop::GPUVertexFormat::kUnorm1010102:
             out = wgpu::VertexFormat::Unorm10_10_10_2;
             return true;
+        case interop::GPUVertexFormat::kSnorm1010102:
+            out = wgpu::VertexFormat::Snorm10_10_10_2;
+            return true;
         case interop::GPUVertexFormat::kUnorm8X4Bgra:
             out = wgpu::VertexFormat::Unorm8x4BGRA;
             return true;
@@ -1782,6 +1786,7 @@ bool Converter::Convert(interop::GPUFeatureName& out, wgpu::FeatureName in) {
         case wgpu::FeatureName::AdapterPropertiesDrm:
         case wgpu::FeatureName::ANGLETextureSharing:
         case wgpu::FeatureName::BufferMapExtendedUsages:
+        case wgpu::FeatureName::BufferMapWriteExtendedUsages:
         case wgpu::FeatureName::ChromiumExperimentalTimestampQueryInsidePasses:
         case wgpu::FeatureName::D3D11MultithreadProtected:
         case wgpu::FeatureName::DawnDeviceAllocatorControl:
@@ -2108,7 +2113,7 @@ bool ConvertDataElementsToSpan(Napi::Env env,
     }
 
     // The offset is in elements.
-    if (data_offset_elements > uint64_t(src.size / src.bytesPerElement)) {
+    if (data_offset_elements > uint64_t{src.size / src.bytesPerElement}) {
         binding::Errors::OperationError(env, "dataOffset is larger than data's size.")
             .ThrowAsJavaScriptException();
         return false;
@@ -2119,7 +2124,7 @@ bool ConvertDataElementsToSpan(Napi::Env env,
 
     // Size defaults to dataSize - dataOffset. Instead of computing in elements, we directly
     // use it in bytes, and convert the provided value, if any, in bytes.
-    uint64_t size64 = uint64_t(src.size);
+    uint64_t size64 = uint64_t{src.size};
     if (size_elements.has_value()) {
         if (size_elements.value() > std::numeric_limits<uint64_t>::max() / src.bytesPerElement) {
             binding::Errors::OperationError(env, "size overflows.").ThrowAsJavaScriptException();
@@ -2128,14 +2133,15 @@ bool ConvertDataElementsToSpan(Napi::Env env,
         size64 = size_elements.value() * src.bytesPerElement;
     }
 
-    if (size64 > uint64_t(src.size)) {
+    if (size64 > uint64_t{src.size}) {
         binding::Errors::OperationError(env, "size + dataOffset is larger than data's size.")
             .ThrowAsJavaScriptException();
         return false;
     }
 
     assert(size64 <= std::numeric_limits<size_t>::max());
-    *out = {reinterpret_cast<const uint8_t*>(src.data), static_cast<size_t>(size64)};
+    *out = DAWN_UNSAFE_TODO(std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(src.data),
+                                                     static_cast<size_t>(size64)));
 
     return true;
 }

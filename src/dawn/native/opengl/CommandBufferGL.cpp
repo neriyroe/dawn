@@ -317,8 +317,8 @@ class VertexStateBufferBindingTracker {
 // Tracking dirty byte range of a vector that needs to call bufferSubData
 // to update to the internal uniform buffer of mPipelineGL. Range it represents: [begin, end)
 struct VectorDirtyRangeInfo {
-    size_t begin;
-    size_t end;
+    size_t begin = 0;
+    size_t end = 0;
 };
 
 class BindGroupTracker : public BindGroupTrackerBase<false> {
@@ -353,7 +353,7 @@ class BindGroupTracker : public BindGroupTrackerBase<false> {
         Sampler* sampler = ToBackend(s);
 
         for (TextureUnit unit : mPipelineGL->GetTextureUnitsForSampler(samplerIndex)) {
-            DAWN_GL_TRY(gl, BindSampler(uint32_t(unit), sampler->GetHandle()));
+            DAWN_GL_TRY(gl, BindSampler(uint32_t{unit}, sampler->GetHandle()));
         }
 
         return {};
@@ -380,7 +380,7 @@ class BindGroupTracker : public BindGroupTrackerBase<false> {
 
                     if (layout.hasDynamicOffset) {
                         // Dynamic buffers are packed at the front of BindingIndices.
-                        offset += uint64_t(dynamicOffsets[bindingIndex]);
+                        offset += uint64_t{dynamicOffsets[bindingIndex]};
                     }
 
                     GLenum target;
@@ -651,12 +651,12 @@ class BindGroupTracker : public BindGroupTrackerBase<false> {
         mInternalArrayLengthBufferData[ssboIndex] = static_cast<uint32_t>(size);
 
         // Updating dirty range of the data vector
-        mDirtyRangeArrayLength.begin = std::min(mDirtyRangeArrayLength.begin, size_t(ssboIndex));
-        mDirtyRangeArrayLength.end = std::max(mDirtyRangeArrayLength.end, size_t(ssboIndex) + 1);
+        mDirtyRangeArrayLength.begin = std::min(mDirtyRangeArrayLength.begin, size_t{ssboIndex});
+        mDirtyRangeArrayLength.end = std::max(mDirtyRangeArrayLength.end, size_t{ssboIndex} + 1);
     }
 
     void ResetInternalUniformDataDirtyRangeArrayLength() {
-        mDirtyRangeArrayLength = {size_t(mInternalArrayLengthBufferData.size()), 0};
+        mDirtyRangeArrayLength = {size_t{mInternalArrayLengthBufferData.size()}, 0};
     }
 
     void ResetInternalUniformDataBindgroupAndDirtyRange() {
@@ -790,8 +790,7 @@ class ImmediateTracker : public T {
         ImmediateMask pipelineMask = lastPipeline->GetImmediateMask();
         ImmediateMask uploadBits = this->mDirty & pipelineMask;
         for (auto&& [offset, size] : IterateRanges(uploadBits)) {
-            size_t immediateContentStartOffset =
-                static_cast<uint32_t>(offset) * kImmediateElementByteSize;
+            size_t immediateContentStartOffset = size_t{offset} * kImmediateElementByteSize;
             auto location =
                 GetImmediateIndexInPipeline(static_cast<uint32_t>(offset), pipelineMask);
             auto count = static_cast<uint32_t>(size);

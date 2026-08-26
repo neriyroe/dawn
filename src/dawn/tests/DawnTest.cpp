@@ -1038,13 +1038,14 @@ DawnTestBase::DawnTestBase(const AdapterTestParam& param) : mParam(param) {
                 native::GetProcs().adapterGetInfo(candidate.Get(), &info);
 
                 const auto& testParam = gCurrentTest->mParam;
-                bool result = (testParam.adapterProperties.selected &&
-                               info.deviceID == testParam.adapterProperties.deviceID &&
-                               info.vendorID == testParam.adapterProperties.vendorID &&
-                               info.adapterType == static_cast<WGPUAdapterType>(
-                                                       testParam.adapterProperties.adapterType) &&
-                               std::string_view(info.device.data, info.device.length) ==
-                                   testParam.adapterProperties.name);
+                bool result =
+                    (testParam.adapterProperties.selected &&
+                     info.deviceID == testParam.adapterProperties.deviceID &&
+                     info.vendorID == testParam.adapterProperties.vendorID &&
+                     info.adapterType ==
+                         static_cast<WGPUAdapterType>(testParam.adapterProperties.adapterType) &&
+                     DAWN_UNSAFE_TODO(std::string_view(info.device.data, info.device.length)) ==
+                         testParam.adapterProperties.name);
                 native::GetProcs().adapterInfoFreeMembers(info);
                 return result;
             });
@@ -1260,15 +1261,19 @@ bool DawnTestBase::IsLinux() const {
 #endif
 }
 
-bool DawnTestBase::IsMacOS(int32_t majorVersion, int32_t minorVersion) const {
+bool DawnTestBase::IsMacOS() const {
 #if DAWN_PLATFORM_IS(MACOS)
-    if (majorVersion == -1 && minorVersion == -1) {
-        return true;
-    }
-    int32_t majorVersionOut, minorVersionOut = 0;
-    GetMacOSVersion(&majorVersionOut, &minorVersionOut);
-    return (majorVersion != -1 && majorVersion == majorVersionOut) &&
-           (minorVersion != -1 && minorVersion == minorVersionOut);
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool DawnTestBase::IsMacOSVersionAtLeast(uint32_t majorVersion,
+                                         uint32_t minorVersion,
+                                         uint32_t patchVersion) const {
+#if DAWN_PLATFORM_IS(MACOS)
+    return dawn::IsMacOSVersionAtLeast(majorVersion, minorVersion, patchVersion);
 #else
     return false;
 #endif
@@ -1793,7 +1798,7 @@ std::ostringstream& DawnTestBase::AddBufferExpectation(const char* file,
                                                        uint64_t offset,
                                                        uint64_t size,
                                                        detail::Expectation* expectation) {
-    uint64_t alignedSize = Align(size, uint64_t(4));
+    uint64_t alignedSize = Align(size, uint64_t{4});
     auto readback = ReserveReadback(device, alignedSize);
 
     // We need to enqueue the copy immediately because by the time we resolve the expectation,
@@ -2015,8 +2020,10 @@ std::ostringstream& DawnTestBase::ExpectMultisampledFloatData(wgpu::Texture text
                                                               uint32_t arrayLayer,
                                                               uint32_t mipLevel,
                                                               detail::Expectation* expectation) {
-    return ExpectSampledFloatDataImpl(texture, width, height, componentCount, sampleCount,
-                                      arrayLayer, mipLevel, wgpu::TextureAspect::All, expectation);
+    return ExpectSampledFloatDataImpl(
+        texture, /*width=*/width, /*height=*/height, /*componentCount=*/componentCount,
+        /*sampleCount=*/sampleCount,
+        /*arrayLayer=*/arrayLayer, /*mipLevel=*/mipLevel, wgpu::TextureAspect::All, expectation);
 }
 
 std::ostringstream& DawnTestBase::ExpectSampledDepthData(wgpu::Texture texture,
@@ -2025,7 +2032,9 @@ std::ostringstream& DawnTestBase::ExpectSampledDepthData(wgpu::Texture texture,
                                                          uint32_t arrayLayer,
                                                          uint32_t mipLevel,
                                                          detail::Expectation* expectation) {
-    return ExpectSampledFloatDataImpl(texture, width, height, 1, 1, arrayLayer, mipLevel,
+    return ExpectSampledFloatDataImpl(texture, /*width=*/width, /*height=*/height,
+                                      /*componentCount=*/1, /*sampleCount=*/1,
+                                      /*arrayLayer=*/arrayLayer, /*mipLevel=*/mipLevel,
                                       wgpu::TextureAspect::DepthOnly, expectation);
 }
 

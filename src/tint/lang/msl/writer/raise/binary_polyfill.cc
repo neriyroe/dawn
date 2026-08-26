@@ -41,9 +41,6 @@ struct State {
     /// The IR module.
     core::ir::Module& ir;
 
-    /// The polyfill config.
-    const BinaryPolyfillConfig& config;
-
     /// The IR builder.
     core::ir::Builder b{ir};
 
@@ -65,11 +62,6 @@ struct State {
             auto* lhs_type = binary->LHS()->Type();
             if (op == core::BinaryOp::kModulo && lhs_type->IsFloatScalarOrVector()) {
                 worklist.push_back([this, binary] { FMod(binary); });
-            } else if ((op == core::BinaryOp::kModulo || op == core::BinaryOp::kDivide) &&
-                       lhs_type->DeepestElement()->Is<core::type::U32>()) {
-                if (config.fix_u32_div_mod) {
-                    worklist.push_back([this, binary] { UDivMod(binary); });
-                }
             } else if ((op == core::BinaryOp::kAnd || op == core::BinaryOp::kOr) &&
                        lhs_type->IsBoolScalarOrVector()) {
                 worklist.push_back([this, binary] { LogicalBool(binary); });
@@ -87,16 +79,6 @@ struct State {
             binary->DetachResult(), msl::BuiltinFn::kFmod, binary->Operands());
         call->InsertBefore(binary);
         binary->Destroy();
-    }
-
-    /// Add a volatile zero to unsigned divide and modulo binary instructions to work around a
-    /// driver bug.
-    /// @param binary the unsigned integer divide or modulo binary instruction
-    void UDivMod(core::ir::CoreBinary* binary) {
-        b.InsertBefore(binary, [&] {
-            auto* zero = b.Call<msl::ir::BuiltinCall>(ty.u32(), msl::BuiltinFn::kVolatileZero);
-            binary->SetOperand(0u, b.Add(binary->LHS(), zero)->Result());
-        });
     }
 
     /// Replace a logical boolean binary instruction.
@@ -119,10 +101,10 @@ struct State {
 
 }  // namespace
 
-Result<SuccessType> BinaryPolyfill(core::ir::Module& ir, const BinaryPolyfillConfig& config) {
+Result<SuccessType> BinaryPolyfill(core::ir::Module& ir) {
     AssertValid(ir, "before msl.BinaryPolyfill");
 
-    State{ir, config}.Process();
+    State{ir}.Process();
 
     return Success;
 }

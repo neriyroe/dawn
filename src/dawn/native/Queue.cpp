@@ -71,8 +71,8 @@ namespace dawn::native {
 
 namespace {
 
-void CopyTextureData(uint8_t* dstPointer,
-                     const uint8_t* srcPointer,
+void CopyTextureData(Span<std::byte> dst,
+                     Span<const std::byte> src,
                      uint32_t depth,
                      uint32_t dstRowsPerImage,
                      uint64_t srcRowsPerImage,
@@ -83,26 +83,27 @@ void CopyTextureData(uint8_t* dstPointer,
     bool copyWholeLayer = actualBytesPerRow == dstBytesPerRow && dstBytesPerRow == srcBytesPerRow;
     bool copyWholeData = copyWholeLayer && imageAdditionalStride == 0;
 
+    size_t dstOffset = 0;
+    size_t srcOffset = 0;
     if (!copyWholeLayer) {  // copy row by row
         for (uint32_t d = 0; d < depth; ++d) {
             for (uint32_t h = 0; h < dstRowsPerImage; ++h) {
-                DAWN_UNSAFE_TODO(memcpy(dstPointer, srcPointer, actualBytesPerRow));
-                DAWN_UNSAFE_TODO(dstPointer += dstBytesPerRow);
-                DAWN_UNSAFE_TODO(srcPointer += srcBytesPerRow);
+                dst.subspan(dstOffset).CopyPrefixFrom(src.subspan(srcOffset, actualBytesPerRow));
+                dstOffset += dstBytesPerRow;
+                srcOffset += srcBytesPerRow;
             }
-            DAWN_UNSAFE_TODO(srcPointer += imageAdditionalStride);
+            srcOffset += imageAdditionalStride;
         }
     } else {
-        uint64_t layerSize = uint64_t(dstRowsPerImage) * actualBytesPerRow;
+        size_t layerSize = size_t{dstRowsPerImage} * actualBytesPerRow;
         if (!copyWholeData) {  // copy layer by layer
             for (uint32_t d = 0; d < depth; ++d) {
-                DAWN_UNSAFE_TODO(memcpy(dstPointer, srcPointer, checked_cast<size_t>(layerSize)));
-                DAWN_UNSAFE_TODO(dstPointer += layerSize);
-                DAWN_UNSAFE_TODO(srcPointer += layerSize + imageAdditionalStride);
+                dst.subspan(dstOffset).CopyPrefixFrom(src.subspan(srcOffset, layerSize));
+                dstOffset += layerSize;
+                srcOffset += layerSize + imageAdditionalStride;
             }
         } else {  // do a single copy
-            DAWN_UNSAFE_TODO(
-                memcpy(dstPointer, srcPointer, checked_cast<size_t>(layerSize * depth)));
+            dst.CopyPrefixFrom(src.first(layerSize * depth));
         }
     }
 }
@@ -284,7 +285,7 @@ void QueueBase::Tick(ExecutionSerial finishedSerial) {
     // To prevent the reentrant call from invalidating mTasksInFlight while in use by the first
     // call, we remove the tasks to finish from the queue, update mTasksInFlight, then run the
     // callbacks.
-    TRACE_EVENT(DAWN_TRACE_CATEGORY(), "Queue::Tick", "finishedSerial", uint64_t(finishedSerial));
+    TRACE_EVENT(DAWN_TRACE_CATEGORY(), "Queue::Tick", "finishedSerial", uint64_t{finishedSerial});
 
     std::vector<std::unique_ptr<TrackTaskCallback>> tasks;
     mTasksInFlight.Use([&](auto tasksInFlight) {
@@ -382,7 +383,7 @@ MaybeError QueueBase::WriteTextureImpl(const TexelCopyTextureInfo& destination,
     // Note that validating texture copy range ensures that writeSizePixel->width and
     // writeSizePixel->height are multiples of blockWidth and blockHeight respectively.
     BlockCount rowsPerImage = writeSize.height;
-    uint32_t bytesPerRow = uint32_t(blockInfo.ToBytes(writeSize.width));
+    uint32_t bytesPerRow = checked_cast<uint32_t>(blockInfo.ToBytes(writeSize.width));
     uint32_t alignedBytesPerRow = Align(bytesPerRow, GetDevice()->GetOptimalBytesPerRowAlignment());
     BlockCount alignedBlocksPerRow = blockInfo.BytesToBlocks(alignedBytesPerRow);
 
@@ -394,7 +395,7 @@ MaybeError QueueBase::WriteTextureImpl(const TexelCopyTextureInfo& destination,
     DAWN_CHECK(IsPowerOfTwo(GetDevice()->GetOptimalBufferToTextureCopyOffsetAlignment()));
     DAWN_CHECK(IsPowerOfTwo(blockInfo.byteSize));
     uint64_t offsetAlignment = std::max(
-        uint64_t(blockInfo.byteSize), GetDevice()->GetOptimalBufferToTextureCopyOffsetAlignment());
+        uint64_t{blockInfo.byteSize}, GetDevice()->GetOptimalBufferToTextureCopyOffsetAlignment());
 
     // Buffer offset alignments must follow additional restrictions for depth stencil formats.
     const Format& format = destination.texture->GetFormat();
@@ -405,12 +406,10 @@ MaybeError QueueBase::WriteTextureImpl(const TexelCopyTextureInfo& destination,
 
     return GetDevice()->GetDynamicUploader()->WithUploadReservation(
         packedDataSize, offsetAlignment, [&](UploadReservation reservation) -> MaybeError {
-            const uint8_t* srcPointer =
-                DAWN_UNSAFE_TODO(reinterpret_cast<const uint8_t*>(data.data()) + dataLayout.offset);
-            uint8_t* dstPointer = reinterpret_cast<uint8_t*>(reservation.mappedPointer.get());
-            CopyTextureData(dstPointer, srcPointer, writeSizePixel.depthOrArrayLayers,
-                            dchecked_cast<uint32_t>(rowsPerImage), dataLayout.rowsPerImage,
-                            bytesPerRow, alignedBytesPerRow, dataLayout.bytesPerRow);
+            CopyTextureData(
+                reservation.mappedData, data.subspan(checked_cast<size_t>(dataLayout.offset)),
+                writeSizePixel.depthOrArrayLayers, dchecked_cast<uint32_t>(rowsPerImage),
+                dataLayout.rowsPerImage, bytesPerRow, alignedBytesPerRow, dataLayout.bytesPerRow);
 
             TexelCopyBufferLayout passDataLayout = dataLayout;
             passDataLayout.offset = reservation.offsetInBuffer;

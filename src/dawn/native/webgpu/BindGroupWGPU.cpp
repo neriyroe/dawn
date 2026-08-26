@@ -213,13 +213,13 @@ MaybeError BindGroup::CaptureCreationParameters(CaptureContext& captureContext) 
 
     schema::BindGroup bg{{
         .layoutId = captureContext.GetId(layout),
-        .numEntries = uint32_t(bindingMap.size()),
+        .numEntries = checked_cast<uint32_t>(bindingMap.size()),
     }};
     Serialize(captureContext, bg);
 
     for (const auto& [bindingNumber, apiBindingIndex] : bindingMap) {
         const auto& bindingInfo = layout->GetAPIBindingInfo(apiBindingIndex);
-        uint32_t binding = uint32_t(bindingNumber);
+        uint32_t binding = uint32_t{bindingNumber};
 
         MatchVariant(
             bindingInfo.bindingLayout,

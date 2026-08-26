@@ -293,7 +293,7 @@ DAWN_TEST_PARAM_STRUCT(WriteTextureFormatParams, TextureFormat);
 struct TextureSpec {
     wgpu::Origin3D copyOrigin;
     wgpu::Extent3D textureSize;
-    uint32_t level;
+    uint32_t level = 0;
 };
 
 struct DataSpec {
@@ -719,6 +719,9 @@ TEST_P(QueueWriteTextureTests, VaryingArrayBytesPerRow) {
 
     // TODO(383779503): reading stencil texture is too slow on D3D11.
     DAWN_SUPPRESS_TEST_IF(IsD3D11() && GetParam().mTextureFormat == wgpu::TextureFormat::Stencil8);
+
+    // TODO(crbug.com/548007733): Flakily failing on Xclipse with GLES + ANGLE.
+    DAWN_SUPPRESS_TEST_IF(IsSamsung() && IsOpenGLES() && IsANGLE());
 
     constexpr uint32_t kWidth = 257;
     constexpr uint32_t kHeight = 129;

@@ -47,9 +47,10 @@ MemorySegment GetMemorySegment(Device* device, ResourceHeapKind resourceHeapKind
         return MemorySegment::Local;
     }
 
-    // Currently we only use Custom_WriteBack_OnlyBuffers on UMA architectures.
+    // Currently we only use custom heaps on UMA architectures.
     // TODO(386255678): consider ReBAR which is UMA Coherent.
-    if (resourceHeapKind == Custom_WriteBack_OnlyBuffers) {
+    if (resourceHeapKind == ResourceHeapKind::Custom_WriteBack_OnlyBuffers ||
+        resourceHeapKind == ResourceHeapKind::Custom_WriteCombine_OnlyBuffers) {
         return MemorySegment::Local;
     }
 
@@ -74,12 +75,13 @@ D3D12_HEAP_FLAGS GetD3D12HeapFlags(ResourceHeapKind resourceHeapKind) {
         case ResourceHeapKind::Readback_OnlyBuffers:
         case ResourceHeapKind::Upload_OnlyBuffers:
         case ResourceHeapKind::Custom_WriteBack_OnlyBuffers:
+        case ResourceHeapKind::Custom_WriteCombine_OnlyBuffers:
             return D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS;
         case ResourceHeapKind::Default_OnlyNonRenderableOrDepthTextures:
             return D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES;
         case ResourceHeapKind::Default_OnlyRenderableOrDepthTextures:
             return D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES;
-        case EnumCount:
+        case ResourceHeapKind::EnumCount:
         default:
             DAWN_UNREACHABLE();
     }
@@ -311,7 +313,7 @@ ResourceAllocatorManager::ResourceAllocatorManager(Device* device, QueueBase* qu
     queue->RegisterSerialProcessor(QueuePriority::BestEffort,
                                    Ref<AllocationSizeTracker>(mUsedMemoryTracker));
 
-    for (uint32_t i = 0; i < ResourceHeapKind::EnumCount; i++) {
+    for (uint32_t i = 0; i < static_cast<uint32_t>(ResourceHeapKind::EnumCount); i++) {
         const ResourceHeapKind resourceHeapKind = static_cast<ResourceHeapKind>(i);
         D3D12_HEAP_FLAGS heapFlags = GetD3D12HeapFlags(resourceHeapKind) | createNotZeroedHeapFlag;
         mHeapAllocators[i] = std::make_unique<HeapAllocator>(
@@ -329,7 +331,7 @@ ResourceAllocatorManager::~ResourceAllocatorManager() {
     // Placed resources must be released before any heaps they reside in.
     Tick(std::numeric_limits<ExecutionSerial>::max());
 
-    for (uint32_t i = 0; i < ResourceHeapKind::EnumCount; i++) {
+    for (uint32_t i = 0; i < static_cast<uint32_t>(ResourceHeapKind::EnumCount); i++) {
         mSubAllocatedResourceAllocators[i] = nullptr;
     }
 

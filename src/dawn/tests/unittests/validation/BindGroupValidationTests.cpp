@@ -1138,7 +1138,7 @@ TEST_F(BindGroupValidationTest, BufferBindingOOB) {
 
     // Error case, offset+size overflows to be 0
     ASSERT_DEVICE_ERROR(
-        utils::MakeBindGroup(device, layout, {{0, buffer, 256, uint32_t(0) - uint32_t(256)}}));
+        utils::MakeBindGroup(device, layout, {{0, buffer, 256, uint32_t{0} - uint32_t{256}}}));
 }
 
 // Tests constraints to be sure the uniform buffer binding isn't too large
@@ -2785,8 +2785,8 @@ class SetBindGroupValidationTest : public ValidationTest {
     }
 
   protected:
-    uint32_t mMinUniformBufferOffsetAlignment;
-    uint64_t mBufferSize;
+    uint32_t mMinUniformBufferOffsetAlignment = 0;
+    uint64_t mBufferSize = 0;
 };
 
 // This is the test case that should work.
@@ -3444,7 +3444,7 @@ class SetBindGroupPersistenceValidationTest : public ValidationTest {
     }
 
   protected:
-    uint32_t mBufferSize;
+    uint32_t mBufferSize = 0;
 
   private:
     wgpu::ShaderModule mVsModule;
@@ -3902,7 +3902,7 @@ class BindingsValidationTest : public BindGroupLayoutCompatibilityTest {
         }
     }
 
-    uint32_t mBufferSize;
+    uint32_t mBufferSize = 0;
     static constexpr uint32_t kBindingNum = 3;
 };
 

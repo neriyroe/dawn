@@ -330,6 +330,7 @@ dawn_test("dawn_unittests") {
     "unittests/native/LimitsTests.cpp",
     "unittests/native/MemoryInstrumentationTests.cpp",
     "unittests/native/ObjectContentHasherTests.cpp",
+    "unittests/native/ShaderModuleTests.cpp",
     "unittests/native/SkipValidationTests.cpp",
     "unittests/native/StreamTests.cpp",
     "unittests/validation/BindGroupValidationTests.cpp",
@@ -420,7 +421,10 @@ dawn_test("dawn_unittests") {
   }
 
   if (is_win) {
-    sources += [ "unittests/WindowsUtilsTests.cpp" ]
+    sources += [
+      "unittests/WindowsUtilsTests.cpp",
+      "unittests/wire/WireInlineSharedMemoryManagerTests.cpp",
+    ]
   }
 
   if (dawn_enable_d3d12) {
@@ -429,6 +433,10 @@ dawn_test("dawn_unittests") {
 
   if (dawn_enable_webgpu_on_webgpu) {
     sources += [ "unittests/replay/CaptureWalkerTests.cpp" ]
+  }
+
+  if (dawn_enable_vulkan && (is_chromeos || is_linux)) {
+    sources += [ "unittests/DRMUtilsTests.cpp" ]
   }
 
   sources += [
@@ -494,6 +502,9 @@ source_set("test_infra_sources") {
     "StringViewMatchers.h",
     "ToggleParser.h",
   ]
+  if (dawn_enable_vulkan && (is_chromeos || is_linux)) {
+    public += [ "GBMUtils.h" ]
+  }
   public_deps = [
     "${dawn_root}/src/dawn/partition_alloc:raw_ptr",
     "${dawn_root}/src/utils:crash_handler",

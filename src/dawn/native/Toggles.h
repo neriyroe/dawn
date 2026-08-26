@@ -189,6 +189,7 @@ enum class Toggle {
     MetalReplaceWorkgroupBoolWithU32,
     VulkanCooperativeMatrixStrideIsMatrixElements,
     VulkanUseExtendedDynamicState,
+    VulkanUseRasterizationOrderAttachmentAccess,
     VulkanForceStaticSamplersForExternalTextures,
     D3D12UseHLSL2021,
     MetalFixU32DivMod,
@@ -196,6 +197,8 @@ enum class Toggle {
     UseSpirvReconvergenceMode,
     VulkanReplaceWorkgroupAtomicStoreWithExchange,
     VulkanDisallowNPOTDepthStencilMipmaps,
+    VulkanReplaceUnsignedCompareZero,
+    VulkanUseCooperativeMatrixRobustBufferAccess,
 
     // Once all backends have been updated to be thread safe for waiting, we can remove this toggle.
     WaitIsThreadSafe,

@@ -228,7 +228,7 @@ static constexpr std::array<Sha3Lane, kRoundCount> kRoundConstants = []() {
         // Step 3
         for (uint32_t j = 0; j < kLog2LaneBitWidth + 1; j++) {
             if (kRoundConstantsBits[j + 7 * ir]) {
-                RC |= uint64_t(1) << ((1 << j) - 1);
+                RC |= uint64_t{1} << ((1 << j) - 1);
             }
         }
 
@@ -256,15 +256,10 @@ void Keccak(Sha3State& a) {
 }
 
 // TODO(402772741): This could be made more efficient by xoring whole 64bits at a time.
-void memxorpy(void* dst, const void* src, size_t n) {
-    char* dstChars = static_cast<char*>(dst);
-    const char* srcChars = static_cast<const char*>(src);
-
-    while (n > 0) {
-        *dstChars ^= *srcChars;
-        n--;
-        DAWN_UNSAFE_TODO(dstChars++);
-        DAWN_UNSAFE_TODO(srcChars++);
+void XorWith(Span<std::byte> dst, Span<const std::byte> src) {
+    DAWN_ASSERT(dst.size() == src.size());
+    for (size_t i = 0; i < dst.size(); i++) {
+        dst[i] ^= src[i];
     }
 }
 
@@ -277,17 +272,13 @@ void memxorpy(void* dst, const void* src, size_t n) {
 // 01 suffix at the end of the message and pads the remaining bits with 10...0...01. (with 11
 // being a valid padding, but not 1).
 template <size_t OutputLength>
-void Sha3<OutputLength>::Update(const void* data, size_t size) {
-    uint8_t* stateAsString = reinterpret_cast<uint8_t*>(&mState);
-    const uint8_t* dataAsBytes = static_cast<const uint8_t*>(data);
-
-    while (size > 0) {
+void Sha3<OutputLength>::Update(Span<const std::byte> data) {
+    while (!data.empty()) {
         DAWN_ASSERT(mOffsetInState < kByteRate);
-        size_t toProcess = std::min(size, kByteRate - mOffsetInState);
+        size_t toProcess = std::min(data.size(), kByteRate - mOffsetInState);
 
-        memxorpy(DAWN_UNSAFE_TODO(stateAsString + mOffsetInState), dataAsBytes, toProcess);
-        size -= toProcess;
-        DAWN_UNSAFE_TODO(dataAsBytes += toProcess);
+        auto stateToXorInto = ByteSpanFromRef(mState).subspan(mOffsetInState, toProcess);
+        XorWith(stateToXorInto, data.TakeFirst(toProcess));
         mOffsetInState += toProcess;
 
         if (mOffsetInState == kByteRate) {
@@ -299,16 +290,14 @@ void Sha3<OutputLength>::Update(const void* data, size_t size) {
 
 template <size_t OutputLength>
 typename Sha3<OutputLength>::Output Sha3<OutputLength>::Finalize() {
-    uint8_t* stateAsString = reinterpret_cast<uint8_t*>(&mState);
+    Span<std::byte> stateAsBytes = ByteSpanFromRef(mState);
     DAWN_ASSERT(mOffsetInState < kByteRate);
 
     // Add in the 01 suffix for SHA3, as well as the first 1 for the padding.
-    uint8_t* suffixByte = DAWN_UNSAFE_TODO(stateAsString + mOffsetInState);
-    *suffixByte ^= 0b110;
+    stateAsBytes[mOffsetInState] ^= std::byte(0b110);
 
     // Add in the last 1 of the multi-rate padding. The byte may be the same byte as suffixByte.
-    uint8_t* endByte = DAWN_UNSAFE_TODO(stateAsString + (kByteRate - 1));
-    *endByte ^= 0b1000'0000;
+    stateAsBytes[kByteRate - 1] ^= std::byte(0b1000'0000);
 
     // Do the final Keccak for the absorption in the sponge.
     Keccak(mState);
@@ -319,23 +308,15 @@ typename Sha3<OutputLength>::Output Sha3<OutputLength>::Finalize() {
     // The squeeze of the hash value can be done in one step.
     static_assert(sizeof(Output) <= kByteRate);
     Output output;
-    DAWN_UNSAFE_TODO(memcpy(&output, &mState, sizeof(output)));
+    Span<std::byte>(output).CopyFrom(stateAsBytes.first(sizeof(Output)));
     return output;
 }
 
 // static
 template <size_t OutputLength>
-Sha3<OutputLength>::Output Sha3<OutputLength>::Hash(const void* data, size_t size) {
+Sha3<OutputLength>::Output Sha3<OutputLength>::Hash(Span<const std::byte> data) {
     Sha3 sha;
-    sha.Update(data, size);
-    return sha.Finalize();
-}
-
-// static
-template <size_t OutputLength>
-Sha3<OutputLength>::Output Sha3<OutputLength>::Hash(std::span<const std::byte> data) {
-    Sha3 sha;
-    sha.Update(data.data(), data.size());
+    sha.Update(data);
     return sha.Finalize();
 }
 

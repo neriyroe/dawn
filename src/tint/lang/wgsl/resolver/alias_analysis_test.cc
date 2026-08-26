@@ -1048,7 +1048,7 @@ class AtomicPointers
         }
     }
 
-    std::string Run() {
+    std::string RunAnalysis() {
         if (r()->Resolve()) {
             return std::string(kPass);
         }
@@ -1083,7 +1083,7 @@ TEST_P(AtomicPointers, CallDirect) {
              CallBuiltin(builtin_b, "p2"),
          });
 
-    EXPECT_EQ(Run(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
+    EXPECT_EQ(RunAnalysis(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
 12:34 note: aliases with another argument passed here)");
 }
 
@@ -1132,7 +1132,7 @@ TEST_P(AtomicPointers, CallThroughChain) {
              CallBuiltin(builtin_b, "p2"),
          });
 
-    EXPECT_EQ(Run(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
+    EXPECT_EQ(RunAnalysis(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
 12:34 note: aliases with another argument passed here)");
 }
 
@@ -1181,7 +1181,7 @@ TEST_P(AtomicPointers, ReadWriteAcrossDifferentFunctions) {
              CallBuiltin(builtin_b, "p"),
          });
 
-    EXPECT_EQ(Run(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
+    EXPECT_EQ(RunAnalysis(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
 12:34 note: aliases with another argument passed here)");
 }
 
@@ -1230,7 +1230,7 @@ class AtomicMinMax : public ResolverTestWithParam<
         return CallStmt(Call(fn, ptr, Call<vec2<u32>>(1_u, 1_u)));
     }
 
-    std::string Run() {
+    std::string RunAnalysis() {
         if (r()->Resolve()) {
             return std::string(kPass);
         }
@@ -1265,7 +1265,7 @@ TEST_P(AtomicMinMax, CallDirect) {
              CallBuiltin(builtin_b, "p2"),
          });
 
-    EXPECT_EQ(Run(), !aliased ? kPass : R"(56:78 error: invalid aliased pointer argument
+    EXPECT_EQ(RunAnalysis(), !aliased ? kPass : R"(56:78 error: invalid aliased pointer argument
 12:34 note: aliases with another argument passed here)");
 }
 
@@ -1314,7 +1314,7 @@ TEST_P(AtomicMinMax, CallThroughChain) {
              CallBuiltin(builtin_b, "p2"),
          });
 
-    EXPECT_EQ(Run(), !aliased ? kPass : R"(56:78 error: invalid aliased pointer argument
+    EXPECT_EQ(RunAnalysis(), !aliased ? kPass : R"(56:78 error: invalid aliased pointer argument
 12:34 note: aliases with another argument passed here)");
 }
 
@@ -1363,7 +1363,7 @@ TEST_P(AtomicMinMax, ReadWriteAcrossDifferentFunctions) {
              CallBuiltin(builtin_b, "p"),
          });
 
-    EXPECT_EQ(Run(), !aliased ? kPass : R"(56:78 error: invalid aliased pointer argument
+    EXPECT_EQ(RunAnalysis(), !aliased ? kPass : R"(56:78 error: invalid aliased pointer argument
 12:34 note: aliases with another argument passed here)");
 }
 
@@ -1426,7 +1426,7 @@ class WorkgroupUniformLoad
         return !fail;
     }
 
-    std::string Run() {
+    std::string RunAnalysis() {
         if (r()->Resolve()) {
             return std::string(kPass);
         }
@@ -1463,7 +1463,7 @@ TEST_P(WorkgroupUniformLoad, CallDirect) {
              Do(action_b, "p2"),
          });
 
-    EXPECT_EQ(Run(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
+    EXPECT_EQ(RunAnalysis(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
 12:34 note: aliases with another argument passed here)");
 }
 
@@ -1516,7 +1516,7 @@ TEST_P(WorkgroupUniformLoad, CallThroughChain) {
              Do(action_b, "p2"),
          });
 
-    EXPECT_EQ(Run(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
+    EXPECT_EQ(RunAnalysis(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
 12:34 note: aliases with another argument passed here)");
 }
 
@@ -1560,7 +1560,7 @@ TEST_P(WorkgroupUniformLoad, ReadWriteAcrossDifferentFunctions) {
 
     Func("f2", Vector{Param("p", ty.ptr<workgroup, i32>())}, ty.void_(), Vector{Do(action_b, "p")});
 
-    EXPECT_EQ(Run(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
+    EXPECT_EQ(RunAnalysis(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
 12:34 note: aliases with another argument passed here)");
 }
 
@@ -1619,13 +1619,15 @@ class SubgroupMatrixTest : public ResolverTestWithParam<std::tuple<SubgroupMatri
                 return Assign(Phony(),
                               Call(Ident(wgsl::BuiltinFn::kSubgroupMatrixLoad,
                                          ty.subgroup_matrix(core::SubgroupMatrixKind::kResult,
-                                                            ty.f32(), 8, 8)),
-                                   ptr, 0_u, false, 8_u));
+                                                            ty.f32(), 8, 8),
+                                         core::Majorness::kRowMajor),
+                                   ptr, 0_u, 8_u));
             case SubgroupMatrixAction::kStore:
                 return CallStmt(Call(
-                    wgsl::BuiltinFn::kSubgroupMatrixStore, ptr, 0_u,
+                    Ident(wgsl::BuiltinFn::kSubgroupMatrixStore, core::Majorness::kRowMajor), ptr,
+                    0_u,
                     Call(ty.subgroup_matrix(core::SubgroupMatrixKind::kResult, ty.f32(), 8, 8)),
-                    false, 8_u));
+                    8_u));
         }
         return nullptr;
     }
@@ -1640,7 +1642,7 @@ class SubgroupMatrixTest : public ResolverTestWithParam<std::tuple<SubgroupMatri
         return !fail;
     }
 
-    std::string Run() {
+    std::string RunAnalysis() {
         if (r()->Resolve()) {
             return std::string(kPass);
         }
@@ -1675,7 +1677,7 @@ TEST_P(SubgroupMatrixTest, CallDirect) {
              Do(action_b, "p2"),
          });
 
-    EXPECT_EQ(Run(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
+    EXPECT_EQ(RunAnalysis(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
 12:34 note: aliases with another argument passed here)");
 }
 
@@ -1724,7 +1726,7 @@ TEST_P(SubgroupMatrixTest, CallThroughChain) {
              Do(action_b, "p2"),
          });
 
-    EXPECT_EQ(Run(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
+    EXPECT_EQ(RunAnalysis(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
 12:34 note: aliases with another argument passed here)");
 }
 
@@ -1767,7 +1769,7 @@ TEST_P(SubgroupMatrixTest, ReadWriteAcrossDifferentFunctions) {
 
     Func("f2", Vector{Param("p", Ptr())}, ty.void_(), Vector{Do(action_b, "p")});
 
-    EXPECT_EQ(Run(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
+    EXPECT_EQ(RunAnalysis(), ShouldPass() ? kPass : R"(56:78 error: invalid aliased pointer argument
 12:34 note: aliases with another argument passed here)");
 }
 

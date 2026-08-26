@@ -43,8 +43,8 @@ DAWN_ENABLE_STRUCT_PADDING_WARNINGS
 // firstVertex and firstInstance are always set together in the immediate mask (firstVertex leads),
 // so group them so callers reference the pair instead of risking setting only one of them.
 struct FirstIndexOffset {
-    uint32_t firstVertex;
-    uint32_t firstInstance;
+    uint32_t firstVertex = 0;
+    uint32_t firstInstance = 0;
 };
 
 using DynamicStorageBufferLengths =
@@ -75,9 +75,10 @@ struct ComputeImmediates {
 };
 DAWN_DISABLE_STRUCT_PADDING_WARNINGS
 
-static_assert(sizeof(ComputeImmediates) <= kMaxImmediateMaskBits * kImmediateElementByteSize,
+static_assert(sizeof(ComputeImmediates) <=
+                  size_t{kMaxImmediateMaskBits} * kImmediateElementByteSize,
               "ComputeImmediates must fit within the immediate mask budget.");
-static_assert(sizeof(RenderImmediates) <= kMaxImmediateMaskBits * kImmediateElementByteSize,
+static_assert(sizeof(RenderImmediates) <= size_t{kMaxImmediateMaskBits} * kImmediateElementByteSize,
               "RenderImmediates must fit within the immediate mask budget.");
 
 }  // namespace dawn::native::d3d12

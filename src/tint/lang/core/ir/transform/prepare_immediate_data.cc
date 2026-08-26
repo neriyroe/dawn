@@ -120,7 +120,10 @@ struct State {
             }
 
             auto index = static_cast<uint32_t>(members.Length());
-            layout.offset_to_index.Add(offset, index);
+            if (!layout.immediate_to_index.Add(internal.second.immediate, index)) {
+                return Failure("duplicate internal immediate with id " +
+                               std::to_string(internal.second.immediate));
+            }
             members.Push(ty.Get<core::type::StructMember>(internal.second.name,
                                                           internal.second.type,
                                                           /* index */ index,
@@ -151,6 +154,19 @@ struct State {
 };
 
 }  // namespace
+
+Value* ImmediateDataLayout::GetPointer(Builder& b, InternalImmediate immediate) const {
+    auto itr = immediate_to_index.Get(immediate);
+    TINT_ASSERT(itr);
+    auto index = u32(*itr.value);
+    auto* str = var->Result()->Type()->UnwrapPtr()->As<core::type::Struct>();
+    auto* type = str->Members()[index]->Type();
+    return b.Access(b.ir.Types().ptr(core::AddressSpace::kImmediate, type), var, index)->Result();
+}
+
+Value* ImmediateDataLayout::GetValue(Builder& b, InternalImmediate immediate) const {
+    return b.Load(GetPointer(b, immediate))->Result();
+}
 
 Result<ImmediateDataLayout> PrepareImmediateData(Module& ir,
                                                  const PrepareImmediateDataConfig& config) {

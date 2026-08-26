@@ -34,7 +34,9 @@
 #include <string>
 #include <vector>
 
+#if TINT_BUILD_WGSL_READER || TINT_BUILD_WGSL_WRITER
 #include "src/tint/lang/wgsl/inspector/inspector.h"
+#endif
 #include "src/tint/utils/diagnostic/source.h"
 #include "src/utils/compiler.h"
 
@@ -81,6 +83,7 @@ struct ProgramInfo {
 /// @param program the program
 void PrintWGSL(std::ostream& out, const tint::Program& program);
 
+#if TINT_BUILD_WGSL_READER || TINT_BUILD_WGSL_WRITER
 /// Prints inspector data information to stderr
 /// @param inspector the inspector to print.
 void PrintInspectorData(tint::inspector::Inspector& inspector);
@@ -88,6 +91,7 @@ void PrintInspectorData(tint::inspector::Inspector& inspector);
 /// Prints inspector binding information to stderr
 /// @param inspector the inspector to print.
 void PrintInspectorBindings(tint::inspector::Inspector& inspector);
+#endif
 
 /// Options for the LoadProgramInfo call
 struct LoadProgramOptions {
@@ -185,7 +189,9 @@ void SetStdinModeBinary();
 template <typename ContainerT>
 bool WriteStdoutImpl(const ContainerT& buffer) {
     FILE* out_file = stdout;
-    size_t written = DAWN_UNSAFE_TODO(
+    // SAFETY: The .data() and .size() are both for the same container, so there should be
+    // .size() * sizeof(value_type) of memory to write into.
+    size_t written = DAWN_UNSAFE_BUFFERS(
         fwrite(buffer.data(), sizeof(typename ContainerT::value_type), buffer.size(), out_file));
     if (buffer.size() != written) {
         std::cerr << "Could not write all output to standard output\n";
@@ -216,7 +222,9 @@ bool WriteFileImpl(const std::string& output_file,
         return false;
     }
 
-    size_t written = DAWN_UNSAFE_TODO(
+    // SAFETY: The .data() and .size() are both for the same container, so there should be
+    // .size() * sizeof(value_type) of memory to write into.
+    size_t written = DAWN_UNSAFE_BUFFERS(
         fwrite(buffer.data(), sizeof(typename ContainerT::value_type), buffer.size(), file));
     if (buffer.size() != written) {
         std::cerr << "Could not write to file " << output_file << "\n";
@@ -274,7 +282,9 @@ bool ReadFileImpl(const std::string& input_file, std::vector<T>* buffer) {
     buffer->clear();
     buffer->resize(file_size / sizeof(T));
 
-    size_t bytes_read = DAWN_UNSAFE_TODO(fread(buffer->data(), 1, file_size, file));
+    // SAFETY: buffer is resized to file_size / sizeof(T) which corresponds to file_size bytes,
+    // making sure there is enough space to write into.
+    size_t bytes_read = DAWN_UNSAFE_BUFFERS(fread(buffer->data(), 1, file_size, file));
     fclose(file);
     if (bytes_read != file_size) {
         std::cerr << "Failed to read " << input_file << "\n";
@@ -298,7 +308,10 @@ bool ReadStdinImpl(std::vector<T>* buffer) {
     std::vector<T> chunk(kItemsPerChunk);
     FILE* in_file = stdin;
     while (!std::feof(in_file)) {
-        size_t bytes_read = DAWN_UNSAFE_TODO(std::fread(chunk.data(), 1, kBytesPerChunk, in_file));
+        // SAFETY: chunk has a capacity of kItemsPerChunk (which is kBytesPerChunk bytes since
+        // sizeof(T) is divisible and checked). std::fread reads at most kBytesPerChunk.
+        size_t bytes_read =
+            DAWN_UNSAFE_BUFFERS(std::fread(chunk.data(), 1, kBytesPerChunk, in_file));
         if (bytes_read == 0) {
             if (std::ferror(in_file)) {
                 std::perror("Error reading from standard input");
@@ -316,7 +329,8 @@ bool ReadStdinImpl(std::vector<T>* buffer) {
         // std::min for extra safety
         size_t items_read = std::min(chunk.size(), bytes_read / sizeof(T));
         buffer->reserve(buffer->size() + items_read);
-        std::copy(chunk.begin(), chunk.begin() + int32_t(items_read), std::back_inserter(*buffer));
+        std::copy(chunk.begin(), chunk.begin() + static_cast<ptrdiff_t>(items_read),
+                  std::back_inserter(*buffer));
     }
     return true;
 }

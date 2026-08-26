@@ -166,9 +166,9 @@ MaybeError Device::Initialize(const UnpackedPtr<DeviceDescriptor>& descriptor) {
 
     mExternalMemoryService = std::make_unique<external_memory::Service>(this);
 
-    if (uint32_t(HasFeature(Feature::SharedFenceVkSemaphoreOpaqueFD)) +
-            uint32_t(HasFeature(Feature::SharedFenceSyncFD)) +
-            uint32_t(HasFeature(Feature::SharedFenceVkSemaphoreZirconHandle)) >
+    if (uint32_t{HasFeature(Feature::SharedFenceVkSemaphoreOpaqueFD)} +
+            uint32_t{HasFeature(Feature::SharedFenceSyncFD)} +
+            uint32_t{HasFeature(Feature::SharedFenceVkSemaphoreZirconHandle)} >
         1) {
         return DAWN_VALIDATION_ERROR("At most one of %s, %s, and %s may be enabled.",
                                      wgpu::FeatureName::SharedFenceVkSemaphoreOpaqueFD,
@@ -594,12 +594,22 @@ ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysica
     }
 
     if (HasFeature(Feature::FramebufferFetch)) {
-        DAWN_ASSERT(usedKnobs.HasExt(DeviceExt::RasterizationOrderAttachmentAccess));
-        auto& usedKnobFeature = usedKnobs.rasterizationOrderAttachmentAccessFeatures;
-        usedKnobFeature = mDeviceInfo.rasterizationOrderAttachmentAccessFeatures;
-        usedKnobFeature.rasterizationOrderDepthAttachmentAccess = VK_FALSE;
-        usedKnobFeature.rasterizationOrderStencilAttachmentAccess = VK_FALSE;
-        featuresChain.Add(&usedKnobs.rasterizationOrderAttachmentAccessFeatures);
+        if (IsToggleEnabled(Toggle::VulkanUseRasterizationOrderAttachmentAccess)) {
+            // Prefer to use the rasterization order extension over subpass self-dependencies when
+            // available. There is a bug in older ARM drivers where subpass self-dependencies add
+            // overhead. The bug is fixed in newer drivers that support the rasterization order
+            // extension, see https://crbug.com/42241389#comment9 for details.
+            DAWN_ASSERT(usedKnobs.HasExt(DeviceExt::RasterizationOrderAttachmentAccess));
+            mFramebufferFetchMode = VulkanFramebufferFetchMode::kCoherentExt;
+
+            auto& usedKnobFeature = usedKnobs.rasterizationOrderAttachmentAccessFeatures;
+            usedKnobFeature = mDeviceInfo.rasterizationOrderAttachmentAccessFeatures;
+            usedKnobFeature.rasterizationOrderDepthAttachmentAccess = VK_FALSE;
+            usedKnobFeature.rasterizationOrderStencilAttachmentAccess = VK_FALSE;
+            featuresChain.Add(&usedKnobs.rasterizationOrderAttachmentAccessFeatures);
+        } else {
+            mFramebufferFetchMode = VulkanFramebufferFetchMode::kCoherentSelfDep;
+        }
     }
 
     if (mDeviceInfo.HasExt(DeviceExt::ShaderIntegerDotProduct)) {
@@ -731,6 +741,13 @@ ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysica
                     &usedKnobs.shaderFloat16Int8Features,
                     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR);
             }
+        }
+
+        // If robustBufferAccess2 is enabled and cooperativeMatrixRobustBufferAccess is available,
+        // enable it.
+        if (IsRobustnessEnabled() && IsToggleEnabled(Toggle::VulkanUseBufferRobustAccess2) &&
+            IsToggleEnabled(Toggle::VulkanUseCooperativeMatrixRobustBufferAccess)) {
+            usedKnobs.cooperativeMatrixFeatures.cooperativeMatrixRobustBufferAccess = VK_TRUE;
         }
     }
 

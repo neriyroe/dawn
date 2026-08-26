@@ -426,7 +426,7 @@ MaybeError Queue::WriteBufferImpl(BufferBase* buffer,
     }
 
     auto commandContext = GetScopedPendingCommandContext(QueueBase::SubmitMode::Normal);
-    return ToBackend(buffer)->Write(&commandContext, bufferOffset, data.data(), data.size());
+    return ToBackend(buffer)->Write(&commandContext, bufferOffset, data);
 }
 
 MaybeError Queue::WriteTextureImpl(const TexelCopyTextureInfo& destination,
@@ -485,7 +485,7 @@ MaybeError MonitoredFenceQueue::NextSerial() {
 
     DAWN_TRY(commandContext.FlushBuffersForSyncingWithCPU());
 
-    const uint64_t submitSerial = uint64_t(GetPendingCommandSerial());
+    const uint64_t submitSerial = uint64_t{GetPendingCommandSerial()};
 
     {
         TRACE_EVENT(DAWN_TRACE_CATEGORY(), "D3D11Device::SignalFence", "serial", submitSerial);
@@ -535,8 +535,8 @@ MaybeError SystemEventQueue::NextSerial() {
         DAWN_ASSERT(mFence);
 
         TRACE_EVENT(DAWN_TRACE_CATEGORY(), "D3D11Device::SignalFence", "serial",
-                    uint64_t(submitSerial));
-        DAWN_TRY(CheckHRESULT(commandContext.Signal(mFence.Get(), uint64_t(submitSerial)),
+                    uint64_t{submitSerial});
+        DAWN_TRY(CheckHRESULT(commandContext.Signal(mFence.Get(), uint64_t{submitSerial}),
                               "D3D11 command queue signal fence"));
     }
 
@@ -627,7 +627,7 @@ ResultOrError<ExecutionSerial> SystemEventQueue::WaitForQueueSerialImpl(Executio
     if (serial > GetLastSubmittedCommandSerial()) {
         return DAWN_FORMAT_INTERNAL_ERROR(
             "Wait a serial (%llu) which is greater than last submitted command serial (%llu).",
-            uint64_t(serial), uint64_t(GetLastSubmittedCommandSerial()));
+            uint64_t{serial}, uint64_t(GetLastSubmittedCommandSerial()));
     }
 
     return mPendingEvents.Use([=, &completedEventsList = mCompletedEvents](
@@ -698,8 +698,8 @@ MaybeError DelayFlushQueue::NextSerial() {
         DAWN_ASSERT(mFence);
 
         TRACE_EVENT(DAWN_TRACE_CATEGORY(), "D3D11Device::SignalFence", "serial",
-                    uint64_t(submitSerial));
-        DAWN_TRY(CheckHRESULT(commandContext.Signal(mFence.Get(), uint64_t(submitSerial)),
+                    uint64_t{submitSerial});
+        DAWN_TRY(CheckHRESULT(commandContext.Signal(mFence.Get(), uint64_t{submitSerial}),
                               "D3D11 command queue signal fence"));
     }
 
@@ -768,7 +768,7 @@ ResultOrError<ExecutionSerial> DelayFlushQueue::WaitForQueueSerialImpl(Execution
     if (waitSerial > GetLastSubmittedCommandSerial()) {
         return DAWN_FORMAT_INTERNAL_ERROR(
             "Wait a serial (%llu) which is greater than last submitted command serial (%llu).",
-            uint64_t(waitSerial), uint64_t(GetLastSubmittedCommandSerial()));
+            uint64_t{waitSerial}, uint64_t(GetLastSubmittedCommandSerial()));
     }
 
     // A coarse-grained D3D11 scope lock is unnecessary here. When D3D11 multithread protection is
@@ -784,8 +784,7 @@ ResultOrError<ExecutionSerial> DelayFlushQueue::WaitForQueueSerialImpl(Execution
         return waitSerial;
     }
 
-    if (uint64_t(timeout) == std::numeric_limits<uint64_t>::max() &&
-        waitSerial == GetLastSubmittedCommandSerial()) {
+    if (timeout >= kMaxDurationNanos && waitSerial == GetLastSubmittedCommandSerial()) {
         // If user submits then waits immediately, we can do a small optimization here,
         // Flush + enqueue SetEvent then wait on the event. This can avoid spinning wait below,
         // wasting less CPU cycles.
@@ -815,9 +814,10 @@ ResultOrError<ExecutionSerial> DelayFlushQueue::WaitForQueueSerialImpl(Execution
 
             if (!done) {
                 auto curTime = std::chrono::steady_clock::now();
-                auto elapsedNs =
-                    std::chrono::duration_cast<std::chrono::nanoseconds>(curTime - startTime);
-                if (static_cast<uint64_t>(elapsedNs.count()) >= uint64_t(timeout)) {
+                auto elapsedNs = Nanoseconds(static_cast<uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(curTime - startTime)
+                        .count()));
+                if (elapsedNs >= timeout) {
                     return kWaitSerialTimeout;
                 }
                 std::this_thread::yield();

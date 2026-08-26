@@ -38,7 +38,6 @@
 #include "src/dawn/native/ResourceTableDefaultResources.h"
 #include "src/dawn/native/Texture.h"
 #include "src/utils/compiler.h"
-#include "src/utils/numeric.h"
 #include "tint/tint.h"
 
 namespace dawn::native {
@@ -59,9 +58,9 @@ Ref<T> GetRef(Variant&& variant) {
 MaybeError ValidateBindingResource(const DeviceBase* device, const BindingResource* resource) {
     DAWN_INVALID_IF(resource->nextInChain != nullptr, "nextInChain is not null.");
 
-    uint32_t resourceCount = uint32_t(resource->buffer != nullptr) +
-                             uint32_t(resource->textureView != nullptr) +
-                             uint32_t(resource->sampler != nullptr);
+    uint32_t resourceCount = uint32_t{resource->buffer != nullptr} +
+                             uint32_t{resource->textureView != nullptr} +
+                             uint32_t{resource->sampler != nullptr};
     DAWN_INVALID_IF(resourceCount != 1,
                     "%i resources are specified (when there must be exactly 1).", resourceCount);
 
@@ -182,17 +181,15 @@ MaybeError ResourceTableBase::InitializeBase() {
 
     // Initialize the metadata buffer with the arrayLength and a bunch of zeroes that correspond to
     // empty entries.
-    DAWN_CHECK(uint32_t(tint::ResourceType::kEmpty) == 0);
+    static_assert(tint::ResourceType{} == tint::ResourceType::kEmpty);
     // TODO(https://crbug.com/435317394): We could rely on zero initialization if it is enabled, and
     // also apply the initial dirty slots in this mapping instead of on the first use of the
     // resource table.
-    uint32_t* data = static_cast<uint32_t*>(
-        mMetadataBuffer->GetMappedRange(0, checked_cast<size_t>(metadataDesc.size)));
+    Span<uint32_t> data = mMetadataBuffer->GetMappedRangeSpan<uint32_t>();
     // Store APISize at element 0 in the metadata buffer, which will be used in the shader to index
     // default resources at APISize + resource type index.
-    data[0] = uint32_t(mAPISize);
-    DAWN_UNSAFE_TODO(
-        memset(data + 1, 0, checked_cast<size_t>(metadataDesc.size - sizeof(uint32_t))));
+    data[0] = uint32_t{mAPISize};
+    std::ranges::fill(data.subspan(1), 0u);
     DAWN_TRY(mMetadataBuffer->Unmap());
 
     // Add the default resources at the end of the table.
@@ -273,7 +270,7 @@ uint32_t ResourceTableBase::APIInsert(const BindingResource* resource) {
         }
 
         UpdateWithDeviceValidation(slot, resource, "Insert");
-        return uint32_t(slot);
+        return uint32_t{slot};
     }
 
     // No slot found, return the invalid binding.
@@ -296,7 +293,7 @@ wgpu::Status ResourceTableBase::APIRemove(uint32_t slotIn) {
 }
 
 uint32_t ResourceTableBase::APIGetSize() const {
-    return uint32_t(mAPISize);
+    return uint32_t{mAPISize};
 }
 
 // static
@@ -544,13 +541,33 @@ void ResourceTableBase::SetEntry(ResourceTableSlot slot, const BindingResource* 
     MarkStateDirty(slot);
 }
 
-absl::flat_hash_set<Ref<TextureBase>> ResourceTableBase::MakeResourcesVisibleExcept(
+MaybeError ResourceTableBase::ApplyDirtySlotUpdatesWith(
+    const absl::flat_hash_set<TextureBase*>& writableTextures,
+    absl::FunctionRef<ApplyUpdateFn> ApplyUpdate) {
+    Updates updates = AcquireDirtySlotUpdates(writableTextures);
+
+    DAWN_TRY(
+        ApplyUpdate(updates.metadataUpdates, updates.resourceDiffs, updates.texturesToTransition));
+
+    // The handling of updates.texturesToTransition may cause memory barriers that mark them
+    // dirty again, when they have just been put in the correct state. Ignore this fake dirtying
+    // by clearing mDirtyStateTextures.
+#if defined(DAWN_ENABLE_ASSERTS)
+    for (const auto& texture : mDirtyStateTextures) {
+        DAWN_ASSERT(updates.texturesToTransition.contains(texture));
+    }
+#endif
+    mDirtyStateTextures = std::move(updates.texturesDirtyAfterUpdate);
+    return {};
+}
+
+ResourceTableBase::Updates ResourceTableBase::MakeResourcesVisibleExcept(
     const absl::flat_hash_set<TextureBase*>& writableTextures) {
     // This function uses mDirtyStateTextures and writableTextures to figure out visibility for each
     // texture in the table. Along with returning the set of textures to transition, this function
     // also updates the visibility flag in mTextureState so that SetEntry can set the right
     // visibility on newly added textures.
-    absl::flat_hash_set<Ref<TextureBase>> texturesToTransition;
+    Updates updates;
 
     auto HandleDirtyTexture = [&](TextureBase* texture) {
         // The texture may not be in mTextureState if, for example, it was destroyed.
@@ -565,7 +582,7 @@ absl::flat_hash_set<Ref<TextureBase>> ResourceTableBase::MakeResourcesVisibleExc
             !texture->IsDestroyed() && texture->HasAccess() && !writableTextures.contains(texture);
 
         if (visible) {
-            texturesToTransition.insert(texture);
+            updates.texturesToTransition.insert(texture);
         }
 
         if (textureState.visible != visible) {
@@ -590,27 +607,25 @@ absl::flat_hash_set<Ref<TextureBase>> ResourceTableBase::MakeResourcesVisibleExc
     mDirtyStateTextures.clear();
 
     // Now process writable textures, hiding any that are in the table.
-    // We also make sure to add them to mDirtyStateTextures so that if they're not writable next
-    // call, we unhide them.
+    // We also make sure to add them to texturesDirtyAfterUpdate so that if they're not writable
+    // next call, we unhide them.
     for (TextureBase* texture : writableTextures) {
         if (mTextureState.contains(texture)) {
             // We may be recomputing visibility unnecessarily, but it will be possible to optimize,
             // and it will get more complex once we support resource state.
             HandleDirtyTexture(texture);
-            mDirtyStateTextures.insert(texture);
+            updates.texturesDirtyAfterUpdate.insert(texture);
         }
     }
 
-    return texturesToTransition;
+    return updates;
 }
 
 ResourceTableBase::Updates ResourceTableBase::AcquireDirtySlotUpdates(
     const absl::flat_hash_set<TextureBase*>& writableTextures) {
     DAWN_CHECK(!mDestroyed);
 
-    Updates updates;
-
-    updates.texturesToTransition = MakeResourcesVisibleExcept(writableTextures);
+    Updates updates = MakeResourcesVisibleExcept(writableTextures);
 
     for (ResourceTableSlot dirtySlot : mDirtySlots) {
         SlotState& state = mSlots[dirtySlot];
@@ -626,11 +641,11 @@ ResourceTableBase::Updates ResourceTableBase::AcquireDirtySlotUpdates(
 
         // Add the update for the metadata buffer.
         // Add 1 because the 0th element holds the table size (APISize).
-        size_t offset = sizeof(uint32_t) * (uint32_t(dirtySlot) + 1);
+        uint32_t offset = sizeof(uint32_t) * (uint32_t{dirtySlot} + 1);
         updates.metadataUpdates.push_back({
             .slot = dirtySlot,
-            .offset = uint32_t(offset),
-            .data = uint32_t(effectiveType),
+            .offset = offset,
+            .data = to_underlying(effectiveType),
         });
 
         // Compute whether a resource update is needed and skip adding it if unnecessary.

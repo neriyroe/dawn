@@ -33,6 +33,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "src/utils/compiler.h"
+
 #if TINT_BUILD_SPV_READER || TINT_BUILD_SPV_WRITER
 #include "spirv-tools/libspirv.hpp"
 #endif  // TINT_BUILD_SPV_READER || TINT_BUILD_SPV_WRITER
@@ -229,9 +231,6 @@ Format InferFormat(const std::string& filename) {
     return Format::kUnknown;
 }
 
-// The actual warning occurs on `std::from_chars(hash.data(), hash.data() + hash.size(), value,
-// base);`, but disabling/enabling warnings cannot be done within function scope
-TINT_BEGIN_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 bool ParseArgs(tint::VectorRef<std::string_view> arguments, Options* opts, ExeMode exe_mode) {
     using namespace tint::cli;  // NOLINT(build/namespaces)
 
@@ -410,7 +409,10 @@ of the hash codes in the comma separated list of hashes)");
                     base = 16;
                 }
 
-                std::from_chars(hash.data(), hash.data() + hash.size(), value, base);
+                // SAFETY: `hash` is a valid string_view, so `hash.data() + hash.size()` is a valid
+                // pointer within bounds.
+                DAWN_UNSAFE_BUFFERS(
+                    std::from_chars(hash.data(), hash.data() + hash.size(), value, base));
                 opts->skip_hash.emplace(value);
             }
         }
@@ -522,6 +524,7 @@ When specified, automatically enables MSL validation)",
         EnumName(tint::msl::validate::MslVersion::kMsl_2_3, "2.3"),
         EnumName(tint::msl::validate::MslVersion::kMsl_2_4, "2.4"),
         EnumName(tint::msl::validate::MslVersion::kMsl_3_2, "3.2"),
+        EnumName(tint::msl::validate::MslVersion::kMsl_4_0, "4.0"),
     };
     auto& msl_version = options.Add<EnumOption<tint::msl::validate::MslVersion>>(
         "msl-version", R"(Specify the MSL version.
@@ -630,10 +633,14 @@ Options:
             }
 
             uint32_t group = 0;
-            std::from_chars(parts[0].data(), parts[0].data() + parts[0].size(), group);
+            // SAFETY: `parts` are subviews of str, which is a valid string_view
+            DAWN_UNSAFE_BUFFERS(
+                std::from_chars(parts[0].data(), parts[0].data() + parts[0].size(), group));
 
             uint32_t binding = 0;
-            std::from_chars(parts[1].data(), parts[1].data() + parts[0].size(), binding);
+            // SAFETY: `parts` are subviews of str, which is a valid string_view
+            DAWN_UNSAFE_BUFFERS(
+                std::from_chars(parts[1].data(), parts[1].data() + parts[0].size(), binding));
 
             return {tint::BindingPoint{group, binding}};
         };
@@ -673,10 +680,14 @@ Options:
             }
 
             uint32_t group = 0;
-            std::from_chars(parts[0].data(), parts[0].data() + parts[0].size(), group);
+            // SAFETY: `parts` are subviews of str, which is a valid string_view.
+            DAWN_UNSAFE_BUFFERS(
+                std::from_chars(parts[0].data(), parts[0].data() + parts[0].size(), group));
 
             uint32_t binding = 0;
-            std::from_chars(parts[1].data(), parts[1].data() + parts[1].size(), binding);
+            // SAFETY: `parts` are subviews of str, which is a valid string_view.
+            DAWN_UNSAFE_BUFFERS(
+                std::from_chars(parts[1].data(), parts[1].data() + parts[1].size(), binding));
 
             return {tint::BindingPoint{group, binding}};
         };
@@ -704,10 +715,14 @@ Options:
             }
 
             uint32_t group = 0;
-            std::from_chars(parts[0].data(), parts[0].data() + parts[0].size(), group, 10);
+            // SAFETY: `parts` are subviews of str, which is a valid string_view
+            DAWN_UNSAFE_BUFFERS(
+                std::from_chars(parts[0].data(), parts[0].data() + parts[0].size(), group, 10));
 
             uint32_t idx = 0;
-            std::from_chars(parts[1].data(), parts[1].data() + parts[1].size(), idx, 10);
+            // SAFETY: `parts` are subviews of str, which is a valid string_view
+            DAWN_UNSAFE_BUFFERS(
+                std::from_chars(parts[1].data(), parts[1].data() + parts[1].size(), idx, 10));
 
             if (!opts->group_to_argument_buffer_info.contains(group)) {
                 opts->group_to_argument_buffer_info.insert({group, {}});
@@ -726,10 +741,14 @@ Options:
             }
 
             uint32_t group = 0;
-            std::from_chars(parts[0].data(), parts[0].data() + parts[0].size(), group, 10);
+            // SAFETY: `parts` are subviews of str, which is a valid string_view
+            DAWN_UNSAFE_BUFFERS(
+                std::from_chars(parts[0].data(), parts[0].data() + parts[0].size(), group, 10));
 
             uint32_t idx = 0;
-            std::from_chars(parts[1].data(), parts[1].data() + parts[1].size(), idx, 10);
+            // SAFETY: `parts` are subviews of str, which is a valid string_view
+            DAWN_UNSAFE_BUFFERS(
+                std::from_chars(parts[1].data(), parts[1].data() + parts[1].size(), idx, 10));
 
             if (!opts->group_to_argument_buffer_info.contains(group)) {
                 opts->group_to_argument_buffer_info.insert({group, {}});
@@ -752,14 +771,20 @@ Options:
                 return false;
             }
             uint32_t group = 0;
-            std::from_chars(bind_point[0].data(), bind_point[0].data() + bind_point[0].size(),
-                            group, 10);
+            // SAFETY: `bind_point[0]` is a subview of `parts[0]` which is a subview of str, which
+            // is a valid string_view
+            DAWN_UNSAFE_BUFFERS(std::from_chars(
+                bind_point[0].data(), bind_point[0].data() + bind_point[0].size(), group, 10));
             uint32_t binding = 0;
-            std::from_chars(bind_point[0].data(), bind_point[0].data() + bind_point[0].size(),
-                            binding, 10);
+            // SAFETY: `bind_point[1]` is a subview of `parts[1]` which is a subview of str, which
+            // is a valid string_view
+            DAWN_UNSAFE_BUFFERS(std::from_chars(
+                bind_point[1].data(), bind_point[1].data() + bind_point[1].size(), binding, 10));
 
             uint32_t offset = 0;
-            std::from_chars(parts[1].data(), parts[1].data() + parts[1].size(), offset, 10);
+            // SAFETY: `parts` are subviews of str, which is a valid string_view
+            DAWN_UNSAFE_BUFFERS(
+                std::from_chars(parts[1].data(), parts[1].data() + parts[1].size(), offset, 10));
 
             if (!opts->group_to_argument_buffer_info.contains(group)) {
                 opts->group_to_argument_buffer_info.insert({group, {}});
@@ -873,7 +898,6 @@ Options:
 
     return true;
 }
-TINT_END_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 
 [[maybe_unused]] tint::diag::Result<tint::SubstituteOverridesConfig> CreateOverrideMap(
     const Options& options,
@@ -1178,12 +1202,17 @@ tint::msl::writer::ArrayLengthOptions GenerateArrayLengthFromConstants(tint::cor
     gen_options.pixel_local_attachments = options.pixel_local_attachments;
     gen_options.bindings = tint::GenerateBindings(
         ir, options.ep_name, !options.use_argument_buffers, !options.use_argument_buffers);
+    gen_options.resource_table = tint::core::ir::transform::GenerateResourceTableConfig(
+        ir, options.treat_samplers_as_filtering);
     // TODO(crbug.com/366291600): Replace ubo with immediate block for end2end tests
     gen_options.immediate_binding_point = tint::BindingPoint{.group = 0u, .binding = 30u};
     gen_options.extensions.disable_demote_to_helper = options.disable_demote_to_helper;
     gen_options.use_argument_buffers = options.use_argument_buffers;
     gen_options.group_to_argument_buffer_info = options.group_to_argument_buffer_info;
     gen_options.array_length_from_constants = GenerateArrayLengthFromConstants(ir, options.ep_name);
+
+    auto entry_point = inspector.GetEntryPoint(options.ep_name);
+    gen_options.non_constant_zero_offset = tint::RoundUp(4U, entry_point.immediate_data_size);
 
     // Run SubstituteOverrides to replace override instructions with constants.
     // This needs to run after SingleEntryPoint which removes unused overrides.
@@ -1270,6 +1299,14 @@ tint::msl::writer::ArrayLengthOptions GenerateArrayLengthFromConstants(tint::cor
     gen_options.bindings = tint::GenerateBindings(ir, options.ep_name, false, false);
     gen_options.resource_table = tint::core::ir::transform::GenerateResourceTableConfig(
         ir, options.treat_samplers_as_filtering);
+
+    auto entry_point = inspector.GetEntryPoint(options.ep_name);
+
+    uint32_t offset = tint::RoundUp(4u, entry_point.immediate_data_size);
+    if (entry_point.num_workgroups_used) {
+        gen_options.num_workgroups_start_offset = offset;
+        offset += 4;
+    }
 
     // Run SubstituteOverrides to replace override instructions with constants.
     // This needs to run after SingleEntryPoint which removes unused overrides.

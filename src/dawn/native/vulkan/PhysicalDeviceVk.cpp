@@ -42,6 +42,7 @@
 #include "src/dawn/native/Limits.h"
 #include "src/dawn/native/vulkan/BackendVk.h"
 #include "src/dawn/native/vulkan/DeviceVk.h"
+#include "src/dawn/native/vulkan/FramebufferFetchHelper.h"
 #include "src/dawn/native/vulkan/ImmediatesLayoutVk.h"
 #include "src/dawn/native/vulkan/ResourceMemoryAllocatorVk.h"
 #include "src/dawn/native/vulkan/SwapChainVk.h"
@@ -338,11 +339,12 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
         EnableFeature(Feature::DualSourceBlending);
     }
 
-    if (mDeviceInfo.HasExt(DeviceExt::RasterizationOrderAttachmentAccess) &&
-        mDeviceInfo.rasterizationOrderAttachmentAccessFeatures
-                .rasterizationOrderColorAttachmentAccess == VK_TRUE) {
-        // There are four possible ways FramebufferFetch can be supported. Currently only #1 is
-        // implemented.
+    if ((mDeviceInfo.HasExt(DeviceExt::RasterizationOrderAttachmentAccess) &&
+         mDeviceInfo.rasterizationOrderAttachmentAccessFeatures
+                 .rasterizationOrderColorAttachmentAccess == VK_TRUE) ||
+        FramebufferFetchHelper::SupportsCoherentRasterization(GetVendorId())) {
+        // There are four possible ways FramebufferFetch can be supported. Currently only #1 and #2
+        // are implemented.
         //
         // 1. Coherent with rasterization order extension.
         // 2. Coherent without rasterization order extension but when GPU architecture supports
@@ -831,7 +833,7 @@ MaybeError PhysicalDevice::InitializeSupportedLimitsInternal(wgpu::FeatureLevel 
     // incorrect values on desktop drivers.
     bool readjustFragmentCombinedOutputResources =
         vkLimits.maxFragmentCombinedOutputResources > minFragmentCombinedOutputResources &&
-        uint64_t(vkLimits.maxFragmentCombinedOutputResources) < maxFragmentCombinedOutputResources;
+        uint64_t{vkLimits.maxFragmentCombinedOutputResources} < maxFragmentCombinedOutputResources;
     if (readjustFragmentCombinedOutputResources) {
         // Split extra resources across the three other limits instead of using the default values
         // since it would overflow.
@@ -902,11 +904,11 @@ MaybeError PhysicalDevice::InitializeSupportedLimitsInternal(wgpu::FeatureLevel 
         vkLimits.maxComputeWorkGroupCount[2],
     });
 
-    if (!IsSubset(VkSampleCountFlags(VK_SAMPLE_COUNT_1_BIT | VK_SAMPLE_COUNT_4_BIT),
+    if (!IsSubset(VkSampleCountFlags{VK_SAMPLE_COUNT_1_BIT | VK_SAMPLE_COUNT_4_BIT},
                   vkLimits.framebufferColorSampleCounts)) {
         return DAWN_INTERNAL_ERROR("Insufficient Vulkan limits for framebufferColorSampleCounts");
     }
-    if (!IsSubset(VkSampleCountFlags(VK_SAMPLE_COUNT_1_BIT | VK_SAMPLE_COUNT_4_BIT),
+    if (!IsSubset(VkSampleCountFlags{VK_SAMPLE_COUNT_1_BIT | VK_SAMPLE_COUNT_4_BIT},
                   vkLimits.framebufferDepthSampleCounts)) {
         return DAWN_INTERNAL_ERROR("Insufficient Vulkan limits for framebufferDepthSampleCounts");
     }
@@ -1115,8 +1117,7 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         // See crbug.com/460209126
         deviceToggles->Default(Toggle::VulkanCooperativeMatrixStrideIsMatrixElements, true);
 
-        // dawn:500417361
-        // TODO: Add details once available.
+        // TODO(https://crbug.com/500417361): Add details once available.
         deviceToggles->Default(Toggle::VulkanSleepAfterLostDeviceWait, true);
     }
 
@@ -1146,6 +1147,15 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         // gate this on driver version.
         // https://crbug.com/487773864
         deviceToggles->Default(Toggle::VulkanReplaceWorkgroupAtomicStoreWithExchange, true);
+
+        // Samsung Xclipse GPUs produce incorrect results from certain combinations of bitwise
+        // operations and select instructions when comparing unsigned values with zero.
+        // Fixed in driver versions >= 25.x.
+        // https://crbug.com/543420711
+        const gpu_info::DriverVersion kFixedDriverVersion = {25, 0, 0, 0};
+        if (GetDriverVersion() < kFixedDriverVersion) {
+            deviceToggles->Default(Toggle::VulkanReplaceUnsignedCompareZero, true);
+        }
     }
 
     if (IsSwiftshader()) {
@@ -1295,6 +1305,16 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         deviceToggles->Default(Toggle::VulkanUseBufferRobustAccess2, true);
     }
 
+    // By default try to skip cooperative matrix robustness if both robustBuffer2 and cooperative
+    // matrix robust access features are available.
+    if (GetDeviceInfo().HasExt(DeviceExt::CooperativeMatrix) &&
+        GetDeviceInfo().cooperativeMatrixFeatures.cooperativeMatrixRobustBufferAccess == VK_TRUE &&
+        deviceToggles->IsEnabled(Toggle::VulkanUseBufferRobustAccess2)) {
+        deviceToggles->Default(Toggle::VulkanUseCooperativeMatrixRobustBufferAccess, true);
+    } else {
+        deviceToggles->ForceSet(Toggle::VulkanUseCooperativeMatrixRobustBufferAccess, false);
+    }
+
     // Enable the polyfill versions of dot4I8Packed() and dot4U8Packed() when the SPIR-V capability
     // `DotProductInput4x8BitPackedKHR` is not supported.
     if (!GetDeviceInfo().HasExt(DeviceExt::ShaderIntegerDotProduct) ||
@@ -1351,6 +1371,15 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         deviceToggles->ForceSet(Toggle::VulkanUseExtendedDynamicState, false);
     } else {
         deviceToggles->Default(Toggle::VulkanUseExtendedDynamicState, false);
+    }
+
+    if (!GetDeviceInfo().HasExt(DeviceExt::RasterizationOrderAttachmentAccess) ||
+        GetDeviceInfo()
+                .rasterizationOrderAttachmentAccessFeatures
+                .rasterizationOrderColorAttachmentAccess == VK_FALSE) {
+        deviceToggles->ForceSet(Toggle::VulkanUseRasterizationOrderAttachmentAccess, false);
+    } else {
+        deviceToggles->Default(Toggle::VulkanUseRasterizationOrderAttachmentAccess, true);
     }
 }
 

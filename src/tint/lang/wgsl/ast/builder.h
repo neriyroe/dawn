@@ -153,7 +153,7 @@ class Builder {
     Builder(Builder&& rhs);
 
     /// Destructor
-    ~Builder();
+    virtual ~Builder();
 
     /// Move assignment operator
     /// @param rhs the builder to move
@@ -954,7 +954,7 @@ class Builder {
                 Expression* expr = nullptr;
                 return array(source, Of<T>(), expr);
             } else {
-                return array(source, Of<T>(), uint32_t(N));
+                return array(source, Of<T>(), uint32_t{N});
             }
         }
 
@@ -965,7 +965,7 @@ class Builder {
                 static_assert(N == 0, "arrays with a count cannot be inferred");
                 return array();
             } else {
-                return array(Of<T>(), uint32_t(N));
+                return array(Of<T>(), uint32_t{N});
             }
         }
 
@@ -3571,7 +3571,7 @@ class Builder {
 
   protected:
     /// Asserts that the builder has not been moved.
-    void AssertNotMoved() const;
+    virtual void AssertNotMoved() const;
 
     /// The last Node identifier
     NodeID last_ast_node_id_ = NodeID{static_cast<decltype(NodeID::value)>(0) - 1};

@@ -486,7 +486,7 @@ void Texture::TrackUsageAndTransitionNow(CommandRecordingContext* commandContext
     std::vector<D3D12_RESOURCE_BARRIER> barriers;
 
     uint32_t aspectCount = sign_dcast(std::popcount(static_cast<uint8_t>(range.aspects)));
-    barriers.reserve(range.levelCount * range.layerCount * aspectCount);
+    barriers.reserve(size_t{range.levelCount} * range.layerCount * aspectCount);
 
     TransitionUsageAndGetResourceBarrier(commandContext, &barriers, newState, range);
     if (barriers.size()) {
@@ -499,7 +499,7 @@ void Texture::TransitionSubresourceRange(std::vector<D3D12_RESOURCE_BARRIER>* ba
                                          const SubresourceRange& range,
                                          StateAndDecay* state,
                                          D3D12_RESOURCE_STATES newState,
-                                         ExecutionSerial pendingCommandSerial) const {
+                                         ExecutionSerial pendingCommandSerial) {
     D3D12_RESOURCE_STATES lastState = state->lastState;
 
     // If the transition is from-UAV-to-UAV, then a UAV barrier is needed.
@@ -532,6 +532,7 @@ void Texture::TransitionSubresourceRange(std::vector<D3D12_RESOURCE_BARRIER>* ba
 
     // Update the tracked state.
     state->lastState = newState;
+    MarkDirtyInResourceTables();
 
     // The COMMON state represents a state where no write operations can be pending, and
     // where all pixels are uncompressed. This makes it possible to transition to and
@@ -887,11 +888,9 @@ MaybeError Texture::ClearTexture(CommandRecordingContext* commandContext,
                 blocksPerRow * largestMipSize.height * largestMipSize.depthOrArrayLayers;
             uint64_t uploadSize = blockInfo.ToBytes(uploadBlocks);
 
-            // TODO(https://crbug.com/534203108): Spanify WithUploadReservation.
             DAWN_TRY(device->GetDynamicUploader()->WithUploadReservation(
                 uploadSize, blockInfo.byteSize, [&](UploadReservation reservation) -> MaybeError {
-                    DAWN_UNSAFE_TODO(memset(reservation.mappedPointer, clearColor,
-                                            checked_cast<size_t>(uploadSize)));
+                    std::ranges::fill(reservation.mappedData, std::byte(clearColor));
 
                     for (uint32_t level = range.baseMipLevel;
                          level < range.baseMipLevel + range.levelCount; ++level) {

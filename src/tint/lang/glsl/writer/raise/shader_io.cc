@@ -292,15 +292,15 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
     /// @returns the clamped value
     core::ir::Value* ClampFragDepth([[maybe_unused]] core::ir::Builder& builder,
                                     core::ir::Value* frag_depth) {
-        if (!config.depth_range_offsets) {
+        if (!config.immediate_data_layout.HasImmediate(core::InternalImmediate::kFragDepthMin) ||
+            !config.immediate_data_layout.HasImmediate(core::InternalImmediate::kFragDepthMax)) {
             return frag_depth;
         }
 
-        auto* immediate_data = config.immediate_data_layout.var;
-        auto min_idx = u32(config.immediate_data_layout.IndexOf(config.depth_range_offsets->min));
-        auto max_idx = u32(config.immediate_data_layout.IndexOf(config.depth_range_offsets->max));
-        auto* min = builder.Load(builder.Access<ptr<immediate, f32>>(immediate_data, min_idx));
-        auto* max = builder.Load(builder.Access<ptr<immediate, f32>>(immediate_data, max_idx));
+        auto* min =
+            config.immediate_data_layout.GetValue(builder, core::InternalImmediate::kFragDepthMin);
+        auto* max =
+            config.immediate_data_layout.GetValue(builder, core::InternalImmediate::kFragDepthMax);
         return builder.Clamp(frag_depth, min, max)->Result();
     }
 

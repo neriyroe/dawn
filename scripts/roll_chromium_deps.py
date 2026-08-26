@@ -81,6 +81,7 @@ SYNCED_VARIABLES = {
     # TODO(crbug.com/528413044): Replace this with a SYNCED_CIPD_DEPS entry on
     # 'third_party/android_toolchain/ndk' instead to implicitly update this var.
     'android_ndk_version': None,
+    'cpython3_version': None,
 }
 
 # DEPS entries which have dep_type = cipd. In the Chromium DEPS file, these
@@ -145,7 +146,6 @@ SYNCED_REPOS = {
     # there is no need to sync their revisions.
     'third_party/google_benchmark/src': None,
     'third_party/googletest/src': 'third_party/googletest/src',
-    'third_party/jsoncpp': 'third_party/jsoncpp/source',
     'third_party/libc++/src': None,
     'third_party/libc++abi/src': None,
     'third_party/libprotobuf-mutator/src': None,

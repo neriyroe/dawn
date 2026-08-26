@@ -46,6 +46,7 @@ namespace tint::core::ir::transform {
 // Backend specific override methods for resource table
 class ResourceTableHelper {
   public:
+    ResourceTableHelper() = default;
     virtual ~ResourceTableHelper();
 
     // Returns a map of types to the var which is used to access the memory of that type
@@ -53,6 +54,17 @@ class ResourceTableHelper {
         core::ir::Builder& b,
         const BindingPoint& bp,
         const std::vector<ResourceType>& types) const = 0;
+
+    // Helper method to load the `ty` object out of the buffer `from` at `idx.
+    virtual Instruction* LoadResource(core::ir::Builder& b,
+                                      core::ir::Instruction* from,
+                                      core::ir::Value* idx,
+                                      const core::type::Type* ty) const;
+
+    ResourceTableHelper(const ResourceTableHelper&) = delete;
+    ResourceTableHelper(ResourceTableHelper&&) = delete;
+    ResourceTableHelper& operator=(const ResourceTableHelper&) = delete;
+    ResourceTableHelper& operator=(ResourceTableHelper&&) = delete;
 };
 
 /// This transform updates the provided IR to support resource_table restrictions/requirements.
@@ -60,11 +72,11 @@ class ResourceTableHelper {
 /// We re-write the `getResource` and `hasResource` calls to use the provided storage buffer to
 /// validate the requested types.
 ///
-/// @param module the module to transform
+/// @param ir the module to transform
 /// @param config the transform configuration
 /// @param helper the resource binding helper
 /// @returns success or failure
-Result<SuccessType> ResourceTable(core::ir::Module& module,
+Result<SuccessType> ResourceTable(core::ir::Module& ir,
                                   const std::optional<ResourceTableConfig>& config,
                                   ResourceTableHelper* helper);
 

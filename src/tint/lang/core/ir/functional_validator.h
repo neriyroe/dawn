@@ -40,6 +40,7 @@
 #include "src/tint/lang/core/ir/construct.h"
 #include "src/tint/lang/core/ir/continue.h"
 #include "src/tint/lang/core/ir/convert.h"
+#include "src/tint/lang/core/ir/core_binary.h"
 #include "src/tint/lang/core/ir/core_builtin_call.h"
 #include "src/tint/lang/core/ir/disassembler.h"
 #include "src/tint/lang/core/ir/exit.h"
@@ -60,6 +61,7 @@
 #include "src/tint/lang/core/ir/swizzle.h"
 #include "src/tint/lang/core/ir/unary.h"
 #include "src/tint/lang/core/ir/user_call.h"
+#include "src/tint/lang/core/ir/validator.h"
 #include "src/tint/lang/core/ir/var.h"
 #include "src/tint/utils/containers/hashmap.h"
 #include "src/tint/utils/diagnostic/diagnostic.h"
@@ -68,12 +70,7 @@ namespace tint::core::ir::validator {
 
 class Functional {
   public:
-    enum class ErrorSource {
-        kWgsl,
-        kIr,
-    };
-
-    Functional(const Module& ir, diag::List& diagnostics, ErrorSource error_source);
+    Functional(Module& ir, diag::List& diagnostics, ErrorSource error_source);
     ~Functional();
 
     void Validate();
@@ -99,6 +96,11 @@ class Functional {
       private:
         Vector<Hashset<const Value*, 8>, 4> stack_;
     };
+
+    // Returns true if we're validating in the context of WGSL. The other option is we're validating
+    // as IR. The primary difference is how const-eval checks are run as the semantics are
+    // different.
+    bool IsWGSLValidation() const;
 
     StyledText NameOf(const core::type::Type* ty);
     StyledText NameOf(const Value* value);
@@ -135,6 +137,7 @@ class Functional {
     void CheckRootBlock(const Block* blk);
     void CheckFunction(const Function* func);
     void CheckFunctionParam(const FunctionParam* param);
+    void CheckSubgroupSize(const Function* func);
     void CheckEntryPoint(const Function* func);
     void CheckPositionPresentForVertexOutput(const Function* ep);
     void CheckBlock(const Block* blk);
@@ -176,10 +179,41 @@ class Functional {
     void CheckUserCall(const UserCall* call);
     void CheckVar(const Var* var);
 
-    const Module& ir_;
+    void CheckSubgroupCall(const CoreBuiltinCall* call);
+    void CheckExtractBitsCall(const CoreBuiltinCall* call);
+    void CheckInsertBitsCall(const CoreBuiltinCall* call);
+    void CheckLdexpCall(const CoreBuiltinCall* call);
+    void CheckQuantizeToF16(const CoreBuiltinCall* call);
+    void CheckPack2x16float(const CoreBuiltinCall* call);
+    void CheckClampCall(const CoreBuiltinCall* call);
+    void CheckSmoothstepCall(const CoreBuiltinCall* call);
+
+    void CheckCoreBinaryCall(const CoreBinary* call);
+    void CheckBinaryDivModCall(const CoreBinary* call);
+    void CheckBinaryShiftCall(const CoreBinary* call);
+
+    struct UseInfo {
+        Usage use;
+        /// Variable/buffer size
+        uint32_t storage_size{};
+        /// Accumulated offset to the pointer
+        uint32_t offset{};
+        /// Pointed to size
+        uint32_t pointer_size{};
+    };
+
+    void CheckBuffersAndMatrices(const Var* var);
+    bool CheckBufferView(const CoreBuiltinCall* call, const Var* var, uint32_t buffer_size);
+    bool CheckSubgroupMatrixMemory(const CoreBuiltinCall* call,
+                                   const Var* var,
+                                   const UseInfo& info);
+
+    Module& ir_;
     diag::List& diag_;
     ErrorSource error_source_;
     std::optional<ir::Disassembler> disassembler_;  // Use Disassemble()
+
+    constant::Eval const_eval_;
 
     SymbolTable symbols_ = SymbolTable::Wrap(ir_.symbols);
     core::type::Manager type_mgr_ = core::type::Manager::Wrap(ir_.Types());

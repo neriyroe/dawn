@@ -142,7 +142,7 @@ tint::msl::writer::ArrayLengthOptions GenerateArrayLengthOptions(const PipelineL
                 case wgpu::BufferBindingType::ReadOnlyStorage:
                 case kInternalReadOnlyStorageBufferBinding:
                     arrayLength.bindpoint_to_size_index.emplace(
-                        tint::BindingPoint{uint32_t(group), uint32_t(bindingInfo.binding)},
+                        tint::BindingPoint{uint32_t{group}, uint32_t{bindingInfo.binding}},
                         layout->GetBindingIndexInfo(stage)[group][index]);
                     break;
 
@@ -198,7 +198,7 @@ std::unordered_map<uint32_t, tint::msl::writer::ArgumentBufferInfo> GenerateArgu
                 [&](const BufferBindingInfo& binding) {
                     if (binding.hasDynamicOffset) {
                         argBufferInfo.binding_info_to_offset_index.insert(
-                            {uint32_t(bindingIndex), curDynamicOffset++});
+                            {uint32_t{bindingIndex}, curDynamicOffset++});
                     }
                 },
                 [&](const SamplerBindingInfo& bindingInfo) {},
@@ -233,7 +233,7 @@ ResultOrError<CacheResult<MslCompilation>> TranslateToMSL(
         GenerateBindingRemapping(layout, stage, [&](BindGroupIndex group, BindingIndex index) {
             if (useArgumentBuffers) {
                 return tint::BindingPoint{
-                    .group = uint32_t(group),
+                    .group = uint32_t{group},
                     .binding = ToMTLArgumentBufferIndex(index),
                 };
             } else {
@@ -261,8 +261,8 @@ ResultOrError<CacheResult<MslCompilation>> TranslateToMSL(
 
             // Tell Tint to map (kPullingBufferBindingSet, slot) to this MSL buffer index.
             tint::BindingPoint srcBindingPoint{
-                .group = uint32_t(kPullingBufferBindingSet),
-                .binding = uint8_t(slot),
+                .group = uint32_t{kPullingBufferBindingSet},
+                .binding = uint8_t{slot},
             };
             tint::BindingPoint dstBindingPoint{
                 .group = 0,
@@ -331,11 +331,19 @@ ResultOrError<CacheResult<MslCompilation>> TranslateToMSL(
     req.tintOptions.vertex_pulling_config = std::move(vertexPullingTransformConfig);
 
     // Set internal immediate offsets
-    if (HasImmediates(&RenderImmediates::clampFragDepth, pipelineImmediateMask)) {
+    if (stage == SingleShaderStage::Fragment &&
+        HasImmediates(&RenderImmediates::clampFragDepth, pipelineImmediateMask)) {
         uint32_t offsetStartBytes = GetImmediateByteOffsetInPipeline(
             &RenderImmediates::clampFragDepth, pipelineImmediateMask);
         req.tintOptions.depth_range_offsets = {offsetStartBytes,
                                                offsetStartBytes + kImmediateElementByteSize};
+    }
+    if (stage == SingleShaderStage::Compute) {
+        req.tintOptions.non_constant_zero_offset = GetImmediateByteOffsetInPipeline(
+            &ComputeImmediates::nonConstantZero, pipelineImmediateMask);
+    } else {
+        req.tintOptions.non_constant_zero_offset = GetImmediateByteOffsetInPipeline(
+            &RenderImmediates::nonConstantZero, pipelineImmediateMask);
     }
 
     req.tintOptions.use_argument_buffers = useArgumentBuffers;
