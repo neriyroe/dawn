@@ -73,7 +73,7 @@ class BufferMappingTests : public DawnTestWithParams<BufferMappingTestParams> {
                          size_t offset,
                          size_t size,
                          wgpu::BufferMapCallback<> cb = nullptr) {
-        wgpu::Future future;
+        wgpu::Future future{};
 
         if (cb) {
             future = buffer.MapAsync(mode, offset, size, GetParam().mFutureCallbackMode, cb);
@@ -491,7 +491,7 @@ TEST_P(BufferMappingTests, MapWrite_ManySimultaneous) {
         buffers[i] = device.CreateBuffer(&descriptor);
     }
 
-    std::array<wgpu::Future, kBuffers> futures;
+    std::array<wgpu::Future, kBuffers> futures{};
     for (uint32_t i = 0; i < kBuffers; ++i) {
         futures[i] = buffers[i].MapAsync(
             wgpu::MapMode::Write, 0, descriptor.size, GetParam().mFutureCallbackMode,
@@ -2271,8 +2271,8 @@ TEST_P(BufferMapExtendedUsagesTests,
     }
 }
 
-// BufferMapWriteExtendedUsages is only ever enabled on D3D12, so the WriteOnly parameter runs on
-// D3D12 and is skipped on other backends; ReadWrite keeps the full backend coverage.
+// The tests with `WriteOnly` parameter will only be run on the backends that support
+// `BufferMapWriteExtendedUsages`.
 DAWN_INSTANTIATE_TEST_P(BufferMapExtendedUsagesTests,
                         {D3D11Backend(), D3D11Backend({"d3d11_disable_map_on_default_buffers"}),
                          D3D11Backend({"auto_map_backend_buffer", "d3d11_disable_cpu_buffers"}),

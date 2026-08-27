@@ -73,6 +73,13 @@
 #include "src/tint/utils/rtti/switch.h"
 #include "src/tint/utils/text/text_style.h"
 
+#define TINT_CHECK_ERRORS()           \
+    do {                              \
+        if (diag_.ContainsErrors()) { \
+            return;                   \
+        }                             \
+    } while (false)
+
 namespace tint::core::ir::validator {
 namespace {
 
@@ -174,10 +181,16 @@ void Structural::Validate() {
     CheckStageRestrictedInstructions();
 }
 
+void Structural::QueueTasks(std::function<void()> begin,
+                            std::function<void()> mid,
+                            std::function<void()> end) {
+    tasks_.Push(end);
+    tasks_.Push(mid);
+    tasks_.Push(begin);
+}
+
 void Structural::CheckForRecursion() {
-    if (diag_.ContainsErrors()) {
-        return;
-    }
+    TINT_CHECK_ERRORS();
 
     ReferencedFunctions<const Module> referenced_functions(ir_);
     for (auto& func : ir_.functions) {
@@ -191,9 +204,7 @@ void Structural::CheckForRecursion() {
 }
 
 void Structural::CheckForOrphanedInstructions() {
-    if (diag_.ContainsErrors()) {
-        return;
-    }
+    TINT_CHECK_ERRORS();
 
     // Check for orphaned instructions.
     for (auto* inst : ir_.Instructions()) {
@@ -204,9 +215,7 @@ void Structural::CheckForOrphanedInstructions() {
 }
 
 void Structural::CheckStageRestrictedInstructions() {
-    if (diag_.ContainsErrors()) {
-        return;
-    }
+    TINT_CHECK_ERRORS();
 
     // Check for instructions being used in stages that do not support them.
     for (const auto& i : stage_restricted_instructions_) {
@@ -230,27 +239,29 @@ void Structural::CheckStageRestrictedInstructions() {
 }
 
 void Structural::RunStructuralSoundnessChecks() {
-    scope_stack_.Push();
-    TINT_DEFER({
-        scope_stack_.Pop();
-        TINT_ASSERT(scope_stack_.IsEmpty());
-        TINT_ASSERT(tasks_.IsEmpty());
-        TINT_ASSERT(control_stack_.IsEmpty());
-        TINT_ASSERT(block_stack_.IsEmpty());
-    });
-    CheckRootBlock(ir_.root_block);
+    {
+        scope_stack_.Push();
+        TINT_DEFER(scope_stack_.Pop());
 
-    for (auto& func : ir_.functions) {
-        if (!all_functions_.Add(func)) {
-            AddError(func) << "function " << NameOf(func) << " added to module multiple times";
+        CheckRootBlock(ir_.root_block);
+
+        for (auto& func : ir_.functions) {
+            if (!all_functions_.Add(func)) {
+                AddError(func) << "function " << NameOf(func) << " added to module multiple times";
+            }
+            scope_stack_.Add(func);
         }
-        scope_stack_.Add(func);
+
+        for (auto& func : ir_.functions) {
+            block_to_function_.Add(func->Block(), func);
+            CheckFunction(func);
+        }
     }
 
-    for (auto& func : ir_.functions) {
-        block_to_function_.Add(func->Block(), func);
-        CheckFunction(func);
-    }
+    TINT_ASSERT(scope_stack_.IsEmpty());
+    TINT_ASSERT(tasks_.IsEmpty());
+    TINT_ASSERT(control_stack_.IsEmpty());
+    TINT_ASSERT(block_stack_.IsEmpty());
 }
 
 diag::Diagnostic& Structural::AddError(const Instruction* inst) {
@@ -576,6 +587,15 @@ bool Structural::CheckOperand(const Instruction* inst, size_t idx) {
     if (DAWN_UNLIKELY(!operand->Alive())) {
         AddError(inst, idx) << "operand is not alive";
         return false;
+    }
+
+    if (operand->Type() && !operand->Type()->Is<core::type::MemoryView>()) {
+        if (operand->Type()->Size() > tint::internal_limits::kMaxTemporaryStorageSize) {
+            AddError(inst, idx) << "operand size (" << operand->Type()->Size()
+                                << ") exceeds maximum allowed ("
+                                << tint::internal_limits::kMaxTemporaryStorageSize << ")";
+            return false;
+        }
     }
 
     if (DAWN_UNLIKELY(operand->Is<Constant>() &&
@@ -1919,8 +1939,7 @@ void Structural::ProcessTasks() {
 }
 
 void Structural::QueueBlock(const Block* blk) {
-    tasks_.Push([this] { EndBlock(); });
-    tasks_.Push([this, blk] { BeginBlock(blk); });
+    QueueTasks([this, blk] { BeginBlock(blk); }, [] {}, [this] { EndBlock(); });
 }
 
 void Structural::BeginBlock(const Block* blk) {
@@ -1979,10 +1998,11 @@ void Structural::EndBlock() {
 }
 
 void Structural::QueueInstructions(const Instruction* inst) {
-    if (diag_.ContainsErrors()) {
-        return;
-    }
+    TINT_CHECK_ERRORS();
 
+    // Note, the ordering here is very specific. The `CheckInstruction` will push both more control
+    // blocks but also result validation. So, you can change the ordering of the tasks if you change
+    // the ordering of these calls.
     tasks_.Push([this, inst] {
         // Tasks are processed LIFO, so push the next instruction to the stack before checking the
         // current instruction, which may need to add more blocks to the stack itself.
@@ -2751,18 +2771,26 @@ void Structural::CheckIf(const If* if_) {
         }
         if (constexpr_if->False()->IsEmpty()) {
             AddError(constexpr_if) << "constexpr_if must have a false block";
+        } else if (!constexpr_if->False()->Terminator() ||
+                   !constexpr_if->False()->Terminator()->Is<core::ir::ExitIf>()) {
+            AddError(constexpr_if->False())
+                << "constexpr_if false block terminator must be an exit_if";
+        }
+        if (!constexpr_if->True()->Terminator() ||
+            !constexpr_if->True()->Terminator()->Is<core::ir::ExitIf>()) {
+            AddError(constexpr_if->True())
+                << "constexpr_if true block terminator must be an exit_if";
         }
     }
 
-    tasks_.Push([this] { control_stack_.Pop(); });
-
-    if (!if_->False()->IsEmpty()) {
-        QueueBlock(if_->False());
-    }
-
-    QueueBlock(if_->True());
-
-    tasks_.Push([this, if_] { control_stack_.Push(if_); });
+    QueueTasks([this, if_] { control_stack_.Push(if_); },
+               [this, if_] {
+                   if (!if_->False()->IsEmpty()) {
+                       QueueBlock(if_->False());
+                   }
+                   QueueBlock(if_->True());
+               },
+               [this] { control_stack_.Pop(); });
 }
 
 void Structural::CheckLoop(const Loop* l) {
@@ -2780,40 +2808,55 @@ void Structural::CheckLoop(const Loop* l) {
         }
     }
 
-    // Note: Tasks are queued in reverse order of their execution
-    tasks_.Push([this] { control_stack_.Pop(); });
-    if (!l->Initializer()->IsEmpty()) {
-        tasks_.Push([this] { EndBlock(); });
-    }
-    tasks_.Push([this] { EndBlock(); });
-    if (!l->Continuing()->IsEmpty()) {
-        tasks_.Push([this, l] {
-            if (!l->Continuing()->Terminator()->IsAnyOf<NextIteration, BreakIf>()) {
-                AddError(l->Continuing())
-                    << "loop continuing terminator can only be next_iteration or break_if";
-            }
-            EndBlock();
-        });
+    if (l->Continuing()->IsEmpty()) {
+        if (!l->Continuing()->Params().IsEmpty()) {
+            AddError(l) << "loop continuing block has parameters but is empty";
+        }
+    } else if (!l->Continuing()->Terminator()->IsAnyOf<NextIteration, BreakIf>()) {
+        AddError(l->Continuing())
+            << "loop continuing terminator can only be next_iteration or break_if";
     }
 
     // ⎡Initializer              ⎤
     // ⎢    ⎡Body               ⎤⎥
     // ⎣    ⎣    [Continuing ]  ⎦⎦
-
-    if (!l->Continuing()->IsEmpty()) {
-        tasks_.Push([this, l] { BeginBlock(l->Continuing()); });
-    } else if (!l->Continuing()->Params().IsEmpty()) {
-        AddError(l) << "loop continuing block has parameters but is empty";
-    }
-
-    tasks_.Push([this, l] {
-        CheckLoopBody(l);
-        BeginBlock(l->Body());
-    });
-    if (!l->Initializer()->IsEmpty()) {
-        tasks_.Push([this, l] { BeginBlock(l->Initializer()); });
-    }
-    tasks_.Push([this, l] { control_stack_.Push(l); });
+    QueueTasks([this, l] { control_stack_.Push(l); },
+               [this, l] {
+                   QueueTasks(
+                       [this, l] {
+                           if (!l->Initializer()->IsEmpty()) {
+                               BeginBlock(l->Initializer());
+                           }
+                       },
+                       [this, l] {
+                           QueueTasks(
+                               [this, l] {
+                                   CheckLoopBody(l);
+                                   BeginBlock(l->Body());
+                               },
+                               [this, l] {
+                                   QueueTasks(
+                                       [this, l] {
+                                           if (!l->Continuing()->IsEmpty()) {
+                                               BeginBlock(l->Continuing());
+                                           }
+                                       },
+                                       [] {},
+                                       [this, l] {
+                                           if (!l->Continuing()->IsEmpty()) {
+                                               EndBlock();
+                                           }
+                                       });
+                               },
+                               [this] { EndBlock(); });
+                       },
+                       [this, l] {
+                           if (!l->Initializer()->IsEmpty()) {
+                               EndBlock();
+                           }
+                       });
+               },
+               [this] { control_stack_.Pop(); });
 }
 
 void Structural::CheckLoopBody(const Loop* loop) {
@@ -2829,19 +2872,19 @@ void Structural::CheckSwitch(const Switch* s) {
     CheckResults(s);
     CheckOperands(s, Switch::kNumOperands);
 
-    tasks_.Push([this] { control_stack_.Pop(); });
-
-    for (auto& cse : s->Cases()) {
-        if (cse.selectors.IsEmpty()) {
-            AddError(s) << "case does not have any selectors";
-        }
-        if (cse.block->Is<core::ir::MultiInBlock>()) {
-            AddError(s) << "case block must be a block";
-        }
-        QueueBlock(cse.block);
-    }
-
-    tasks_.Push([this, s] { control_stack_.Push(s); });
+    QueueTasks([this, s] { control_stack_.Push(s); },
+               [this, s] {
+                   for (auto& cse : s->Cases()) {
+                       if (cse.selectors.IsEmpty()) {
+                           AddError(s) << "case does not have any selectors";
+                       }
+                       if (cse.block->Is<core::ir::MultiInBlock>()) {
+                           AddError(s) << "case block must be a block";
+                       }
+                       QueueBlock(cse.block);
+                   }
+               },
+               [this] { control_stack_.Pop(); });
 }
 
 void Structural::CheckSwizzle(const Swizzle* s) {

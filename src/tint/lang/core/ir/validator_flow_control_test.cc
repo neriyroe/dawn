@@ -327,6 +327,71 @@ TEST_F(IR_ValidatorTest, ConstExprIf_InvalidResultType) {
                 testing::HasSubstr("error: constexpr_if: constexpr_if result type must be 'bool'"));
 }
 
+TEST_F(IR_ValidatorTest, ConstExprIf_TrueInvalidTerminator) {
+    // %my_func = func():void {
+    //   $B1: {
+    //     %2:bool = constexpr_if true [t: $B2, f: $B3] {  # constexpr_if_1
+    //       $B2: {  # true
+    //         ret
+    //       }
+    //       $B3: {  # false
+    //         exit_if false  # constexpr_if_1
+    //       }
+    //     }
+    //     ret
+    //   }
+    // }
+    auto* f = b.Function("my_func", ty.void_());
+    auto* if_ = b.ConstExprIf(true);
+    if_->True()->Append(b.Return(f));
+    if_->False()->Append(b.ExitIf(if_, false));
+
+    auto* r1 = b.InstructionResult(ty.bool_());
+    if_->SetResults(Vector{r1});
+
+    auto sb = b.Append(f->Block());
+    sb.Append(if_);
+    sb.Return(f);
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr("error: constexpr_if true block terminator must be an exit_if"));
+}
+
+TEST_F(IR_ValidatorTest, ConstExprIf_FalseInvalidTerminator) {
+    // %my_func = func():void {
+    //   $B1: {
+    //     %2:bool = constexpr_if true [t: $B2, f: $B3] {  # constexpr_if_1
+    //       $B2: {  # true
+    //         exit_if true  # constexpr_if_1
+    //       }
+    //       $B3: {  # false
+    //         ret
+    //       }
+    //     }
+    //     ret
+    //   }
+    // }
+    auto* f = b.Function("my_func", ty.void_());
+    auto* if_ = b.ConstExprIf(true);
+    if_->True()->Append(b.ExitIf(if_, true));
+    if_->False()->Append(b.Return(f));
+
+    auto* r1 = b.InstructionResult(ty.bool_());
+    if_->SetResults(Vector{r1});
+
+    auto sb = b.Append(f->Block());
+    sb.Append(if_);
+    sb.Return(f);
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(
+        res.Failure().reason,
+        testing::HasSubstr("error: constexpr_if false block terminator must be an exit_if"));
+}
+
 TEST_F(IR_ValidatorTest, If_TrueMultiInBlock) {
     auto* f = b.Function("my_func", ty.void_());
 
@@ -2628,8 +2693,7 @@ TEST_F(IR_ValidatorTest, Loop_ContinuingWithoutContinue) {
     loop->Body()->Append(b.Let("let", b.Constant(u32(1u))));
     loop->Body()->Append(b.Return(f));
     b.Append(loop->Continuing(), [&] {
-        auto* add = b.Add(1_u, 1_u);
-        add->Result()->SetType(ty.bool_());
+        b.Binary(BinaryOp::kAdd, ty.bool_(), 1_u, 1_u);
         b.NextIteration(loop);
     });
     f->Block()->Append(loop);

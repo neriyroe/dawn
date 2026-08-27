@@ -137,7 +137,6 @@ Checks:
   #- -cppcoreguidelines-avoid-non-const-global-variables
   #- -cppcoreguidelines-no-malloc
   #- -cppcoreguidelines-prefer-member-initializer
-  #- -google-readability-avoid-underscore-in-googletest-name
   #- -google-runtime-int
   #- -misc-unconventional-assign-operator
   #- -modernize-concat-nested-namespaces
@@ -176,6 +175,7 @@ Checks:
   - -readability-redundant-nested-if
 
   # P∞. Checks we're not really interested in re-enabling.
+  - -bugprone-throwing-static-initialization  # We don't have exceptions, so nothing throws
   # -ftrivial-auto-var-init = pattern (debug) or zero (release) is enabled across chrome build, which addresses uninitialized issues of POD variables.
   - -cppcoreguidelines-init-variables
   # - Appears unnecessary since we use hardened libc++.
@@ -189,12 +189,14 @@ Checks:
   - -cppcoreguidelines-rvalue-reference-param-not-moved  # We don't mind moving a value into a function for it to be dropped at the end.
   - -fuchsia-trailing-return  # Buggy: docs say this isn't supposed to trigger on lambdas, but it does.
   - -google-objc-global-variable-declaration  # Triggers when using GTest.
+  - -google-readability-avoid-underscore-in-googletest-name  # Used all the time in Tint. Doesn't add anything
   - -misc-redundant-expression  # In practice only triggers in macros and generated code.
   - -misc-unused-parameters  # Not really useful and can be handled by Clang if needed.
   - -modernize-redundant-void-arg  # Doesn't matter, triggers once on webgpu.h
   - -modernize-use-trailing-return-type  # We don't prefer trailing return types.
   - -readability-inconsistent-ifelse-braces  # Handled by clang-format instead.
   - -readability-redundant-lambda-parameter-list  # We don't prefer [] {} over []() {} for lambdas with no arguments.
+  - -readability-uppercase-literal-suffix  # Tint uses primarily lower case, so triggers a lot.
   - -readability-use-concise-preprocessor-directives  # We don't prefer #ifdef over #if defined.
   # - Zircon kernel code style checks.
   - -fuchsia-default-arguments-calls
@@ -238,7 +240,6 @@ Checks:
   - -readability-static-definition-in-anonymous-namespace
   - -readability-trailing-comma
   - -readability-trivial-switch
-  - -readability-uppercase-literal-suffix
   - -readability-use-anyofallof
   - -readability-use-std-min-max
 
@@ -307,6 +308,7 @@ Checks:
   - -google-readability-braces-around-statements                # readability-braces-around-statements
   - -google-readability-casting                                 # modernize-avoid-c-style-cast
   - -google-readability-function-size                           # readability-function-size
+  - -hicpp-uppercase-literal-suffix                             # readability-uppercase-literal-suffix
   - -llvm-else-after-return                                     # readability-else-after-return
   - -llvm-qualified-auto                                        # readability-qualified-auto
   - -performance-faster-string-find                             # performance-prefer-single-char-overloads

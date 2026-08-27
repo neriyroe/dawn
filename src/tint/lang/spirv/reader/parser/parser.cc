@@ -2544,6 +2544,9 @@ class Parser {
                 case spv::Op::OpGroupNonUniformAll:
                     EmitSubgroupBuiltin(inst, core::BuiltinFn::kSubgroupAll);
                     break;
+                case spv::Op::OpGroupNonUniformAllEqual:
+                    EmitSubgroupAllEqual(inst);
+                    break;
                 case spv::Op::OpGroupNonUniformAny:
                     EmitSubgroupBuiltin(inst, core::BuiltinFn::kSubgroupAny);
                     break;
@@ -2552,6 +2555,9 @@ class Parser {
                     break;
                 case spv::Op::OpGroupNonUniformBallot:
                     EmitSubgroupBuiltin(inst, core::BuiltinFn::kSubgroupBallot);
+                    break;
+                case spv::Op::OpGroupNonUniformBallotBitCount:
+                    TINT_CHECK_RESULT(EmitSubgroupBallotBitCount(inst));
                     break;
                 case spv::Op::OpGroupNonUniformBroadcastFirst:
                     EmitSubgroupBuiltin(inst, spirv::BuiltinFn::kGroupNonUniformBroadcastFirst);
@@ -2724,6 +2730,67 @@ class Parser {
     void EmitSubgroupBuiltin(spvtools::opt::Instruction& inst, core::BuiltinFn fn) {
         ValidateScope(inst);
         Emit(b_.Call(Type(inst.type_id()), fn, Args(inst, 3)), inst.result_id());
+    }
+
+    Result<SuccessType> EmitSubgroupBallotBitCount(spvtools::opt::Instruction& inst) {
+        ValidateScope(inst);
+
+        auto ballot_id = inst.GetSingleWordInOperand(2);
+        auto* ballot_inst = spirv_context_->get_def_use_mgr()->GetDef(ballot_id);
+        if (!ballot_inst || ballot_inst->opcode() != spv::Op::OpGroupNonUniformBallot) {
+            return Failure(
+                "OpGroupNonUniformBallotBitCount is only supported when Value is from "
+                "OpGroupNonUniformBallot");
+        }
+
+        auto group = inst.GetSingleWordInOperand(1);
+        auto group_op = static_cast<spv::GroupOperation>(group);
+
+        core::BuiltinFn fn = core::BuiltinFn::kNone;
+        switch (group_op) {
+            case spv::GroupOperation::Reduce:
+                fn = core::BuiltinFn::kSubgroupAdd;
+                break;
+            case spv::GroupOperation::InclusiveScan:
+                fn = core::BuiltinFn::kSubgroupInclusiveAdd;
+                break;
+            case spv::GroupOperation::ExclusiveScan:
+                fn = core::BuiltinFn::kSubgroupExclusiveAdd;
+                break;
+            default:
+                TINT_UNREACHABLE();
+        }
+
+        auto* pred_val = Value(ballot_inst->GetSingleWordInOperand(1));
+        auto* conv = b_.Convert<u32>(pred_val);
+        EmitWithoutSpvResult(conv);
+
+        Emit(b_.Call(Type(inst.type_id()), fn, conv), inst.result_id());
+        return Success;
+    }
+
+    void EmitSubgroupAllEqual(spvtools::opt::Instruction& inst) {
+        ValidateScope(inst);
+
+        auto* val = Value(inst.GetSingleWordInOperand(1));
+        auto* first = b_.Call<spirv::ir::BuiltinCall>(
+            val->Type(), spirv::BuiltinFn::kGroupNonUniformBroadcastFirst,
+            Vector{Value(inst.GetSingleWordInOperand(0)), val});
+        EmitWithoutSpvResult(first);
+
+        // If NaNs and INFs are supported in the future, this lowering will remain correct as long
+        // as floating-point equality comparisons use ordered-and-equal (OpFOrdEqual) semantics.
+        auto* eq = b_.Equal(val, first)->AsInstruction();
+        EmitWithoutSpvResult(eq);
+
+        core::ir::Value* eq_val = eq->Result();
+        if (val->Type()->Is<core::type::Vector>()) {
+            auto* all_call = b_.Call(ty_.bool_(), core::BuiltinFn::kAll, eq);
+            EmitWithoutSpvResult(all_call);
+            eq_val = all_call->Result();
+        }
+
+        Emit(b_.Call(ty_.bool_(), core::BuiltinFn::kSubgroupAll, eq_val), inst.result_id());
     }
 
     struct IfBranchValue {
@@ -3801,8 +3868,10 @@ class Parser {
         // unreachable.
         if (true_id == false_id) {
             auto* binary = b_.Binary(core::BinaryOp::kOr, cond->Type(), cond, b_.Constant(true));
-            EmitWithoutSpvResult(binary);
-            cond = binary->Result();
+            if (auto* res = binary->AsInstruction()) {
+                EmitWithoutSpvResult(res);
+            }
+            cond = binary;
         }
 
         auto* if_ = b_.If(cond);
@@ -4387,7 +4456,11 @@ class Parser {
         auto* lhs = Value(inst.GetSingleWordOperand(first_operand_idx));
         auto* rhs = Value(inst.GetSingleWordOperand(first_operand_idx + 1));
         auto* binary = b_.Binary(op, Type(inst.type_id()), lhs, rhs);
-        Emit(binary, inst.result_id());
+        if (auto* res = binary->AsInstruction()) {
+            Emit(res, inst.result_id());
+        } else {
+            AddValue(inst.result_id(), binary);
+        }
     }
 
     /// Emits the logical negation of the result of the given SPIR-V instruction.
@@ -4397,10 +4470,12 @@ class Parser {
         auto* lhs = Value(inst.GetSingleWordOperand(2));
         auto* rhs = Value(inst.GetSingleWordOperand(3));
         auto* binary = b_.Binary(op, Type(inst.type_id()), lhs, rhs);
-        EmitWithoutSpvResult(binary);
+        if (auto* res = binary->AsInstruction()) {
+            EmitWithoutSpvResult(res);
+        }
 
-        auto* res = b_.Not(binary);
-        Emit(res, inst.result_id());
+        auto* inv = b_.Not(binary);
+        Emit(inv, inst.result_id());
     }
 
     /// @param inst the SPIR-V instruction for OpCompositeExtract

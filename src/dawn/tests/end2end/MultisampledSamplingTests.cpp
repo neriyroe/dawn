@@ -245,7 +245,7 @@ TEST_P(MultisampledSamplingTest, SamplePositions) {
     wgpu::CommandBuffer commandBuffer = commandEncoder.Finish();
     queue.Submit(1, &commandBuffer);
 
-    std::array<float, 8> expectedData;
+    std::array<float, 8> expectedData{};
 
     expectedData = {1, 0, 0, 0, 0.7, 0, 0, 0};
     EXPECT_BUFFER_FLOAT_RANGE_EQ(expectedData.data(), outputBuffer, 0 * alignedResultSize, 8)
@@ -284,8 +284,9 @@ TEST_P(MultisampledSamplingTest, SamplePositions) {
 // Apple Silicon due to our workaround that introduces volatile instructions.
 // See https://crbug.com/533785363
 TEST_P(MultisampledSamplingTest, ImplicitDerivativeFromU32Div) {
-    // TODO(crbug.com/468061892): Fails on Windows 11/AMD RX 5500 XT w/ backend validation.
-    DAWN_SUPPRESS_TEST_IF(IsWindows11() && IsAMD() && IsD3D12() && IsBackendValidationEnabled());
+    // TODO(crbug.com/468061892): Fails on Windows 11 D3D12 (AMD w/ backend validation, NVIDIA).
+    DAWN_SUPPRESS_TEST_IF(IsWindows11() && IsD3D12() &&
+                          (IsAMD() && IsBackendValidationEnabled() || IsNvidia()));
 
     // Texture 256x256 with 2 mip levels.
     wgpu::TextureDescriptor texDesc;

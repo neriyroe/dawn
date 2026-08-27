@@ -363,17 +363,17 @@ deps = {
   },
 
   'third_party/angle': {
-    'url': '{chromium_git}/angle/angle@8d273b266600311193360dd7203ba6aea81a5433',
+    'url': '{chromium_git}/angle/angle@2c68772a0eb74c771e2b0b6c490869c0e98fc412',
     'condition': 'dawn_standalone',
   },
 
   'third_party/swiftshader': {
-    'url': '{swiftshader_git}/SwiftShader@516b76187972c378ae48b2b5b5a787c82de79df8',
+    'url': '{swiftshader_git}/SwiftShader@e8be468b3dc417bac831236cdfbf4e9d53b814d2',
     'condition': 'dawn_standalone',
   },
 
   'third_party/vulkan-deps': {
-    'url': '{chromium_git}/vulkan-deps@5bbb3eca69a212e2bb4fa28036ca7dabecaf6c6d',
+    'url': '{chromium_git}/vulkan-deps@f9dbdedb486023d84df3ea9c4368a570973165ae',
     'condition': 'dawn_standalone',
   },
 
@@ -383,12 +383,12 @@ deps = {
   },
 
   'third_party/spirv-headers/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/SPIRV-Headers@0d25db97cb9b8f725e4c95e4553001710e7fc39d',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/SPIRV-Headers@496543121ce6419f23d6fa5d7194ba66c36212d2',
     'condition': 'dawn_standalone',
   },
 
   'third_party/spirv-tools/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/SPIRV-Tools@47c74f488bad1136559f382ce99e8e52d7a392cd',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/SPIRV-Tools@b964f44901ad6396d3b46307ef1ce66eaef3bb83',
     'condition': 'dawn_standalone',
   },
 
@@ -398,7 +398,7 @@ deps = {
   },
 
   'third_party/vulkan-loader/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Loader@fd782b4fd6c58340b91c46ee435bdb330385ec04',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Loader@0104fa40a160c12cd329a59f6c99e8a54de26a4b',
     'condition': 'dawn_standalone',
   },
 
@@ -413,7 +413,7 @@ deps = {
   },
 
   'third_party/vulkan-validation-layers/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-ValidationLayers@c4e132b98dfc7c8a5fb7feb99069be68ede3ea28',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-ValidationLayers@c2e1c0ef87f34b39ccd943321faa2765bcff9319',
     'condition': 'dawn_standalone',
   },
 
@@ -428,7 +428,7 @@ deps = {
   },
 
   'third_party/directx-shader-compiler/src': {
-    'url': '{chromium_git}/external/github.com/microsoft/DirectXShaderCompiler@ecd150ebb088146d74d24a25116b22c610b0e777',
+    'url': '{chromium_git}/external/github.com/microsoft/DirectXShaderCompiler@3bac2476aeaf6d11b5d483ba8e077d7f888adab1',
   },
 
   'third_party/directx-headers/src': {
@@ -551,7 +551,7 @@ deps = {
 
   # Upstream webgpu.h headers for testing purposes
   'third_party/webgpu-headers/src': {
-    'url': '{chromium_git}/external/github.com/webgpu-native/webgpu-headers@01addc4ba8a2915a061b7095a6768b512071ab96',
+    'url': '{chromium_git}/external/github.com/webgpu-native/webgpu-headers@b5ff182caa90e53293f47939716281342c0812ba',
   },
 
   # Like the Node dependency, architectures are listed out explicitly instead of
