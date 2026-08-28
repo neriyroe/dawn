@@ -223,6 +223,17 @@ bool HasRayQuery() {
     return MutableGotRayQuery();
 }
 
+void RequestExtraDeviceFeatures(const VulkanExtraFeatures& wanted) {
+    VulkanExtraFeatures& asking = MutableWantExtraFeatures();
+    asking.shaderInt8 = asking.shaderInt8 || wanted.shaderInt8;
+    asking.scalarBlockLayout = asking.scalarBlockLayout || wanted.scalarBlockLayout;
+    asking.mutableDescriptorType = asking.mutableDescriptorType || wanted.mutableDescriptorType;
+}
+
+VulkanExtraFeatures GetExtraDeviceFeatures() {
+    return MutableGotExtraFeatures();
+}
+
 // Lock free: the pending serial is an atomic, and the completed one takes the queue's own mutex. Neither
 // wants the device guard, which a caller holding it across a submit would deadlock on.
 uint64_t GetPendingCommandSerial(WGPUDevice device) {

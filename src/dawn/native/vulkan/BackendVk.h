@@ -51,6 +51,10 @@ namespace dawn::native::vulkan {
 // See crbug.com/850881, crbug.com/863086, crbug.com/1465064, crbug.com/346990068
 inline constexpr uint32_t kRequiredVulkanVersion = VK_API_VERSION_1_1;
 
+// What the instance declares, as against the minimum it insists on. An SDK running its own passes on Dawn's
+// device calls core entry points of its own, and the version the instance names is what admits them.
+inline constexpr uint32_t kDeclaredVulkanVersion = VK_API_VERSION_1_3;
+
 enum class ICD : uint8_t {
     None,
     SwiftShader,

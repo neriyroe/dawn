@@ -92,6 +92,20 @@ DAWN_NATIVE_EXPORT bool HasTimelineSemaphores();
 DAWN_NATIVE_EXPORT void RequestRayQuery();
 DAWN_NATIVE_EXPORT bool HasRayQuery();
 
+// Device features an embedder's SDK needs that Dawn has no use for itself. Asked for by name rather than
+// as a chain: an SDK states these in the aggregate VkPhysicalDeviceVulkan1x structs, and Vulkan forbids
+// those sharing a pNext chain with the individual promoted ones Dawn already builds its device from.
+struct VulkanExtraFeatures {
+    bool shaderInt8 = false;
+    bool scalarBlockLayout = false;
+    bool mutableDescriptorType = false;
+};
+
+// The same ask-then-read-back as the two above: each is granted only where the driver both enables the
+// extension carrying it and advertises the feature, because one it does not fails device creation outright.
+DAWN_NATIVE_EXPORT void RequestExtraDeviceFeatures(const VulkanExtraFeatures& wanted);
+DAWN_NATIVE_EXPORT VulkanExtraFeatures GetExtraDeviceFeatures();
+
 // Dawn's own place in the queue's timeline, for an embedder whose resources a frame in flight still names.
 // The pending serial is the one the work being recorded now will be submitted under; the completed one is
 // the last that has retired, so anything stamped at or below it is nobody's any more. Zero off Vulkan.

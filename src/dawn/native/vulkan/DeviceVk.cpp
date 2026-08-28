@@ -737,6 +737,7 @@ ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysica
         if (mDeviceInfo.shaderFloat16Int8Features.shaderInt8 == VK_TRUE) {
             usedKnobs.shaderFloat16Int8Features.shaderInt8 = VK_TRUE;
             if (!shaderFloat16Int8FeaturesAdded) {
+                shaderFloat16Int8FeaturesAdded = true;
                 featuresChain.Add(
                     &usedKnobs.shaderFloat16Int8Features,
                     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR);
@@ -754,6 +755,61 @@ ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysica
     if (HasFeature(Feature::ChromiumExperimentalSamplingResourceTable)) {
         usedKnobs.descriptorIndexingFeatures = mDeviceInfo.descriptorIndexingFeatures;
         featuresChain.Add(&usedKnobs.descriptorIndexingFeatures);
+    }
+
+    // What an embedder's SDK asked for. Each is granted only where the extension carrying it made the list
+    // above and the driver advertises the feature, because one it does not fails vkCreateDevice outright.
+    VkPhysicalDeviceScalarBlockLayoutFeatures scalarBlockLayoutFeatures = {};
+    VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT mutableDescriptorTypeFeatures = {};
+    {
+        const VulkanExtraFeatures& wanted = MutableWantExtraFeatures();
+        VulkanExtraFeatures granted = {};
+
+        // Asked of the driver here rather than read from mDeviceInfo, which gathers only what Dawn itself
+        // has a knob for and neither of these two is.
+        VkPhysicalDeviceScalarBlockLayoutFeatures hasScalar = {};
+        hasScalar.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES;
+        VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT hasMutable = {};
+        hasMutable.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT;
+        hasScalar.pNext = &hasMutable;
+        VkPhysicalDeviceFeatures2 advertised = {};
+        advertised.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        advertised.pNext = &hasScalar;
+        fn.GetPhysicalDeviceFeatures2(vkPhysicalDevice, &advertised);
+
+        if (wanted.shaderInt8 && enabling(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME) &&
+            mDeviceInfo.shaderFloat16Int8Features.shaderInt8 == VK_TRUE) {
+            usedKnobs.shaderFloat16Int8Features.shaderInt8 = VK_TRUE;
+            if (!shaderFloat16Int8FeaturesAdded) {
+                shaderFloat16Int8FeaturesAdded = true;
+                featuresChain.Add(
+                    &usedKnobs.shaderFloat16Int8Features,
+                    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR);
+            }
+            granted.shaderInt8 = true;
+        }
+
+        if (wanted.scalarBlockLayout && enabling(VK_EXT_SCALAR_BLOCK_LAYOUT_EXTENSION_NAME) &&
+            hasScalar.scalarBlockLayout == VK_TRUE) {
+            scalarBlockLayoutFeatures.sType =
+                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES;
+            scalarBlockLayoutFeatures.scalarBlockLayout = VK_TRUE;
+            featuresChain.Add(&scalarBlockLayoutFeatures,
+                              VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES);
+            granted.scalarBlockLayout = true;
+        }
+
+        if (wanted.mutableDescriptorType && enabling(VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME) &&
+            hasMutable.mutableDescriptorType == VK_TRUE) {
+            mutableDescriptorTypeFeatures.sType =
+                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT;
+            mutableDescriptorTypeFeatures.mutableDescriptorType = VK_TRUE;
+            featuresChain.Add(&mutableDescriptorTypeFeatures,
+                              VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT);
+            granted.mutableDescriptorType = true;
+        }
+
+        MutableGotExtraFeatures() = granted;
     }
 
     // Determine what Vulkan render pass method will be used for the device.

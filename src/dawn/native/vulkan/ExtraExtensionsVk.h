@@ -9,6 +9,9 @@
 
 #include "src/dawn/common/vulkan_platform.h"
 
+// Must be after vulkan_platform, whose non-dispatchable handles this one's includes would otherwise settle.
+#include "dawn/native/VulkanBackend.h"
+
 namespace dawn::native::vulkan {
 
 // Inline so the storage is one per component with no source-list change; registration happens on the
@@ -53,6 +56,18 @@ inline bool& MutableWantRayQuery() {
 
 inline bool& MutableGotRayQuery() {
     static bool granted = false;
+    return granted;
+}
+
+// Features an embedder's SDK needs, the same way: wanted by name, granted only where the driver has them.
+// Dawn asks for none of these itself -- they belong to whatever runs its own passes on Dawn's device.
+inline VulkanExtraFeatures& MutableWantExtraFeatures() {
+    static VulkanExtraFeatures wanted;
+    return wanted;
+}
+
+inline VulkanExtraFeatures& MutableGotExtraFeatures() {
+    static VulkanExtraFeatures granted;
     return granted;
 }
 
