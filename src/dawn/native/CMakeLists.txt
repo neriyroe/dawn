@@ -573,6 +573,7 @@ if (DAWN_ENABLE_METAL)
         )
     endif()
     list(APPEND conditional_private_platform_depends
+        "-framework CoreGraphics"
         "-framework Foundation"
         "-framework IOSurface"
         "-framework QuartzCore"
