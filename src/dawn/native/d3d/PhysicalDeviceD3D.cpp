@@ -82,6 +82,9 @@ ResultOrError<PhysicalDeviceSurfaceCapabilities> PhysicalDevice::GetSurfaceCapab
         wgpu::CompositeAlphaMode::Premultiplied,
     };
 
+    // TODO(hdr-windows): set extendedToneMapping once SwapChainD3D honours SurfaceColorManagement.
+    // Until then an extended request is a clean validation error rather than a silently clamped frame.
+
     return capabilities;
 }
 

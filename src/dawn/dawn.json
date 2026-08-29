@@ -4064,7 +4064,7 @@
     "surface color management": {
         "category": "structure",
         "chained": "in",
-        "chain roots": ["surface descriptor"],
+        "chain roots": ["surface descriptor", "surface configuration"],
         "members": [
             {"name": "color space", "type": "predefined color space"},
             {"name": "tone mapping mode", "type": "tone mapping mode"}

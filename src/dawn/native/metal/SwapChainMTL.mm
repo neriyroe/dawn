@@ -27,6 +27,7 @@
 
 #include "src/dawn/native/metal/SwapChainMTL.h"
 
+#import <CoreGraphics/CoreGraphics.h>
 #import <QuartzCore/CAMetalLayer.h>
 
 #include "src/dawn/native/ChainUtils.h"
@@ -81,6 +82,25 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
 
     // TODO(dawn:2320): Check that this behaves as expected by the spec
     [*mLayer setOpaque:(GetAlphaMode() != wgpu::CompositeAlphaMode::Premultiplied)];
+
+    // Extended range. Both properties are set either way rather than only on the way in: the layer belongs
+    // to the window and outlives this swapchain, so a configure back to standard has to put it back.
+    if (GetToneMappingMode() == wgpu::ToneMappingMode::Extended) {
+        const CFStringRef named = GetColorSpace() == wgpu::PredefinedColorSpace::DisplayP3
+                                      ? kCGColorSpaceExtendedDisplayP3
+                                      : kCGColorSpaceExtendedSRGB;
+        CGColorSpaceRef space = CGColorSpaceCreateWithName(named);
+        [*mLayer setColorspace:space];
+        CGColorSpaceRelease(space);
+        if (@available(macOS 10.11, iOS 16.0, *)) {
+            [*mLayer setWantsExtendedDynamicRangeContent:YES];
+        }
+    } else {
+        [*mLayer setColorspace:nil];
+        if (@available(macOS 10.11, iOS 16.0, *)) {
+            [*mLayer setWantsExtendedDynamicRangeContent:NO];
+        }
+    }
 
 #if DAWN_PLATFORM_IS(MACOS)
     [*mLayer setDisplaySyncEnabled:(GetPresentMode() != wgpu::PresentMode::Immediate)];

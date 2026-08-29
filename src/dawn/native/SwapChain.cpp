@@ -65,6 +65,16 @@ SwapChainBase::SwapChainBase(DeviceBase* device,
       mPresentMode(config->presentMode),
       mAlphaMode(config->alphaMode),
       mSurface(surface) {
+    // Unpacking here rather than threading two more arguments through every backend's constructor: the
+    // configuration has already been validated, so a chained struct on it is one the adapter can honour.
+    for (const auto* chain = static_cast<const ChainedStruct*>(config->nextInChain); chain != nullptr;
+         chain = chain->nextInChain) {
+        if (chain->sType == wgpu::SType::SurfaceColorManagement) {
+            const auto* colour = static_cast<const SurfaceColorManagement*>(chain);
+            mColorSpace = colour->colorSpace;
+            mToneMappingMode = colour->toneMappingMode;
+        }
+    }
     for (wgpu::TextureFormat viewFormat : config->viewFormats) {
         if (viewFormat == config->format) {
             // Skip our own format, like texture creations does.
@@ -174,6 +184,14 @@ wgpu::TextureUsage SwapChainBase::GetUsage() const {
 
 wgpu::PresentMode SwapChainBase::GetPresentMode() const {
     return mPresentMode;
+}
+
+wgpu::PredefinedColorSpace SwapChainBase::GetColorSpace() const {
+    return mColorSpace;
+}
+
+wgpu::ToneMappingMode SwapChainBase::GetToneMappingMode() const {
+    return mToneMappingMode;
 }
 
 wgpu::CompositeAlphaMode SwapChainBase::GetAlphaMode() const {

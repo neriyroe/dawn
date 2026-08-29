@@ -295,6 +295,18 @@ MaybeError SwapChain::InitializeSwapChainFromScratch() {
 
     DAWN_TRY(CheckHRESULT(swapChain1.As(&mDXGISwapChain), "Gettting IDXGISwapChain1"));
 
+    // TODO(hdr-windows): honour SurfaceColorManagement here. The shape, for whoever picks this up:
+    //   - PhysicalDeviceD3D sets capabilities.extendedToneMapping, which is what lets a page ask at all.
+    //   - Extended + sRGB-linear means scRGB: DXGI_FORMAT_R16G16B16A16_FLOAT with
+    //     mDXGISwapChain->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709), checking
+    //     CheckColorSpaceSupport first. scRGB is LINEAR light where 1.0 is 80 nits, not the encoded,
+    //     white-relative space the Apple path uses -- so the engine reports nitsPerWhite 80 and sets the
+    //     shader's hdrMode lane to 1, which is what makes infHdrOut hand back linear instead of encoded.
+    //   - HDR10 (RGB10A2 + G2084_P2020, PQ) is deliberately out of scope: the shared display shader has
+    //     no PQ curve, and adding one is a second encode path rather than a flag.
+    //   - The headroom the engine asks for comes from IDXGIOutput6::GetDesc1 MaxLuminance over the
+    //     DISPLAYCONFIG_SDR_WHITE_LEVEL of the output the window is on, not from Dawn.
+
     // With the waitable object the app absorbs the present queue's wait itself, so queue no more
     // frames than there are back buffers to rotate through.
     if (mConfig.swapChainFlags & DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT) {

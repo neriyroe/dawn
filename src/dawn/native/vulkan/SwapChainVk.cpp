@@ -126,6 +126,13 @@ SwapChain::~SwapChain() = default;
 
 // Note that when we need to re-create the swapchain because it is out of date,
 // previousSwapChain can be set to `this`.
+// TODO(hdr-vulkan): honour SurfaceColorManagement. The shape, for whoever picks this up:
+//   - Enable VK_EXT_swapchain_colorspace on the instance, then look for the pair
+//     (VK_FORMAT_R16G16B16A16_SFLOAT, VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT) in the surface formats,
+//     and only then set capabilities.extendedToneMapping in PhysicalDeviceVk.
+//   - LINEAR_EXT is scRGB and wants linear light, so the engine reports nitsPerWhite 80 and sets the
+//     shader's hdrMode lane to 1; a driver offering NONLINEAR_EXT instead keeps mode 0 and the encode.
+//   - Android takes the same path, with Display.getHdrSdrRatio as the headroom the engine asks for.
 MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
     Device* device = ToBackend(GetDevice());
     PhysicalDevice* physicalDevice = ToBackend(GetDevice()->GetPhysicalDevice());

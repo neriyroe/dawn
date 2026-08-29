@@ -54,6 +54,10 @@ struct PhysicalDeviceSurfaceCapabilities {
     std::vector<wgpu::TextureFormat> formats;
     std::vector<wgpu::PresentMode> presentModes;
     std::vector<wgpu::CompositeAlphaMode> alphaModes;
+    // Whether the backend can hand the compositor values past white. False keeps every backend that has
+    // not implemented it compiling, and turns an extended request into a validation error rather than a
+    // silently clamped frame.
+    bool extendedToneMapping = false;
 };
 
 struct FeatureValidationResult {

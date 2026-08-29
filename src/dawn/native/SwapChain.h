@@ -91,6 +91,10 @@ class SwapChainBase : public RefCounted {
     wgpu::TextureUsage GetUsage() const;
     wgpu::PresentMode GetPresentMode() const;
     wgpu::CompositeAlphaMode GetAlphaMode() const;
+    // What the page asked the compositor for. Standard on sRGB unless a configuration chained otherwise,
+    // which is what every backend that has not implemented colour management keeps seeing.
+    wgpu::PredefinedColorSpace GetColorSpace() const;
+    wgpu::ToneMappingMode GetToneMappingMode() const;
     Surface* GetSurface() const;
     bool IsAttached() const;
     wgpu::BackendType GetBackendType() const;
@@ -120,6 +124,8 @@ class SwapChainBase : public RefCounted {
     // descriptor returned by GetSwapChainBaseTextureDescriptor():
     std::vector<wgpu::TextureFormat> mViewFormats = {};
     wgpu::CompositeAlphaMode mAlphaMode = wgpu::CompositeAlphaMode::Auto;
+    wgpu::PredefinedColorSpace mColorSpace = wgpu::PredefinedColorSpace::SRGB;
+    wgpu::ToneMappingMode mToneMappingMode = wgpu::ToneMappingMode::Standard;
 
     // This is a weak reference to the surface. If the surface is destroyed it will call
     // DetachFromSurface and mSurface will be updated to nullptr.

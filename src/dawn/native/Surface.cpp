@@ -105,8 +105,12 @@ ResultOrError<UnpackedPtr<SurfaceDescriptor>> ValidateSurfaceDescriptor(
     UnpackedPtr<SurfaceDescriptor> descriptor;
     DAWN_TRY_ASSIGN(descriptor, ValidateAndUnpack(rawDescriptor));
 
+    // Colour management is asked for at Configure, not here, mirroring where GPUCanvasContext.configure
+    // puts colorSpace and toneMapping. Chaining it onto the descriptor names it a surface's fixed property,
+    // which it is not: the page may change its mind about range for the same window.
     if (descriptor.Has<SurfaceColorManagement>()) {
-        return DAWN_VALIDATION_ERROR("SurfaceColorManagement unsupported.");
+        return DAWN_VALIDATION_ERROR(
+            "SurfaceColorManagement belongs on the surface configuration, not the descriptor.");
     }
 
     wgpu::SType type;
@@ -248,6 +252,13 @@ MaybeError ValidateSurfaceConfiguration(DeviceBase* device,
     DAWN_INVALID_IF(alphaModeIt == capabilities.alphaModes.end(),
                     "Alpha mode (%s) is not supported by the adapter (%s) for this surface.",
                     config->alphaMode, config->device->GetAdapter());
+
+    if (auto* colour = unpacked.Get<SurfaceColorManagement>()) {
+        DAWN_INVALID_IF(colour->toneMappingMode == wgpu::ToneMappingMode::Extended &&
+                            !capabilities.extendedToneMapping,
+                        "Extended tone mapping is not supported by the adapter (%s) for this surface.",
+                        config->device->GetAdapter());
+    }
 
     // Validate the surface would produce valid textures.
     TextureDescriptor textureDesc;
