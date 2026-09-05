@@ -105,6 +105,8 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
 #if DAWN_PLATFORM_IS(MACOS)
     [*mLayer setDisplaySyncEnabled:(GetPresentMode() != wgpu::PresentMode::Immediate)];
 #endif  // DAWN_PLATFORM_IS(MACOS)
+    // Three drawables, the depth the other backends queue at: one on screen, one queued, one being drawn.
+    [*mLayer setMaximumDrawableCount:3];
 
     // There is no way to control Fifo vs. Mailbox in Metal.
 

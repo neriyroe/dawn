@@ -46,8 +46,10 @@ namespace {
 uint32_t PresentModeToBufferCount(wgpu::PresentMode mode) {
     switch (mode) {
         case wgpu::PresentMode::Immediate:
-        case wgpu::PresentMode::Fifo:
             return 2;
+        // Three, so one can be on screen, one queued and one being drawn. With two, the frame-latency
+        // waitable below allows a single queued frame and CPU and GPU serialise inside one refresh.
+        case wgpu::PresentMode::Fifo:
         case wgpu::PresentMode::Mailbox:
             return 3;
         case wgpu::PresentMode::FifoRelaxed:

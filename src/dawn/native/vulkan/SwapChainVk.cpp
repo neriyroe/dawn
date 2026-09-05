@@ -72,10 +72,12 @@ VkPresentModeKHR ToVulkanPresentMode(wgpu::PresentMode mode) {
 
 uint32_t MinImageCountForPresentMode(VkPresentModeKHR mode) {
     switch (mode) {
-        case VK_PRESENT_MODE_FIFO_KHR:
-        case VK_PRESENT_MODE_FIFO_RELAXED_KHR:
         case VK_PRESENT_MODE_IMMEDIATE_KHR:
             return 2;
+        // Three for a paced chain: the acquire blocks until the engine hands an image back, and with two
+        // that is only after the last present flipped, which serialises CPU and GPU inside one refresh.
+        case VK_PRESENT_MODE_FIFO_KHR:
+        case VK_PRESENT_MODE_FIFO_RELAXED_KHR:
         case VK_PRESENT_MODE_MAILBOX_KHR:
             return 3;
         default:
