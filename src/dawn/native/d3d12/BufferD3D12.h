@@ -93,6 +93,10 @@ class Buffer final : public BufferBase {
 
     MaybeError MapInternal(bool isWrite, size_t offset, size_t size, const char* contextInfo);
 
+    MaybeError UploadData(uint64_t bufferOffset, Span<const std::byte> data) override;
+    bool IsGPUUploadHeap() const;
+    MaybeError MapGPUUpload();
+
     MaybeError InitializeToZero(CommandRecordingContext* commandContext);
     MaybeError ClearBuffer(CommandRecordingContext* commandContext,
                            uint8_t clearValue,
@@ -106,6 +110,10 @@ class Buffer final : public BufferBase {
 
     D3D12_RANGE mWrittenMappedRange = {0, 0};
     Span<std::byte> mMappedData;
+
+    // A GPU upload buffer is mapped for its lifetime, but only once a second write proves it dynamic.
+    Span<std::byte> mGPUUploadData;
+    uint32_t mUploads = 0;
 
     std::unique_ptr<Heap> mHostMappedHeap;
     wgpu::Callback mHostMappedDisposeCallback = nullptr;

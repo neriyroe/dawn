@@ -110,13 +110,20 @@ size_t D3D12BufferSizeAlignment(wgpu::BufferUsage usage) {
     return 1;
 }
 
+/// True for a buffer the CPU fills and the GPU only ever reads, which is what a GPU upload heap is for.
+bool IsGPUUploadCandidate(wgpu::BufferUsage bufferUsage) {
+    return (bufferUsage & wgpu::BufferUsage::CopyDst) &&
+           IsSubset(bufferUsage, kReadOnlyBufferUsages | wgpu::BufferUsage::CopyDst);
+}
+
 ResourceHeapKind GetResourceHeapKind(wgpu::BufferUsage bufferUsage,
                                      uint32_t resourceHeapTier,
                                      bool isCacheCoherentUMA,
-                                     bool useGPUUploadHeap) {
+                                     bool useGPUUploadHeap,
+                                     bool useGPUUploadHeapForStaging) {
     if (bufferUsage == (wgpu::BufferUsage::MapWrite | wgpu::BufferUsage::CopySrc) ||
         bufferUsage == wgpu::BufferUsage::MapWrite) {
-        if (useGPUUploadHeap) {
+        if (useGPUUploadHeapForStaging) {
             return ResourceHeapKind::GPUUpload_OnlyBuffers;
         }
         if (resourceHeapTier >= 2) {
@@ -144,6 +151,11 @@ ResourceHeapKind GetResourceHeapKind(wgpu::BufferUsage bufferUsage,
         } else {
             return ResourceHeapKind::Custom_WriteCombine_OnlyBuffers;
         }
+    }
+
+    // Resizable BAR: the CPU writes these straight into VRAM, so writeBuffer needs no staging copy.
+    if (useGPUUploadHeap && IsGPUUploadCandidate(bufferUsage)) {
+        return ResourceHeapKind::GPUUpload_OnlyBuffers;
     }
 
     if (resourceHeapTier >= 2) {
@@ -219,46 +231,48 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
     // and robust resource initialization.
     resourceDescriptor.Flags = D3D12ResourceFlags(GetInternalUsage() | wgpu::BufferUsage::CopyDst);
 
-    ResourceHeapKind resourceHeapKind =
-        GetResourceHeapKind(GetInternalUsage(), ToBackend(GetDevice())->GetResourceHeapTier(),
-                            ToBackend(GetDevice())->GetDeviceInfo().isCacheCoherentUMA,
-                            GetDevice()->IsToggleEnabled(Toggle::D3D12UseGPUUploadHeap) &&
-                                GetDevice()->IsToggleEnabled(Toggle::D3D12UseGPUUploadHeapForStaging));
-    mLastState = D3D12_RESOURCE_STATE_COMMON;
-
-    switch (resourceHeapKind) {
-            // D3D12 requires buffers on the READBACK heap to have the
-            // D3D12_RESOURCE_STATE_COPY_DEST state
-        case ResourceHeapKind::Readback_AllBuffersAndTextures:
-        case ResourceHeapKind::Readback_OnlyBuffers: {
-            mLastState |= D3D12_RESOURCE_STATE_COPY_DEST;
-            mFixedResourceState = true;
-            break;
+    const bool useGPUUploadHeap = GetDevice()->IsToggleEnabled(Toggle::D3D12UseGPUUploadHeap);
+    ResourceHeapKind resourceHeapKind = GetResourceHeapKind(
+        GetInternalUsage(), ToBackend(GetDevice())->GetResourceHeapTier(),
+        ToBackend(GetDevice())->GetDeviceInfo().isCacheCoherentUMA, useGPUUploadHeap,
+        useGPUUploadHeap && GetDevice()->IsToggleEnabled(Toggle::D3D12UseGPUUploadHeapForStaging));
+    // The heap kind decides the state a buffer is born in and whether it may ever leave it.
+    auto adoptHeapKind = [this](ResourceHeapKind kind) {
+        mLastState = D3D12_RESOURCE_STATE_COMMON;
+        mFixedResourceState = false;
+        switch (kind) {
+                // D3D12 requires buffers on the READBACK heap to have the
+                // D3D12_RESOURCE_STATE_COPY_DEST state
+            case ResourceHeapKind::Readback_AllBuffersAndTextures:
+            case ResourceHeapKind::Readback_OnlyBuffers: {
+                mLastState |= D3D12_RESOURCE_STATE_COPY_DEST;
+                mFixedResourceState = true;
+                break;
+            }
+                // D3D12 requires buffers on the UPLOAD heap to have the
+                // D3D12_RESOURCE_STATE_GENERIC_READ state
+            case ResourceHeapKind::Upload_AllBuffersAndTextures:
+            case ResourceHeapKind::Upload_OnlyBuffers: {
+                mLastState |= D3D12_RESOURCE_STATE_GENERIC_READ;
+                mFixedResourceState = true;
+                break;
+            }
+                // A GPU upload heap is a custom heap, not an UPLOAD heap: it is born in COMMON and
+                // promotes and decays like a DEFAULT buffer.
+            case ResourceHeapKind::GPUUpload_OnlyBuffers:
+            case ResourceHeapKind::Default_AllBuffersAndTextures:
+            case ResourceHeapKind::Default_OnlyBuffers:
+            case ResourceHeapKind::Custom_WriteBack_OnlyBuffers:
+            case ResourceHeapKind::Custom_WriteCombine_OnlyBuffers:
+                break;
+            default:
+                DAWN_UNREACHABLE();
         }
-            // D3D12 requires buffers on the UPLOAD heap to have the
-            // D3D12_RESOURCE_STATE_GENERIC_READ state
-        case ResourceHeapKind::Upload_AllBuffersAndTextures:
-        case ResourceHeapKind::GPUUpload_OnlyBuffers:
-        case ResourceHeapKind::Upload_OnlyBuffers: {
-            mLastState |= D3D12_RESOURCE_STATE_GENERIC_READ;
-            mFixedResourceState = true;
-            break;
-        }
-        case ResourceHeapKind::Default_AllBuffersAndTextures:
-        case ResourceHeapKind::Default_OnlyBuffers:
-        case ResourceHeapKind::Custom_WriteBack_OnlyBuffers:
-        case ResourceHeapKind::Custom_WriteCombine_OnlyBuffers:
-            break;
-        default:
-            DAWN_UNREACHABLE();
-    }
+    };
+    adoptHeapKind(resourceHeapKind);
 
-    // GPU upload buffers start in COMMON and implicitly promote to their read-only GPU usages.
-    const D3D12_RESOURCE_STATES initialState = resourceHeapKind == ResourceHeapKind::GPUUpload_OnlyBuffers
-                                                  ? D3D12_RESOURCE_STATE_COMMON
-                                                  : mLastState;
     auto allocation = ToBackend(GetDevice())->AllocateMemory(resourceHeapKind, resourceDescriptor,
-                                                              initialState, 0);
+                                                              mLastState, 0);
     if (allocation.IsError()) {
         auto error = allocation.AcquireError();
         if (resourceHeapKind != ResourceHeapKind::GPUUpload_OnlyBuffers ||
@@ -267,7 +281,8 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
         }
         resourceHeapKind = GetResourceHeapKind(GetInternalUsage(),
                                                ToBackend(GetDevice())->GetResourceHeapTier(),
-                                               false, false);
+                                               false, false, false);
+        adoptHeapKind(resourceHeapKind);
         allocation = ToBackend(GetDevice())->AllocateMemory(resourceHeapKind, resourceDescriptor,
                                                               mLastState, 0);
     }
@@ -581,6 +596,57 @@ Span<std::byte> Buffer::GetMappedRangeImpl(size_t offset, size_t size) {
     return mMappedData.subspan(offset, size);
 }
 
+bool Buffer::IsGPUUploadHeap() const {
+    return mResourceAllocation.GetResourceHeapKind() == ResourceHeapKind::GPUUpload_OnlyBuffers;
+}
+
+MaybeError Buffer::MapGPUUpload() {
+    if (!mGPUUploadData.empty()) {
+        return {};
+    }
+    // The pointer is kept for the buffer's lifetime, so the heap must never be evicted under it.
+    auto deviceGuard = GetDevice()->GetGuard();
+    Heap* heap = ToBackend(mResourceAllocation.GetResourceHeap());
+    DAWN_TRY(ToBackend(GetDevice())->GetResidencyManager()->LockAllocation(heap));
+
+    void* mappedPointer = nullptr;
+    // An empty read range promises D3D12 the CPU never reads this memory back, which it must not.
+    const D3D12_RANGE readRange = {0, 0};
+    DAWN_TRY(CheckHRESULT(GetD3D12Resource()->Map(0, &readRange, &mappedPointer),
+                          "D3D12 map GPU upload buffer"));
+    // SAFETY: Map returns the start of the resource, which is GetAllocatedSize() bytes long.
+    mGPUUploadData = DAWN_UNSAFE_BUFFERS(
+        {static_cast<std::byte*>(mappedPointer), checked_cast<size_t>(GetAllocatedSize())});
+    return {};
+}
+
+MaybeError Buffer::UploadData(uint64_t bufferOffset, Span<const std::byte> data) {
+    if (data.empty()) {
+        return {};
+    }
+
+    const uint32_t uploads = mUploads++;
+    // A buffer written once is static and not worth a permanent mapping; one written again is not.
+    // Writing while the GPU may still be reading the old contents would tear, so that stages instead.
+    if (!IsGPUUploadHeap() || uploads == 0 ||
+        GetLastUsageSerial() > GetDevice()->GetQueue()->GetCompletedCommandSerial()) {
+        return BufferBase::UploadData(bufferOffset, data);
+    }
+
+    DAWN_TRY(MapGPUUpload());
+
+    // A partial write into an uninitialized buffer still owes zeroes everywhere else.
+    if (NeedsInitialization()) {
+        if (!IsFullBufferRange(bufferOffset, data.size())) {
+            std::ranges::fill(mGPUUploadData, std::byte{0});
+            GetDevice()->IncrementLazyClearCountForTesting();
+        }
+        SetInitialized(true);
+    }
+    DAWN_UNSAFE_TODO(memcpy(mGPUUploadData.data() + bufferOffset, data.data(), data.size()));
+    return {};
+}
+
 void Buffer::DestroyImpl(DestroyReason reason) {
     // TODO(crbug.com/dawn/831): DestroyImpl is called from two places.
     // - It may be called if the buffer is explicitly destroyed with APIDestroy.
@@ -596,6 +662,15 @@ void Buffer::DestroyImpl(DestroyReason reason) {
         mWrittenMappedRange = {0, 0};
     }
     BufferBase::DestroyImpl(reason);
+
+    if (!mGPUUploadData.empty()) {
+        GetD3D12Resource()->Unmap(0, nullptr);
+        mGPUUploadData = {};
+        auto deviceGuard = GetDevice()->GetGuard();
+        ToBackend(GetDevice())
+            ->GetResidencyManager()
+            ->UnlockAllocation(ToBackend(mResourceAllocation.GetResourceHeap()));
+    }
 
     ToBackend(GetDevice())->DeallocateMemory(mResourceAllocation);
 

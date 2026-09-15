@@ -240,6 +240,62 @@ TEST_P(D3D12GPUUploadHeapTests, GPUWrittenBuffersUseDefaultHeap) {
     EXPECT_EQ(HeapType(buffer), D3D12_HEAP_TYPE_DEFAULT);
 }
 
+TEST_P(D3D12GPUUploadHeapTests, CPUWrittenBuffersUseGPUUploadHeap) {
+    wgpu::BufferDescriptor descriptor;
+    descriptor.size = 256;
+    descriptor.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Uniform;
+    wgpu::Buffer buffer = device.CreateBuffer(&descriptor);
+
+    D3D12_HEAP_TYPE expected = D3D12_HEAP_TYPE_DEFAULT;
+#if D3D12_SDK_VERSION >= 613
+    if (UseGPUUploadHeap(device.Get())) {
+        expected = D3D12_HEAP_TYPE_GPU_UPLOAD;
+    }
+#endif
+    EXPECT_EQ(HeapType(buffer), expected);
+}
+
+// The first write stages; later writes of an idle buffer go straight into it. Both must land, and a
+// partial write must leave the rest of the buffer alone.
+TEST_P(D3D12GPUUploadHeapTests, RepeatedWritesLand) {
+    wgpu::BufferDescriptor descriptor;
+    descriptor.size = 4 * sizeof(uint32_t);
+    descriptor.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::CopySrc;
+    wgpu::Buffer buffer = device.CreateBuffer(&descriptor);
+
+    const uint32_t first[] = {1u, 2u, 3u, 4u};
+    queue.WriteBuffer(buffer, 0, first, sizeof(first));
+    EXPECT_BUFFER_U32_RANGE_EQ(first, buffer, 0, 4);
+
+    WaitForAllOperations();
+    const uint32_t second[] = {5u, 6u, 7u, 8u};
+    queue.WriteBuffer(buffer, 0, second, sizeof(second));
+    EXPECT_BUFFER_U32_RANGE_EQ(second, buffer, 0, 4);
+
+    WaitForAllOperations();
+    const uint32_t tail[] = {9u, 10u};
+    queue.WriteBuffer(buffer, 2 * sizeof(uint32_t), tail, sizeof(tail));
+    const uint32_t merged[] = {5u, 6u, 9u, 10u};
+    EXPECT_BUFFER_U32_RANGE_EQ(merged, buffer, 0, 4);
+}
+
+// A buffer whose very first write is partial owes zeroes everywhere the write does not reach.
+TEST_P(D3D12GPUUploadHeapTests, PartialWriteZeroFillsTheRest) {
+    wgpu::BufferDescriptor descriptor;
+    descriptor.size = 4 * sizeof(uint32_t);
+    descriptor.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::CopySrc;
+    wgpu::Buffer buffer = device.CreateBuffer(&descriptor);
+
+    const uint32_t head[] = {0xAAAAAAAAu};
+    queue.WriteBuffer(buffer, 0, head, sizeof(head));
+    WaitForAllOperations();
+    const uint32_t again[] = {0xBBBBBBBBu};
+    queue.WriteBuffer(buffer, sizeof(uint32_t), again, sizeof(again));
+
+    const uint32_t expected[] = {0xAAAAAAAAu, 0xBBBBBBBBu, 0u, 0u};
+    EXPECT_BUFFER_U32_RANGE_EQ(expected, buffer, 0, 4);
+}
+
 DAWN_INSTANTIATE_TEST(D3D12GPUUploadHeapTests,
                       D3D12Backend(),
                       D3D12Backend({"d3d12_use_gpu_upload_heap",
