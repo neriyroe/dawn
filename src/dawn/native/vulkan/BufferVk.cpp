@@ -189,6 +189,10 @@ MemoryKind GetMemoryKindFor(wgpu::BufferUsage bufferUsage) {
         requestKind |= MemoryKind::DeviceLocal;
     }
 
+    if ((bufferUsage & wgpu::BufferUsage::CopyDst) && !IsMemoryKindMappable(requestKind)) {
+        requestKind |= MemoryKind::PreferHostVisible;
+    }
+
     return requestKind;
 }
 

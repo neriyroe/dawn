@@ -127,12 +127,24 @@ void ResidencyManager::UpdateVideoMemoryInfo() {
     }
 }
 
-void ResidencyManager::UpdateMemorySegmentInfo(MemorySegmentInfo* segmentInfo) {
-    DXGI_QUERY_VIDEO_MEMORY_INFO queryVideoMemoryInfo;
+bool ResidencyManager::CanAllocateWithoutEviction(uint64_t allocationSize,
+                                                  MemorySegment memorySegment) {
+    MemorySegmentInfo* segmentInfo = GetMemorySegmentInfo(memorySegment);
+    UpdateMemorySegmentInfo(segmentInfo);
+    return segmentInfo->usage <= segmentInfo->budget &&
+           allocationSize <= segmentInfo->budget - segmentInfo->usage;
+}
 
-    ToBackend(mDevice->GetPhysicalDevice())
-        ->GetHardwareAdapter()
-        ->QueryVideoMemoryInfo(0, segmentInfo->dxgiSegment, &queryVideoMemoryInfo);
+void ResidencyManager::UpdateMemorySegmentInfo(MemorySegmentInfo* segmentInfo) {
+    DXGI_QUERY_VIDEO_MEMORY_INFO queryVideoMemoryInfo = {};
+
+    if (FAILED(ToBackend(mDevice->GetPhysicalDevice())
+                   ->GetHardwareAdapter()
+                   ->QueryVideoMemoryInfo(0, segmentInfo->dxgiSegment, &queryVideoMemoryInfo))) {
+        segmentInfo->budget = 0;
+        segmentInfo->usage = 0;
+        return;
+    }
 
     // The video memory budget provided by QueryVideoMemoryInfo is defined by the operating
     // system, and may be lower than expected in certain scenarios. Under memory pressure, we
@@ -143,7 +155,9 @@ void ResidencyManager::UpdateMemorySegmentInfo(MemorySegmentInfo* segmentInfo) {
     segmentInfo->externalReservation =
         std::min(queryVideoMemoryInfo.Budget / 2, segmentInfo->externalRequest);
 
-    segmentInfo->usage = queryVideoMemoryInfo.CurrentUsage - segmentInfo->externalReservation;
+    segmentInfo->usage = queryVideoMemoryInfo.CurrentUsage -
+                         std::min(queryVideoMemoryInfo.CurrentUsage,
+                                  segmentInfo->externalReservation);
 
     // If we're restricting the budget for testing, leave the budget as is.
     if (mRestrictBudgetForTesting) {
@@ -290,16 +304,16 @@ MaybeError ResidencyManager::EnsureHeapsAreResident(Span<Heap* const> heaps) {
     }
 
     if (localSizeToMakeResident > 0) {
-        return MakeAllocationsResident(&mVideoMemoryInfo.local, localSizeToMakeResident,
-                                       localHeapsToMakeResident.size(),
-                                       localHeapsToMakeResident.data());
+        DAWN_TRY(MakeAllocationsResident(&mVideoMemoryInfo.local, localSizeToMakeResident,
+                                         localHeapsToMakeResident.size(),
+                                         localHeapsToMakeResident.data()));
     }
 
     if (nonLocalSizeToMakeResident > 0) {
         DAWN_ASSERT(!mDevice->GetDeviceInfo().isUMA);
-        return MakeAllocationsResident(&mVideoMemoryInfo.nonLocal, nonLocalSizeToMakeResident,
-                                       nonLocalHeapsToMakeResident.size(),
-                                       nonLocalHeapsToMakeResident.data());
+        DAWN_TRY(MakeAllocationsResident(&mVideoMemoryInfo.nonLocal, nonLocalSizeToMakeResident,
+                                         nonLocalHeapsToMakeResident.size(),
+                                         nonLocalHeapsToMakeResident.data()));
     }
 
     return {};

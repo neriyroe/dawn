@@ -41,6 +41,7 @@ class PhysicalDevice;
 struct D3D12DeviceInfo {
     bool isUMA;
     bool isCacheCoherentUMA;
+    bool supportsGPUUploadHeap;
     uint32_t resourceHeapTier;
     uint32_t resourceBindingTier;
     bool supportsRenderPass;

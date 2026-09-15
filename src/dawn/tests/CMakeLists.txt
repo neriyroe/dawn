@@ -63,6 +63,19 @@ endif()
 # dawn_end2end_test_objects - Tests that only use the public Dawn API
 ################################################################################
 
+add_executable(dawn_allocator_tests "unittests/BuddyMemoryAllocatorTests.cpp")
+if (DAWN_ENABLE_VULKAN)
+    target_sources(dawn_allocator_tests PRIVATE "unittests/vulkan/MemoryTypeSelectorTests.cpp")
+endif()
+common_compile_options(dawn_allocator_tests)
+target_link_libraries(dawn_allocator_tests PRIVATE
+    dawn_common
+    dawn_internal_config
+    dawn_native
+    dawn_native_objects
+    gtest_main
+)
+
 set(end2end_conditional_private_platform_depends)
 set(end2end_sources
     "end2end/AdapterCreationTests.cpp"
@@ -437,6 +450,27 @@ target_link_libraries(dawn_whitebox_test_objects PRIVATE
 
     ${whitebox_conditional_private_platform_depends}
 )
+
+add_executable(dawn_buffer_upload_tests
+    "End2EndTestsMain.cpp"
+    "end2end/BufferTests.cpp"
+    "end2end/BufferZeroInitTests.cpp"
+)
+if (DAWN_ENABLE_D3D12)
+    target_sources(dawn_buffer_upload_tests PRIVATE
+        "white_box/D3D12ResourceHeapTests.cpp"
+        "white_box/D3D12ResidencyTests.cpp"
+    )
+endif()
+if (DAWN_ENABLE_VULKAN AND DAWN_ENABLE_ERROR_INJECTION)
+    target_sources(dawn_buffer_upload_tests PRIVATE "white_box/VulkanErrorInjectorTests.cpp")
+endif()
+common_compile_options(dawn_buffer_upload_tests)
+get_target_property(buffer_upload_test_dependencies dawn_whitebox_test_objects LINK_LIBRARIES)
+target_link_libraries(dawn_buffer_upload_tests PRIVATE ${buffer_upload_test_dependencies} partition_alloc)
+if (DAWN_SUPPORTS_GLFW_FOR_WINDOWING)
+    target_link_libraries(dawn_buffer_upload_tests PRIVATE dawn_glfw)
+endif()
 
 ################################################################################
 # dawn_end2end_tests

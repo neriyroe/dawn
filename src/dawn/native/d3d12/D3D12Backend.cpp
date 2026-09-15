@@ -79,6 +79,20 @@ Microsoft::WRL::ComPtr<ID3D12Device> GetD3D12Device(WGPUDevice device) {
     return ToBackend(base)->GetD3D12Device();
 }
 
+bool UseGPUUploadHeap(WGPUDevice device, uint64_t allocationSize) {
+    DeviceBase* base = FromAPI(device);
+    if (!IsD3D12(base) || !ToBackend(base)->GetDeviceInfo().supportsGPUUploadHeap ||
+        !base->IsToggleEnabled(Toggle::D3D12UseGPUUploadHeap)) {
+        return false;
+    }
+    if (allocationSize == 0) {
+        return true;
+    }
+    auto deviceGuard = base->GetGuard();
+    return ToBackend(base)->GetResidencyManager()->CanAllocateWithoutEviction(allocationSize,
+                                                                              MemorySegment::Local);
+}
+
 // Lets the app take the present queue's wait at the top of its frame instead of inside
 // wgpuSurfaceGetCurrentTexture.
 HANDLE GetFrameLatencyWaitableObject(WGPUSurface surface) {

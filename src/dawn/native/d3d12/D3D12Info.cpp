@@ -194,6 +194,14 @@ ResultOrError<D3D12DeviceInfo> GatherDeviceInfo(const PhysicalDevice& physicalDe
             featureOptions13.UnrestrictedBufferTextureCopyPitchSupported;
     }
 
+#if D3D12_SDK_VERSION >= 613
+    D3D12_FEATURE_DATA_D3D12_OPTIONS16 featureOptions16 = {};
+    if (SUCCEEDED(d3d12Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS16,
+                                                   &featureOptions16, sizeof(featureOptions16)))) {
+        info.supportsGPUUploadHeap = featureOptions16.GPUUploadHeapSupported;
+    }
+#endif
+
 #if D3D12_SDK_VERSION >= 612
     D3D12_FEATURE_DATA_D3D12_OPTIONS18 featureOptions18 = {};
     if (SUCCEEDED(d3d12Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS18, &featureOptions18,

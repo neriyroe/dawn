@@ -50,6 +50,7 @@ class ResidencyManager {
     void UnlockAllocation(Pageable* pageable);
 
     MaybeError EnsureCanAllocate(uint64_t allocationSize, MemorySegment memorySegment);
+    bool CanAllocateWithoutEviction(uint64_t allocationSize, MemorySegment memorySegment);
     MaybeError EnsureHeapsAreResident(Span<Heap* const> heaps);
 
     uint64_t SetExternalMemoryReservation(MemorySegment segment, uint64_t requestedReservationSize);

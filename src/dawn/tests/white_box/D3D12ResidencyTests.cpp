@@ -260,13 +260,23 @@ TEST_P(D3D12ResourceResidencyTests, AsyncMappedBufferRead) {
 TEST_P(D3D12ResourceResidencyTests, AsyncMappedBufferWrite) {
     // Create a mappable buffer.
     wgpu::Buffer buffer = CreateBuffer(4, kMapWriteBufferUsage);
+    auto* d3dDevice = native::d3d12::ToBackend(native::FromAPI(device.Get()));
+    auto* d3dBuffer = native::d3d12::ToBackend(native::FromAPI(buffer.Get()));
+    D3D12_HEAP_PROPERTIES heapProperties = {};
+    ASSERT_HRESULT_SUCCEEDED(d3dBuffer->GetD3D12Resource()->GetHeapProperties(&heapProperties, nullptr));
+    const auto memoryPool = d3dDevice->GetD3D12Device()
+                                ->GetCustomHeapProperties(0, heapProperties.Type)
+                                .MemoryPoolPreference;
+    const auto pressureBufferUsage = memoryPool == D3D12_MEMORY_POOL_L1
+                                         ? kNonMappableBufferUsage
+                                         : kMapReadBufferUsage;
     // The mappable buffer should be resident.
     EXPECT_TRUE(CheckIfBufferIsResident(buffer));
 
     // Create and touch enough buffers to use the entire budget.
     std::vector<wgpu::Buffer> bufferSet1 = AllocateBuffers(
         kDirectlyAllocatedResourceSize, kRestrictedBudgetSize / kDirectlyAllocatedResourceSize,
-        kMapReadBufferUsage);
+        pressureBufferUsage);
     TouchBuffers(0, bufferSet1.size(), bufferSet1);
 
     // The mappable buffer should have been evicted.
@@ -296,7 +306,7 @@ TEST_P(D3D12ResourceResidencyTests, AsyncMappedBufferWrite) {
     buffer.Unmap();
     std::vector<wgpu::Buffer> bufferSet2 = AllocateBuffers(
         kDirectlyAllocatedResourceSize, kRestrictedBudgetSize / kDirectlyAllocatedResourceSize,
-        kMapReadBufferUsage);
+        pressureBufferUsage);
     TouchBuffers(0, bufferSet2.size(), bufferSet2);
     EXPECT_FALSE(CheckIfBufferIsResident(buffer));
 }
@@ -342,6 +352,42 @@ TEST_P(D3D12ResourceResidencyTests, SetExternalReservation) {
             device.Get(), kExternalReservationSize, native::d3d12::MemorySegment::NonLocal);
         EXPECT_EQ(amountReserved, kExternalReservationSize);
     }
+}
+
+TEST_P(D3D12ResourceResidencyTests, RestoreBothMemorySegmentsInOneSubmission) {
+    DAWN_TEST_UNSUPPORTED_IF(IsUMA());
+
+    wgpu::Buffer source = CreateBuffer(kDirectlyAllocatedResourceSize,
+                                       wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::CopySrc);
+    wgpu::Buffer readback = CreateBuffer(kDirectlyAllocatedResourceSize, kMapReadBufferUsage);
+    TouchBuffers(0, 2, {source, readback});
+    const uint32_t zero = 0;
+    queue.WriteBuffer(readback, 0, &zero, sizeof(zero));
+    queue.Submit(0, nullptr);
+    WaitForAllOperations();
+
+    auto localPressure = AllocateBuffers(
+        kDirectlyAllocatedResourceSize, kRestrictedBudgetSize / kDirectlyAllocatedResourceSize,
+        kNonMappableBufferUsage);
+    auto nonLocalPressure = AllocateBuffers(
+        kDirectlyAllocatedResourceSize, kRestrictedBudgetSize / kDirectlyAllocatedResourceSize,
+        kMapReadBufferUsage);
+    ASSERT_FALSE(CheckIfBufferIsResident(source));
+    ASSERT_FALSE(CheckIfBufferIsResident(readback));
+
+    auto encoder = device.CreateCommandEncoder();
+    encoder.CopyBufferToBuffer(source, 0, readback, 0, kSourceBufferSize);
+    auto commands = encoder.Finish();
+    queue.Submit(1, &commands);
+    EXPECT_TRUE(CheckIfBufferIsResident(source));
+    EXPECT_TRUE(CheckIfBufferIsResident(readback));
+
+    MapAsyncAndWait(readback, wgpu::MapMode::Read, 0, kSourceBufferSize);
+    const auto* mappedValue =
+        static_cast<const uint32_t*>(readback.GetConstMappedRange(0, kSourceBufferSize));
+    ASSERT_NE(mappedValue, nullptr);
+    EXPECT_EQ(*mappedValue, 1u);
+    readback.Unmap();
 }
 
 // Checks that when a descriptor heap is bound, it is locked resident. Also checks that when a

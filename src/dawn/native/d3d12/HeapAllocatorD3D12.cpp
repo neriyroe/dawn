@@ -51,6 +51,11 @@ HeapAllocator::HeapAllocator(Device* device,
 
 ResultOrError<std::unique_ptr<ResourceHeapBase>> HeapAllocator::AllocateResourceHeap(
     uint64_t size) {
+    if (mResourceHeapKind == ResourceHeapKind::GPUUpload_OnlyBuffers &&
+        !mDevice->GetResidencyManager()->CanAllocateWithoutEviction(size, mMemorySegment)) {
+        return DAWN_OUT_OF_MEMORY_ERROR("GPU upload heap exceeds the local memory budget");
+    }
+
     D3D12_HEAP_DESC heapDesc;
     heapDesc.SizeInBytes = size;
     heapDesc.Properties = GetD3D12HeapProperties(mResourceHeapKind);

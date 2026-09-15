@@ -71,6 +71,8 @@ enum class ResourceHeapKind : uint8_t {
     // Allows custom resource heaps to contain the buffers that support write-combined CPU property.
     Custom_WriteCombine_OnlyBuffers,
 
+    GPUUpload_OnlyBuffers,
+
     EnumCount,
     InvalidEnum = EnumCount,
 };
@@ -96,7 +98,11 @@ class ResourceAllocatorManager {
     uint64_t GetTotalAllocatedMemory() const;
     uint64_t GetTotalUsedMemory() const;
 
+    void ReduceMemoryUsage(ExecutionSerial completedSerial);
+    ExecutionSerial GetLastPendingDeletionSerial() const;
+
   private:
+    void FreeRecycledAllocations();
     void FreeSubAllocatedMemory(ResourceHeapAllocation& allocation);
 
     ResultOrError<ResourceHeapAllocation> CreatePlacedResource(
@@ -110,8 +116,6 @@ class ResourceAllocatorManager {
         const D3D12_RESOURCE_DESC& resourceDescriptor,
         const D3D12_CLEAR_VALUE* optimizedClearValue,
         D3D12_RESOURCE_STATES initialUsage);
-
-    void FreeRecycledAllocations();
 
     raw_ptr<Device> mDevice;
 

@@ -47,8 +47,11 @@ MemorySegment GetMemorySegment(Device* device, ResourceHeapKind resourceHeapKind
         return MemorySegment::Local;
     }
 
-    // Currently we only use custom heaps on UMA architectures.
-    // TODO(386255678): consider ReBAR which is UMA Coherent.
+    if (resourceHeapKind == ResourceHeapKind::GPUUpload_OnlyBuffers) {
+        return MemorySegment::Local;
+    }
+
+    // Custom heaps use system memory on UMA architectures.
     if (resourceHeapKind == ResourceHeapKind::Custom_WriteBack_OnlyBuffers ||
         resourceHeapKind == ResourceHeapKind::Custom_WriteCombine_OnlyBuffers) {
         return MemorySegment::Local;
@@ -74,6 +77,7 @@ D3D12_HEAP_FLAGS GetD3D12HeapFlags(ResourceHeapKind resourceHeapKind) {
         case ResourceHeapKind::Default_OnlyBuffers:
         case ResourceHeapKind::Readback_OnlyBuffers:
         case ResourceHeapKind::Upload_OnlyBuffers:
+        case ResourceHeapKind::GPUUpload_OnlyBuffers:
         case ResourceHeapKind::Custom_WriteBack_OnlyBuffers:
         case ResourceHeapKind::Custom_WriteCombine_OnlyBuffers:
             return D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS;
@@ -505,9 +509,19 @@ ResultOrError<ResourceHeapAllocation> ResourceAllocatorManager::CreatePlacedReso
 
     Heap* heap = ToBackend(allocation.GetResourceHeap());
 
+    if (resourceHeapKind == ResourceHeapKind::GPUUpload_OnlyBuffers &&
+        mDevice->IsToggleEnabled(Toggle::UseD3D12ResidencyManagement) &&
+        !heap->IsInResidencyLRUCache() && !heap->IsResidencyLocked() &&
+        !mDevice->GetResidencyManager()->CanAllocateWithoutEviction(heap->GetSize(),
+                                                                   MemorySegment::Local)) {
+        allocator->Deallocate(allocation);
+        return DAWN_OUT_OF_MEMORY_ERROR("GPU upload heap residency exceeds the local memory budget");
+    }
+
     // Before calling CreatePlacedResource, we must ensure the target heap is resident.
     // CreatePlacedResource will fail if it is not.
-    DAWN_TRY(mDevice->GetResidencyManager()->LockAllocation(heap));
+    DAWN_TRY_WITH_CLEANUP(mDevice->GetResidencyManager()->LockAllocation(heap),
+                         { allocator->Deallocate(allocation); });
 
     // With placed resources, a single heap can be reused.
     // The resource placed at an offset is only reclaimed
@@ -517,11 +531,16 @@ ResultOrError<ResourceHeapAllocation> ResourceAllocatorManager::CreatePlacedReso
     // barrier).
     // https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-createplacedresource
     ComPtr<ID3D12Resource> placedResource;
-    DAWN_TRY(CheckOutOfMemoryHRESULT(
-        mDevice->GetD3D12Device()->CreatePlacedResource(
-            heap->GetD3D12Heap(), allocation.GetOffset(), &resourceDescriptor, initialUsage,
-            optimizedClearValue, IID_PPV_ARGS(&placedResource)),
-        "ID3D12Device::CreatePlacedResource"));
+    DAWN_TRY_WITH_CLEANUP(
+        CheckOutOfMemoryHRESULT(
+            mDevice->GetD3D12Device()->CreatePlacedResource(
+                heap->GetD3D12Heap(), allocation.GetOffset(), &resourceDescriptor, initialUsage,
+                optimizedClearValue, IID_PPV_ARGS(&placedResource)),
+            "ID3D12Device::CreatePlacedResource"),
+        {
+            mDevice->GetResidencyManager()->UnlockAllocation(heap);
+            allocator->Deallocate(allocation);
+        });
 
     mUsedMemoryTracker->Increment(resourceInfo.SizeInBytes);
 
@@ -554,6 +573,12 @@ ResultOrError<ResourceHeapAllocation> ResourceAllocatorManager::CreateCommittedR
 
     if (resourceInfo.SizeInBytes > kMaxHeapSize) {
         return ResourceHeapAllocation{};  // Invalid
+    }
+
+    if (resourceHeapKind == ResourceHeapKind::GPUUpload_OnlyBuffers &&
+        !mDevice->GetResidencyManager()->CanAllocateWithoutEviction(resourceInfo.SizeInBytes,
+                                                                   MemorySegment::Local)) {
+        return DAWN_OUT_OF_MEMORY_ERROR("GPU upload allocation exceeds the local memory budget");
     }
 
     // CreateCommittedResource will implicitly make the created resource resident. We must
@@ -607,6 +632,29 @@ void ResourceAllocatorManager::FreeRecycledAllocations() {
     for (auto& alloc : mPooledHeapAllocators) {
         alloc->FreeRecycledAllocations();
     }
+}
+
+void ResourceAllocatorManager::ReduceMemoryUsage(ExecutionSerial completedSerial) {
+    Tick(completedSerial);
+    // User-visible queue waits do not notify Lowest-priority allocation trackers.
+    mUsedMemoryTracker->UpdateCompletedSerialTo(completedSerial);
+    mAllocatedMemoryTracker->UpdateCompletedSerialTo(completedSerial);
+    FreeRecycledAllocations();
+}
+
+ExecutionSerial ResourceAllocatorManager::GetLastPendingDeletionSerial() const {
+    ExecutionSerial serial = kBeginningOfGPUTime;
+    // Present retires external swapchain wrappers every frame without releasing allocator storage.
+    for (const auto& allocation : mAllocationsToDelete.IterateAll()) {
+        if (allocation.GetInfo().mMethod != AllocationMethod::kExternal) {
+            serial = mAllocationsToDelete.LastSerial();
+            break;
+        }
+    }
+    if (!mHeapsToDelete.Empty()) {
+        serial = std::max(serial, mHeapsToDelete.LastSerial());
+    }
+    return serial;
 }
 
 uint64_t ResourceAllocatorManager::GetTotalAllocatedMemory() const {

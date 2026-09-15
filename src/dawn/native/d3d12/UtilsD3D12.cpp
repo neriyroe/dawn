@@ -440,6 +440,12 @@ D3D12_HEAP_TYPE GetD3D12HeapType(ResourceHeapKind resourceHeapKind) {
         case ResourceHeapKind::Upload_OnlyBuffers:
         case ResourceHeapKind::Upload_AllBuffersAndTextures:
             return D3D12_HEAP_TYPE_UPLOAD;
+        case ResourceHeapKind::GPUUpload_OnlyBuffers:
+#if D3D12_SDK_VERSION >= 613
+            return D3D12_HEAP_TYPE_GPU_UPLOAD;
+#else
+            DAWN_UNREACHABLE();
+#endif
         case ResourceHeapKind::Custom_WriteBack_OnlyBuffers:
         case ResourceHeapKind::Custom_WriteCombine_OnlyBuffers:
             return D3D12_HEAP_TYPE_CUSTOM;

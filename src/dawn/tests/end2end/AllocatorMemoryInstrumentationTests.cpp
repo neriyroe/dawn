@@ -25,6 +25,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <array>
+
 #include "src/dawn/tests/DawnTest.h"
 
 namespace dawn {
@@ -76,6 +78,60 @@ TEST_P(AllocatorMemoryInstrumentationTest, GetAllocatorMemoryInfo) {
     memInfo = native::GetAllocatorMemoryInfo(device.Get());
     EXPECT_EQ(memInfo.totalUsedMemory, usedMemoryInInitialization);
     EXPECT_LE(memInfo.totalAllocatedMemory, prevAllocatedMemory);
+}
+
+TEST_P(AllocatorMemoryInstrumentationTest, ReduceMemoryPreservesLiveResources) {
+    DAWN_TEST_UNSUPPORTED_IF(!IsD3D12());
+    wgpu::BufferDescriptor bufferDesc = {
+        .usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst,
+        .size = 4096,
+    };
+    auto liveBuffer = device.CreateBuffer(&bufferDesc);
+    constexpr uint32_t value = 0x12345678;
+    device.GetQueue().WriteBuffer(liveBuffer, 0, &value, sizeof(value));
+    wgpu::TextureDescriptor textureDesc = {
+        .usage = wgpu::TextureUsage::CopySrc | wgpu::TextureUsage::CopyDst,
+        .size = {1, 1, 1},
+        .format = wgpu::TextureFormat::R32Uint,
+    };
+    auto liveTexture = device.CreateTexture(&textureDesc);
+    wgpu::TexelCopyTextureInfo target = {.texture = liveTexture};
+    wgpu::TexelCopyBufferLayout layout = {.bytesPerRow = 4, .rowsPerImage = 1};
+    wgpu::Extent3D extent = {1, 1, 1};
+    device.GetQueue().WriteTexture(&target, &value, sizeof(value), &layout, &extent);
+
+    bufferDesc.size = 4 * 1024 * 1024;
+    std::array<wgpu::Buffer, 8> temporary;
+    for (auto& buffer : temporary) {
+        buffer = device.CreateBuffer(&bufferDesc);
+        device.GetQueue().WriteBuffer(buffer, 0, &value, sizeof(value));
+    }
+    device.GetQueue().Submit(0, nullptr);
+    const auto peak = native::GetAllocatorMemoryInfo(device.Get());
+    // Destroy while submitted work may still reference the allocations.
+    for (auto& buffer : temporary) {
+        buffer.Destroy();
+    }
+    bool pending = true;
+    for (uint32_t pass = 0; pass < 8 && pending; pass++) {
+        pending = native::ReduceMemoryUsage(device.Get());
+        WaitForAllOperations();
+    }
+    EXPECT_FALSE(pending);
+    const auto trimmed = native::GetAllocatorMemoryInfo(device.Get());
+    EXPECT_LT(trimmed.totalAllocatedMemory, peak.totalAllocatedMemory);
+    EXPECT_LT(trimmed.totalUsedMemory, peak.totalUsedMemory);
+    EXPECT_FALSE(native::ReduceMemoryUsage(device.Get()));
+    EXPECT_EQ(native::GetAllocatorMemoryInfo(device.Get()).totalAllocatedMemory,
+              trimmed.totalAllocatedMemory);
+    EXPECT_BUFFER_U32_EQ(value, liveBuffer, 0);
+    EXPECT_TEXTURE_EQ(&value, liveTexture, {0, 0, 0}, {1, 1, 1});
+
+    constexpr uint32_t next = 0x87654321;
+    device.GetQueue().WriteBuffer(liveBuffer, 0, &next, sizeof(next));
+    device.GetQueue().WriteTexture(&target, &next, sizeof(next), &layout, &extent);
+    EXPECT_BUFFER_U32_EQ(next, liveBuffer, 0);
+    EXPECT_TEXTURE_EQ(&next, liveTexture, {0, 0, 0}, {1, 1, 1});
 }
 
 DAWN_INSTANTIATE_TEST(AllocatorMemoryInstrumentationTest, D3D12Backend(), VulkanBackend());

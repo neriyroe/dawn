@@ -135,6 +135,8 @@ enum class Toggle {
     D3D12PolyfillReflectVec2F32,
     VulkanClearGen12TextureWithCCSAmbiguateOnCreation,
     D3D12UseRootSignatureVersion1_1,
+    D3D12UseGPUUploadHeap,
+    D3D12UseGPUUploadHeapForStaging,
     VulkanUseImageRobustAccess2,
     VulkanUseBufferRobustAccess2,
     D3D12Use64KBAlignedMSAATexture,

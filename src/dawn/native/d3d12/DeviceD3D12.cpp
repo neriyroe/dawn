@@ -402,6 +402,34 @@ void Device::ReferenceUntilUnused(ComPtr<IUnknown> object) {
     mUsedComObjectRefs->Enqueue(std::move(object), GetQueue()->GetPendingCommandSerial());
 }
 
+bool Device::ReduceMemoryUsageImpl() {
+    Queue* queue = ToBackend(GetQueue());
+    (*mResourceAllocatorManager)->ReduceMemoryUsage(queue->GetCompletedCommandSerial());
+
+    auto lastDeletion = [this]() {
+        // Read the queues separately: freeing an allocator heap also retains a COM reference.
+        ExecutionSerial serial = (*mResourceAllocatorManager)->GetLastPendingDeletionSerial();
+        mUsedComObjectRefs.Use([&](auto refs) {
+            if (!refs->Empty()) {
+                serial = std::max(serial, refs->LastSerial());
+            }
+        });
+        return serial;
+    };
+    ExecutionSerial serial = lastDeletion();
+    if (serial == kBeginningOfGPUTime) {
+        return false;
+    }
+    if (serial > queue->GetLastSubmittedCommandSerial()) {
+        queue->GetPendingCommandContext();
+    }
+    if (ConsumedError(TickImpl())) {
+        return false;
+    }
+    DAWN_ASSERT(serial <= queue->GetLastSubmittedCommandSerial());
+    return lastDeletion() != kBeginningOfGPUTime;
+}
+
 ResultOrError<Ref<BindGroupBase>> Device::CreateBindGroupImpl(
     const UnpackedPtr<BindGroupDescriptor>& descriptor) {
     return BindGroup::Create(this, descriptor);

@@ -33,6 +33,8 @@
 #include "src/dawn/common/Math.h"
 #include "src/dawn/native/ErrorData.h"
 #include "src/dawn/native/vulkan/DeviceVk.h"
+#include "src/dawn/native/vulkan/ResourceHeapVk.h"
+#include "src/dawn/native/vulkan/ResourceMemoryAllocatorVk.h"
 #include "src/dawn/native/vulkan/VulkanError.h"
 #include "src/dawn/tests/DawnTest.h"
 
@@ -131,6 +133,43 @@ TEST_P(VulkanErrorInjectorTests, InjectErrorOnCreateBuffer) {
             EXPECT_TRUE(CreateTestBuffer());
 
             ClearErrorInjector();
+        }
+    }
+}
+
+TEST_P(VulkanErrorInjectorTests, UploadMemoryFallsBackOnlyAfterOutOfMemory) {
+    constexpr VkMemoryRequirements requirements = {
+        .size = 4096,
+        .alignment = 256,
+        .memoryTypeBits = 0xFFFFFFFF,
+    };
+    constexpr MemoryKind fallbackKind = MemoryKind::Linear | MemoryKind::DeviceLocal;
+    constexpr MemoryKind uploadKind = fallbackKind | MemoryKind::PreferHostVisible;
+    auto& allocator = mDeviceVk->GetResourceMemoryAllocator();
+    auto preferredType = allocator->FindBestTypeIndex(requirements, uploadKind);
+    auto fallbackType = allocator->FindBestTypeIndex(requirements, fallbackKind);
+    DAWN_TEST_UNSUPPORTED_IF(!preferredType.has_value() || !fallbackType.has_value() ||
+                             preferredType == fallbackType);
+
+    for (uint64_t errorIndex : {0u, 1u}) {
+        ClearErrorInjector();
+        EnableErrorInjector();
+        InjectErrorAt(errorIndex);
+        auto result = allocator->Allocate(requirements, uploadKind,
+                                           /*forceDisableSubAllocation=*/true);
+        DisableErrorInjector();
+        ClearErrorInjector();
+
+        if (result.IsError()) {
+            auto error = result.AcquireError();
+            EXPECT_EQ(errorIndex, 1u) << error->GetFormattedMessage();
+            EXPECT_EQ(error->GetType(), InternalErrorType::Internal);
+        } else {
+            ResourceMemoryAllocation allocation = result.AcquireSuccess();
+            EXPECT_EQ(errorIndex, 0u);
+            EXPECT_EQ(ToBackend(allocation.GetResourceHeap())->GetMemoryType(),
+                      fallbackType.value());
+            allocator->Deallocate(&allocation);
         }
     }
 }

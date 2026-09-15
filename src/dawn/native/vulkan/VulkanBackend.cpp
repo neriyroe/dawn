@@ -45,6 +45,7 @@
 #include "src/dawn/native/vulkan/ExtraQueuesVk.h"
 #include "src/dawn/native/vulkan/PhysicalDeviceVk.h"
 #include "src/dawn/native/vulkan/QueueVk.h"
+#include "src/dawn/native/vulkan/ResourceMemoryAllocatorVk.h"
 #include "src/dawn/native/vulkan/SwapchainHooksVk.h"
 #include "src/dawn/native/vulkan/TextureVk.h"
 
@@ -113,6 +114,35 @@ VkPhysicalDevice GetVkPhysicalDevice(WGPUDevice device) {
 uint32_t GetQueueFamilyIndex(WGPUDevice device) {
     Device* backendDevice = AsVulkan(device);
     return backendDevice == nullptr ? 0 : backendDevice->GetGraphicsQueueFamily();
+}
+
+uint32_t FindBufferMemoryTypeIndex(WGPUDevice device,
+                                 VkMemoryRequirements requirements,
+                                 bool hostVisible,
+                                 bool preferDeviceLocal) {
+    Device* backendDevice = AsVulkan(device);
+    if (backendDevice == nullptr) {
+        return kInvalidMemoryTypeIndex;
+    }
+
+    MemoryKind kind = MemoryKind::Linear;
+    if (hostVisible) {
+        kind |= MemoryKind::WriteMappable;
+        const auto& memoryTypes = backendDevice->GetDeviceInfo().memoryTypes;
+        for (uint32_t i = 0; i < memoryTypes.size(); ++i) {
+            if (!(memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+                requirements.memoryTypeBits &= ~(1u << i);
+            }
+        }
+        if (preferDeviceLocal) {
+            kind |= MemoryKind::PreferDeviceLocal;
+        }
+    } else {
+        kind |= MemoryKind::DeviceLocal;
+    }
+    return backendDevice->GetResourceMemoryAllocator()
+        ->FindBestTypeIndex(requirements, kind)
+        .value_or(kInvalidMemoryTypeIndex);
 }
 
 VkInstance GetVkInstance(WGPUAdapter adapter) {

@@ -46,6 +46,8 @@ enum class MemoryKind : uint8_t {
     ReadMappable = 8,
     WriteMappable = 16,
     HostCached = 32,
+    PreferHostVisible = 64,
+    PreferDeviceLocal = 128,
 };
 
 static constexpr uint32_t kInvalidMemoryTypeIndex = std::numeric_limits<uint32_t>::max();
@@ -68,6 +70,7 @@ class MemoryTypeSelector {
 
     const std::vector<VkMemoryType> mMemoryTypes;
     const std::vector<VkMemoryHeap> mMemoryHeaps;
+    VkDeviceSize mLargestDeviceLocalHeapSize = 0;
 };
 
 }  // namespace dawn::native::vulkan

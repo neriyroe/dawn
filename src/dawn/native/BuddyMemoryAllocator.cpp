@@ -88,7 +88,8 @@ ResultOrError<ResourceMemoryAllocation> BuddyMemoryAllocator::Allocate(uint64_t 
     if (mTrackedSubAllocations[memoryIndex].refcount == 0) {
         // Transfer ownership to this allocator
         std::unique_ptr<ResourceHeapBase> memory;
-        DAWN_TRY_ASSIGN(memory, mHeapAllocator->AllocateResourceHeap(mMemoryBlockSize));
+        DAWN_TRY_ASSIGN_WITH_CLEANUP(memory, mHeapAllocator->AllocateResourceHeap(mMemoryBlockSize),
+                                    { mBuddyBlockAllocator.Deallocate(blockOffset); });
         mTrackedSubAllocations[memoryIndex] = {/*refcount*/ 0, std::move(memory)};
     }
 

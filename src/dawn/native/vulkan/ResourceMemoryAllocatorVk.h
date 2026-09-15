@@ -83,6 +83,12 @@ class ResourceMemoryAllocator {
     void DeallocateResourceHeap(ResourceHeap* heap, bool isLazyMemoryType);
 
   private:
+    ResultOrError<ResourceMemoryAllocation> AllocateFromType(
+        const VkMemoryRequirements& requirements,
+        MemoryKind kind,
+        bool forceDisableSubAllocation,
+        uint32_t memoryType);
+
     raw_ptr<Device> mDevice;
     const VkDeviceSize mMaxSizeForSuballocation;
     MemoryTypeSelector mMemoryTypeSelector;

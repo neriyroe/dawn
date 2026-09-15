@@ -710,6 +710,13 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
     deviceToggles->Default(Toggle::UseD3D12ResourceHeapTier2, useResourceHeapTier2);
     deviceToggles->Default(Toggle::UseD3D12RenderPass, GetDeviceInfo().supportsRenderPass);
     deviceToggles->Default(Toggle::UseD3D12ResidencyManagement, true);
+    if (!GetDeviceInfo().supportsGPUUploadHeap) {
+        deviceToggles->ForceSet(Toggle::D3D12UseGPUUploadHeap, false);
+        deviceToggles->ForceSet(Toggle::D3D12UseGPUUploadHeapForStaging, false);
+    } else {
+        deviceToggles->Default(Toggle::D3D12UseGPUUploadHeap, !GetDeviceInfo().isUMA);
+    }
+    deviceToggles->Default(Toggle::D3D12UseGPUUploadHeapForStaging, false);
     deviceToggles->Default(Toggle::D3D12AlwaysUseTypelessFormatsForCastableTexture,
                            !GetDeviceInfo().supportsCastingFullyTypedFormat);
     deviceToggles->Default(Toggle::ApplyClearBigIntegerColorValueWithDraw, true);

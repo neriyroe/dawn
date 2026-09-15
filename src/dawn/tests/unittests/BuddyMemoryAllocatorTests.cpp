@@ -468,4 +468,68 @@ TEST(BuddyMemoryAllocatorTests, DestroyHeaps) {
     ASSERT_EQ(poolAllocator.GetPoolSizeForTesting(), 0u);
 }
 
+TEST(BuddyMemoryAllocatorTests, TrimPreservesPartiallyOccupiedHeap) {
+    class TrackingAllocator : public PlaceholderResourceHeapAllocator {
+      public:
+        void DeallocateResourceHeap(std::unique_ptr<ResourceHeapBase> heap) override {
+            freed.insert(heap.get());
+            PlaceholderResourceHeapAllocator::DeallocateResourceHeap(std::move(heap));
+        }
+        std::set<ResourceHeapBase*> freed;
+    } heaps;
+    PooledResourceMemoryAllocator pool(&heaps);
+    PlaceholderBuddyResourceAllocator allocator(4096, 128, &pool);
+    auto survivor = allocator.Allocate(64);
+    auto neighbor = allocator.Allocate(64);
+    auto temporary = allocator.Allocate(128);
+    auto* liveHeap = survivor.GetResourceHeap();
+    auto* emptyHeap = temporary.GetResourceHeap();
+    ASSERT_EQ(liveHeap, neighbor.GetResourceHeap());
+    ASSERT_NE(liveHeap, emptyHeap);
+
+    allocator.Deallocate(neighbor);
+    allocator.Deallocate(temporary);
+    ASSERT_EQ(pool.GetPoolSizeForTesting(), 1u);
+    pool.FreeRecycledAllocations();
+    EXPECT_EQ(pool.GetPoolSizeForTesting(), 0u);
+    EXPECT_EQ(heaps.freed.count(emptyHeap), 1u);
+    EXPECT_EQ(heaps.freed.count(liveHeap), 0u);
+
+    auto reused = allocator.Allocate(64);
+    EXPECT_EQ(reused.GetResourceHeap(), liveHeap);
+    allocator.Deallocate(reused);
+    allocator.Deallocate(survivor);
+    pool.FreeRecycledAllocations();
+    EXPECT_EQ(heaps.freed.count(liveHeap), 1u);
+}
+
+TEST(BuddyMemoryAllocatorTests, HeapAllocationFailureReleasesReservedBlock) {
+    class FailingHeapAllocator : public PlaceholderResourceHeapAllocator {
+      public:
+        ResultOrError<std::unique_ptr<ResourceHeapBase>> AllocateResourceHeap(uint64_t size) override {
+            if (fail) {
+                return DAWN_OUT_OF_MEMORY_ERROR("Injected heap allocation failure");
+            }
+            return PlaceholderResourceHeapAllocator::AllocateResourceHeap(size);
+        }
+        bool fail = true;
+    } heaps;
+    BuddyMemoryAllocator allocator(128, 128, &heaps);
+
+    for (uint32_t attempt = 0; attempt < 3; ++attempt) {
+        auto result = allocator.Allocate(128, 1, false);
+        ASSERT_TRUE(result.IsError());
+        EXPECT_EQ(result.AcquireError()->GetType(), InternalErrorType::OutOfMemory);
+        EXPECT_EQ(allocator.ComputeTotalNumOfHeapsForTesting(), 0u);
+    }
+
+    heaps.fail = false;
+    auto result = allocator.Allocate(128, 1, false);
+    ASSERT_TRUE(result.IsSuccess());
+    auto allocation = result.AcquireSuccess();
+    EXPECT_EQ(allocation.GetInfo().mMethod, AllocationMethod::kSubAllocated);
+    EXPECT_EQ(allocation.GetInfo().mBlockOffset, 0u);
+    allocator.Deallocate(allocation);
+}
+
 }  // namespace dawn::native

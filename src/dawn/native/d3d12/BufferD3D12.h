@@ -28,7 +28,6 @@
 #ifndef SRC_DAWN_NATIVE_D3D12_BUFFERD3D12_H_
 #define SRC_DAWN_NATIVE_D3D12_BUFFERD3D12_H_
 
-#include <limits>
 #include <memory>
 #include <vector>
 
@@ -103,7 +102,7 @@ class Buffer final : public BufferBase {
     ResourceHeapAllocation mResourceAllocation;
     bool mFixedResourceState = false;
     D3D12_RESOURCE_STATES mLastState = D3D12_RESOURCE_STATE_COMMON;
-    ExecutionSerial mLastUsedSerial = std::numeric_limits<ExecutionSerial>::max();
+    ExecutionSerial mLastUsedSerial = kBeginningOfGPUTime;
 
     D3D12_RANGE mWrittenMappedRange = {0, 0};
     Span<std::byte> mMappedData;

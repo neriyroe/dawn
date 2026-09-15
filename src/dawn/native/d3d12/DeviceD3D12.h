@@ -226,6 +226,7 @@ class Device final : public d3d::Device {
         const SharedFenceDescriptor* descriptor) override;
 
     void DestroyImpl(DestroyReason reason) override;
+    bool ReduceMemoryUsageImpl() override;
 
     MaybeError CheckDebugLayerAndGenerateErrors();
     void AppendDebugLayerMessages(ErrorData* error) override;

@@ -27,6 +27,7 @@
 
 #include "src/dawn/native/vulkan/MemoryTypeSelector.h"
 
+#include <algorithm>
 #include <utility>
 
 #include "src/utils/numeric.h"
@@ -67,7 +68,13 @@ MemoryTypeSelector::MemoryTypeSelector(const VulkanDeviceInfo& info)
 
 MemoryTypeSelector::MemoryTypeSelector(std::vector<VkMemoryType> memoryTypes,
                                        std::vector<VkMemoryHeap> memoryHeaps)
-    : mMemoryTypes(std::move(memoryTypes)), mMemoryHeaps(std::move(memoryHeaps)) {}
+    : mMemoryTypes(std::move(memoryTypes)), mMemoryHeaps(std::move(memoryHeaps)) {
+    for (const auto& heap : mMemoryHeaps) {
+        if (heap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
+            mLargestDeviceLocalHeapSize = std::max(mLargestDeviceLocalHeapSize, heap.size);
+        }
+    }
+}
 
 uint32_t MemoryTypeSelector::FindBestTypeIndex(VkMemoryRequirements requirements, MemoryKind kind) {
     bool mappable = IsMemoryKindMappable(kind);
@@ -146,12 +153,39 @@ uint32_t MemoryTypeSelector::FindBestTypeIndex(VkMemoryRequirements requirements
             continue;
         }
 
-        // All things equal favor the memory in the biggest heap
+        // Favor larger heaps before host visibility to avoid exhausting a small BAR aperture.
         VkDeviceSize bestTypeHeapSize = mMemoryHeaps[mMemoryTypes[bestType].heapIndex].size;
         VkDeviceSize candidateHeapSize = mMemoryHeaps[mMemoryTypes[i].heapIndex].size;
-        if (candidateHeapSize > bestTypeHeapSize) {
-            bestType = i;
+        if ((kind & MemoryKind::PreferDeviceLocal) && (kind & MemoryKind::WriteMappable) &&
+            !(kind & MemoryKind::ReadMappable)) {
+            bool currentFullVRAM =
+                currentDeviceLocal && candidateHeapSize == mLargestDeviceLocalHeapSize;
+            bool bestFullVRAM = bestDeviceLocal && bestTypeHeapSize == mLargestDeviceLocalHeapSize;
+            if (currentFullVRAM != bestFullVRAM) {
+                if (currentFullVRAM) {
+                    bestType = i;
+                }
+                continue;
+            }
+        }
+        if (candidateHeapSize != bestTypeHeapSize) {
+            if (candidateHeapSize > bestTypeHeapSize) {
+                bestType = i;
+            }
             continue;
+        }
+
+        // Coherent host-visible VRAM lets idle upload destinations bypass staging copies.
+        constexpr VkMemoryPropertyFlags kDirectUploadFlags =
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        if (!mappable && (kind & MemoryKind::PreferHostVisible)) {
+            bool currentDirectUpload =
+                (mMemoryTypes[i].propertyFlags & kDirectUploadFlags) == kDirectUploadFlags;
+            bool bestDirectUpload =
+                (mMemoryTypes[bestType].propertyFlags & kDirectUploadFlags) == kDirectUploadFlags;
+            if (currentDirectUpload && !bestDirectUpload) {
+                bestType = i;
+            }
         }
     }
 

@@ -25,6 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <utility>
 #include <vector>
 
 #include "dawn/webgpu_cpp_print.h"
@@ -40,6 +41,118 @@ namespace dawn::native::vulkan {
 constexpr VkMemoryRequirements kAnyType = {.size = 16,
                                            .alignment = 16,
                                            .memoryTypeBits = 0xFFFFFFFF};
+
+class MemoryTypeSelectorResizableBARTests : public testing::Test {
+  protected:
+    static constexpr MemoryKind kUploadKind =
+        MemoryKind::Linear | MemoryKind::DeviceLocal | MemoryKind::PreferHostVisible;
+
+    std::vector<VkMemoryType> memoryTypes = {
+        {VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0},
+        {VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 1},
+        {VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
+             VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+         1},
+        {VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+         0},
+    };
+    std::vector<VkMemoryHeap> memoryHeaps = {
+        {16ull * 1024 * 1024 * 1024, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT},
+        {32ull * 1024 * 1024 * 1024, 0},
+    };
+};
+
+TEST_F(MemoryTypeSelectorResizableBARTests, UploadPrefersCoherentHostVisibleVRAM) {
+    MemoryTypeSelector selector(memoryTypes, memoryHeaps);
+    EXPECT_EQ(selector.FindBestTypeIndex(kAnyType, kUploadKind), 3u);
+    EXPECT_FALSE(IsMemoryKindMappable(kUploadKind));
+
+    std::swap(memoryTypes[0], memoryTypes[3]);
+    MemoryTypeSelector reorderedSelector(memoryTypes, memoryHeaps);
+    EXPECT_EQ(reorderedSelector.FindBestTypeIndex(kAnyType, kUploadKind), 0u);
+}
+
+TEST_F(MemoryTypeSelectorResizableBARTests, GPUOnlyAndMappedBuffersKeepTheirMemoryPolicy) {
+    MemoryTypeSelector selector(memoryTypes, memoryHeaps);
+    EXPECT_EQ(selector.FindBestTypeIndex(kAnyType, MemoryKind::Linear | MemoryKind::DeviceLocal),
+              0u);
+    EXPECT_EQ(selector.FindBestTypeIndex(kAnyType, MemoryKind::Linear | MemoryKind::WriteMappable),
+              1u);
+    EXPECT_EQ(selector.FindBestTypeIndex(kAnyType, MemoryKind::Linear | MemoryKind::ReadMappable),
+              2u);
+    EXPECT_EQ(selector.FindBestTypeIndex(kAnyType, MemoryKind::Linear | MemoryKind::ReadMappable |
+                                                       MemoryKind::WriteMappable),
+              2u);
+}
+
+TEST_F(MemoryTypeSelectorResizableBARTests, SmallBARApertureDoesNotDisplaceFullVRAMHeap) {
+    memoryHeaps.push_back({256ull * 1024 * 1024, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT});
+    memoryTypes[3].heapIndex = 2;
+    MemoryTypeSelector selector(memoryTypes, memoryHeaps);
+    EXPECT_EQ(selector.FindBestTypeIndex(kAnyType, kUploadKind), 0u);
+
+    std::swap(memoryTypes[0], memoryTypes[3]);
+    MemoryTypeSelector reorderedSelector(memoryTypes, memoryHeaps);
+    EXPECT_EQ(reorderedSelector.FindBestTypeIndex(kAnyType, kUploadKind), 3u);
+}
+
+TEST_F(MemoryTypeSelectorResizableBARTests, UploadPreferenceRequiresCoherentMemory) {
+    memoryTypes[3].propertyFlags &= ~VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    MemoryTypeSelector selector(memoryTypes, memoryHeaps);
+    EXPECT_EQ(selector.FindBestTypeIndex(kAnyType, kUploadKind), 0u);
+}
+
+TEST_F(MemoryTypeSelectorResizableBARTests, MissingBARUsesDeviceLocalMemory) {
+    memoryTypes.pop_back();
+    MemoryTypeSelector selector(memoryTypes, memoryHeaps);
+    EXPECT_EQ(selector.FindBestTypeIndex(kAnyType, kUploadKind), 0u);
+    EXPECT_EQ(selector.FindBestTypeIndex(kAnyType, MemoryKind::Linear |
+                                                       MemoryKind::PreferHostVisible),
+              0u);
+}
+
+TEST_F(MemoryTypeSelectorResizableBARTests, UploadPreferenceRespectsCompatibleMemoryTypes) {
+    MemoryTypeSelector selector(memoryTypes, memoryHeaps);
+    VkMemoryRequirements requirements = kAnyType;
+    requirements.memoryTypeBits &= ~(1u << 3);
+    EXPECT_EQ(selector.FindBestTypeIndex(requirements, kUploadKind), 0u);
+
+    requirements.memoryTypeBits = (1u << 1) | (1u << 2);
+    EXPECT_EQ(selector.FindBestTypeIndex(requirements, kUploadKind), kInvalidMemoryTypeIndex);
+    EXPECT_EQ(selector.FindBestTypeIndex(requirements, MemoryKind::Linear |
+                                                          MemoryKind::PreferHostVisible),
+              1u);
+}
+
+TEST_F(MemoryTypeSelectorResizableBARTests, MappedDirectReadPrefersFullVRAM) {
+    MemoryTypeSelector selector(memoryTypes, memoryHeaps);
+    constexpr MemoryKind kind =
+        MemoryKind::Linear | MemoryKind::WriteMappable | MemoryKind::PreferDeviceLocal;
+    EXPECT_EQ(selector.FindBestTypeIndex(kAnyType, kind), 3u);
+    EXPECT_EQ(selector.FindBestTypeIndex(kAnyType, kind | MemoryKind::ReadMappable), 2u);
+
+    VkMemoryRequirements requirements = kAnyType;
+    requirements.memoryTypeBits &= ~(1u << 3);
+    EXPECT_EQ(selector.FindBestTypeIndex(requirements, kind), 1u);
+}
+
+TEST_F(MemoryTypeSelectorResizableBARTests, MappedDirectReadAvoidsSmallBAR) {
+    memoryHeaps.push_back({256ull * 1024 * 1024, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT});
+    memoryTypes[3].heapIndex = 2;
+    MemoryTypeSelector selector(memoryTypes, memoryHeaps);
+    EXPECT_EQ(selector.FindBestTypeIndex(kAnyType, MemoryKind::Linear | MemoryKind::WriteMappable |
+                                                       MemoryKind::PreferDeviceLocal),
+              1u);
+}
+
+TEST_F(MemoryTypeSelectorResizableBARTests, MappedDirectReadPrefersCoherenceOverLocality) {
+    memoryTypes[3].propertyFlags &= ~VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    MemoryTypeSelector selector(memoryTypes, memoryHeaps);
+    EXPECT_EQ(selector.FindBestTypeIndex(kAnyType, MemoryKind::Linear | MemoryKind::WriteMappable |
+                                                       MemoryKind::PreferDeviceLocal),
+              1u);
+}
 
 TEST(MemoryTypeSelectorTests, Quatro_P100) {
     // Memory info from Nvidia Quatro P100 GPU.

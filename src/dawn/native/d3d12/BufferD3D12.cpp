@@ -28,6 +28,7 @@
 #include "src/dawn/native/d3d12/BufferD3D12.h"
 
 #include <algorithm>
+#include <limits>
 #include <utility>
 
 #include "dawn/platform/DawnPlatform.h"
@@ -111,9 +112,13 @@ size_t D3D12BufferSizeAlignment(wgpu::BufferUsage usage) {
 
 ResourceHeapKind GetResourceHeapKind(wgpu::BufferUsage bufferUsage,
                                      uint32_t resourceHeapTier,
-                                     bool isCacheCoherentUMA) {
+                                     bool isCacheCoherentUMA,
+                                     bool useGPUUploadHeap) {
     if (bufferUsage == (wgpu::BufferUsage::MapWrite | wgpu::BufferUsage::CopySrc) ||
         bufferUsage == wgpu::BufferUsage::MapWrite) {
+        if (useGPUUploadHeap) {
+            return ResourceHeapKind::GPUUpload_OnlyBuffers;
+        }
         if (resourceHeapTier >= 2) {
             return ResourceHeapKind::Upload_AllBuffersAndTextures;
         } else {
@@ -216,7 +221,9 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
 
     ResourceHeapKind resourceHeapKind =
         GetResourceHeapKind(GetInternalUsage(), ToBackend(GetDevice())->GetResourceHeapTier(),
-                            ToBackend(GetDevice())->GetDeviceInfo().isCacheCoherentUMA);
+                            ToBackend(GetDevice())->GetDeviceInfo().isCacheCoherentUMA,
+                            GetDevice()->IsToggleEnabled(Toggle::D3D12UseGPUUploadHeap) &&
+                                GetDevice()->IsToggleEnabled(Toggle::D3D12UseGPUUploadHeapForStaging));
     mLastState = D3D12_RESOURCE_STATE_COMMON;
 
     switch (resourceHeapKind) {
@@ -231,6 +238,7 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
             // D3D12 requires buffers on the UPLOAD heap to have the
             // D3D12_RESOURCE_STATE_GENERIC_READ state
         case ResourceHeapKind::Upload_AllBuffersAndTextures:
+        case ResourceHeapKind::GPUUpload_OnlyBuffers:
         case ResourceHeapKind::Upload_OnlyBuffers: {
             mLastState |= D3D12_RESOURCE_STATE_GENERIC_READ;
             mFixedResourceState = true;
@@ -245,9 +253,25 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
             DAWN_UNREACHABLE();
     }
 
-    DAWN_TRY_ASSIGN(mResourceAllocation,
-                    ToBackend(GetDevice())
-                        ->AllocateMemory(resourceHeapKind, resourceDescriptor, mLastState, 0));
+    // GPU upload buffers start in COMMON and implicitly promote to their read-only GPU usages.
+    const D3D12_RESOURCE_STATES initialState = resourceHeapKind == ResourceHeapKind::GPUUpload_OnlyBuffers
+                                                  ? D3D12_RESOURCE_STATE_COMMON
+                                                  : mLastState;
+    auto allocation = ToBackend(GetDevice())->AllocateMemory(resourceHeapKind, resourceDescriptor,
+                                                              initialState, 0);
+    if (allocation.IsError()) {
+        auto error = allocation.AcquireError();
+        if (resourceHeapKind != ResourceHeapKind::GPUUpload_OnlyBuffers ||
+            error->GetType() != InternalErrorType::OutOfMemory) {
+            return std::move(error);
+        }
+        resourceHeapKind = GetResourceHeapKind(GetInternalUsage(),
+                                               ToBackend(GetDevice())->GetResourceHeapTier(),
+                                               false, false);
+        allocation = ToBackend(GetDevice())->AllocateMemory(resourceHeapKind, resourceDescriptor,
+                                                              mLastState, 0);
+    }
+    DAWN_TRY_ASSIGN(mResourceAllocation, std::move(allocation));
 
     SetLabelImpl();
 
@@ -383,6 +407,14 @@ bool Buffer::TrackUsageAndGetResourceBarrier(CommandRecordingContext* commandCon
         return false;
     }
 
+    // Buffers decay to COMMON between submissions, including when the next usage is unchanged.
+    const ExecutionSerial pendingCommandSerial =
+        ToBackend(GetDevice())->GetQueue()->GetPendingCommandSerial();
+    if (pendingCommandSerial > mLastUsedSerial) {
+        mLastState = D3D12_RESOURCE_STATE_COMMON;
+        mLastUsedSerial = pendingCommandSerial;
+    }
+
     D3D12_RESOURCE_STATES newState = D3D12BufferUsage(newUsage);
     D3D12_RESOURCE_STATES lastState = mLastState;
 
@@ -406,26 +438,6 @@ bool Buffer::TrackUsageAndGetResourceBarrier(CommandRecordingContext* commandCon
     }
 
     mLastState = newState;
-
-    // The COMMON state represents a state where no write operations can be pending, which makes
-    // it possible to transition to and from some states without synchronization (i.e. without an
-    // explicit ResourceBarrier call). A buffer can be implicitly promoted to 1) a single write
-    // state, or 2) multiple read states. A buffer that is accessed within a command list will
-    // always implicitly decay to the COMMON state after the call to ExecuteCommandLists
-    // completes - this is because all buffer writes are guaranteed to be completed before the
-    // next ExecuteCommandLists call executes.
-    // https://docs.microsoft.com/en-us/windows/desktop/direct3d12/using-resource-barriers-to-synchronize-resource-states-in-direct3d-12#implicit-state-transitions
-
-    // To track implicit decays, we must record the pending serial on which a transition will
-    // occur. When that buffer is used again, the previously recorded serial must be compared to
-    // the last completed serial to determine if the buffer has implicity decayed to the common
-    // state.
-    const ExecutionSerial pendingCommandSerial =
-        ToBackend(GetDevice())->GetQueue()->GetPendingCommandSerial();
-    if (pendingCommandSerial > mLastUsedSerial) {
-        lastState = D3D12_RESOURCE_STATE_COMMON;
-        mLastUsedSerial = pendingCommandSerial;
-    }
 
     // All possible buffer states used by Dawn are eligible for implicit promotion from COMMON.
     // These are: COPY_SOURCE, VERTEX_AND_COPY_BUFFER, INDEX_BUFFER, COPY_DEST,
@@ -495,7 +507,8 @@ MaybeError Buffer::MapInternal(bool isWrite, size_t offset, size_t size, const c
         DAWN_TRY(ToBackend(GetDevice())->GetResidencyManager()->LockAllocation(heap));
     }
 
-    D3D12_RANGE range = {offset, offset + size};
+    const D3D12_RANGE range = {offset, offset + size};
+    const D3D12_RANGE readRange = isWrite ? D3D12_RANGE{0, 0} : range;
     // mappedPointer is the pointer to the start of the resource, irrespective of offset.
     // MSDN says (note the weird use of "never"):
     //
@@ -504,7 +517,7 @@ MaybeError Buffer::MapInternal(bool isWrite, size_t offset, size_t size, const c
     //
     // https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12resource-map
     void* mappedPointer = nullptr;
-    DAWN_TRY(CheckHRESULT(GetD3D12Resource()->Map(0, &range, &mappedPointer), contextInfo));
+    DAWN_TRY(CheckHRESULT(GetD3D12Resource()->Map(0, &readRange, &mappedPointer), contextInfo));
     // SAFETY: The pointer returned is for the actual memory of the resource and contains at least
     // GetAllocatedSize() bytes.
     mMappedData = DAWN_UNSAFE_BUFFERS(

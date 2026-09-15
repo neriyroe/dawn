@@ -67,6 +67,9 @@ enum MemorySegment {
 
 DAWN_NATIVE_EXPORT Microsoft::WRL::ComPtr<ID3D12Device> GetD3D12Device(WGPUDevice device);
 
+// Whether GPU upload heaps are enabled and a nonzero allocation size fits the local budget.
+DAWN_NATIVE_EXPORT bool UseGPUUploadHeap(WGPUDevice device, uint64_t allocationSize = 0);
+
 DAWN_NATIVE_EXPORT Microsoft::WRL::ComPtr<ID3D11On12Device> GetOrCreateD3D11On12Device(
     WGPUDevice device);
 

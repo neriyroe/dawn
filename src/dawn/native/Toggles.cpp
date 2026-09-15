@@ -546,6 +546,14 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "a descriptor heap and the data pointed to by the descriptors so that the drivers can make "
       "better optimizations on them.",
       "https://crbug.com/tint/1890", ToggleStage::Device}},
+    {Toggle::D3D12UseGPUUploadHeap,
+     {"d3d12_use_gpu_upload_heap",
+      "Use CPU-visible video memory for GPU upload heaps when supported, with system-memory fallback.",
+      "https://microsoft.github.io/DirectX-Specs/d3d/D3D12GPUUploadHeaps.html", ToggleStage::Device}},
+    {Toggle::D3D12UseGPUUploadHeapForStaging,
+     {"d3d12_use_gpu_upload_heap_for_staging",
+      "Opt into CPU-visible video memory for staging uploads when GPU upload heaps are enabled.",
+      "https://gpuopen.com/learn/using-d3d12-heap-type-gpu-upload/", ToggleStage::Device}},
     {Toggle::VulkanUseImageRobustAccess2,
      {"vulkan_use_image_robust_access_2",
       "Disable Tint robustness transform on textures when VK_EXT_robustness2 is supported and "

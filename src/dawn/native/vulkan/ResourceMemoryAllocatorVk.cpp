@@ -190,6 +190,33 @@ ResultOrError<ResourceMemoryAllocation> ResourceMemoryAllocator::Allocate(
     auto maybeMemoryType = FindBestTypeIndex(requirements, kind);
     DAWN_INTERNAL_ERROR_IF(!maybeMemoryType.has_value(), "Failed to find suitable memory type.");
     uint32_t memoryType = maybeMemoryType.value();
+
+    auto allocation = AllocateFromType(requirements, kind, forceDisableSubAllocation, memoryType);
+    if (!allocation.IsError()) {
+        return allocation.AcquireSuccess();
+    }
+
+    auto error = allocation.AcquireError();
+    if (error->GetType() != InternalErrorType::OutOfMemory ||
+        !(kind & MemoryKind::PreferHostVisible)) {
+        return std::move(error);
+    }
+
+    // Host-visible memory is optional for uploads; retry the regular type if it is available.
+    MemoryKind fallbackKind = kind & ~MemoryKind::PreferHostVisible;
+    auto fallbackType = FindBestTypeIndex(requirements, fallbackKind);
+    if (!fallbackType.has_value() || fallbackType.value() == memoryType) {
+        return std::move(error);
+    }
+    return AllocateFromType(requirements, fallbackKind, forceDisableSubAllocation,
+                            fallbackType.value());
+}
+
+ResultOrError<ResourceMemoryAllocation> ResourceMemoryAllocator::AllocateFromType(
+    const VkMemoryRequirements& requirements,
+    MemoryKind kind,
+    bool forceDisableSubAllocation,
+    uint32_t memoryType) {
     bool isLazyMemoryType = mAllocatorsPerType[memoryType]->IsLazyMemoryType();
 
     VkDeviceSize size = requirements.size;

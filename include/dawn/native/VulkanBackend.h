@@ -49,6 +49,13 @@ DAWN_NATIVE_EXPORT VkQueue GetVkQueue(WGPUDevice device);
 DAWN_NATIVE_EXPORT VkPhysicalDevice GetVkPhysicalDevice(WGPUDevice device);
 DAWN_NATIVE_EXPORT uint32_t GetQueueFamilyIndex(WGPUDevice device);
 
+// Selects coherent mapped or device-local buffer memory; returns UINT32_MAX if unavailable.
+// preferDeviceLocal favors full-sized host-visible VRAM for buffers read directly by the GPU.
+DAWN_NATIVE_EXPORT uint32_t FindBufferMemoryTypeIndex(WGPUDevice device,
+                                                       VkMemoryRequirements requirements,
+                                                       bool hostVisible,
+                                                       bool preferDeviceLocal);
+
 // The same, from the adapter -- which is what an SDK needs to answer for its own extension
 // requirements, since the device that must enable them does not exist yet.
 DAWN_NATIVE_EXPORT VkInstance GetVkInstance(WGPUAdapter adapter);
