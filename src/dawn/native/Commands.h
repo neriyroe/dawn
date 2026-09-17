@@ -67,6 +67,7 @@ enum class Command : uint32_t {
     DrawIndexed,
     DrawIndirect,
     DrawIndexedIndirect,
+    DrawMeshTasks,
     MultiDrawIndirect,
     MultiDrawIndexedIndirect,
     EndComputePass,
@@ -281,6 +282,12 @@ struct DrawCmd {
     uint32_t instanceCount = 0;
     uint32_t firstVertex = 0;
     uint32_t firstInstance = 0;
+};
+
+struct DrawMeshTasksCmd {
+    uint32_t groupCountX = 0;
+    uint32_t groupCountY = 0;
+    uint32_t groupCountZ = 0;
 };
 
 struct DrawIndexedCmd {

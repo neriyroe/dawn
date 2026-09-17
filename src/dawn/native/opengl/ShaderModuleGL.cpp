@@ -92,6 +92,9 @@ GLenum GLShaderType(SingleShaderStage stage) {
             return GL_FRAGMENT_SHADER;
         case SingleShaderStage::Compute:
             return GL_COMPUTE_SHADER;
+        case SingleShaderStage::Task:
+        case SingleShaderStage::Mesh:
+            break;
     }
     DAWN_UNREACHABLE();
 }

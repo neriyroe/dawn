@@ -187,6 +187,11 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
 #if defined(DAWN_USE_BUILT_DXC)
     // ShaderF16 features require DXC version being 1.4 or higher, shader model supporting 6.2 or
     // higher, and native supporting F16 shader ops.
+    // The mesh blobs arrive signed from an offline DXC, so DXC at runtime is not a precondition.
+    if (mDeviceInfo.supportsMeshShaderTier1 && mDeviceInfo.highestSupportedShaderModel >= 65) {
+        EnableFeature(Feature::DawnMeshShader);
+    }
+
     if (mDeviceInfo.highestSupportedShaderModel >= 62 && mDeviceInfo.supportsNative16BitShaderOps) {
         EnableFeature(Feature::ShaderF16);
     }

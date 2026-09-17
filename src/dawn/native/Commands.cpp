@@ -106,6 +106,11 @@ void FreeCommands(CommandIterator* commands) {
                 draw->~DrawIndirectCmd();
                 break;
             }
+            case Command::DrawMeshTasks: {
+                DrawMeshTasksCmd* draw = commands->NextCommand<DrawMeshTasksCmd>();
+                draw->~DrawMeshTasksCmd();
+                break;
+            }
             case Command::DrawIndexedIndirect: {
                 DrawIndexedIndirectCmd* draw = commands->NextCommand<DrawIndexedIndirectCmd>();
                 draw->~DrawIndexedIndirectCmd();
@@ -304,6 +309,10 @@ void SkipCommand(CommandIterator* commands, Command type) {
 
         case Command::DrawIndirect:
             commands->NextCommand<DrawIndirectCmd>();
+            break;
+
+        case Command::DrawMeshTasks:
+            commands->NextCommand<DrawMeshTasksCmd>();
             break;
 
         case Command::DrawIndexedIndirect:

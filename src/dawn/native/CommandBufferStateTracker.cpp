@@ -336,6 +336,11 @@ static constexpr CommandBufferStateTracker::ValidationAspects kDrawIndexedAspect
     1 << VALIDATION_ASPECT_RESOURCE_TABLES | 1 << VALIDATION_ASPECT_VERTEX_BUFFERS |
     1 << VALIDATION_ASPECT_INDEX_BUFFER | 1 << VALIDATION_ASPECT_IMMEDIATE_DATA;
 
+// A mesh dispatch reads no vertex or index buffer.
+static constexpr CommandBufferStateTracker::ValidationAspects kDrawMeshTasksAspects =
+    1 << VALIDATION_ASPECT_PIPELINE | 1 << VALIDATION_ASPECT_BIND_GROUPS |
+    1 << VALIDATION_ASPECT_RESOURCE_TABLES | 1 << VALIDATION_ASPECT_IMMEDIATE_DATA;
+
 static constexpr CommandBufferStateTracker::ValidationAspects kLazyAspects =
     1 << VALIDATION_ASPECT_BIND_GROUPS | 1 << VALIDATION_ASPECT_RESOURCE_TABLES |
     1 << VALIDATION_ASPECT_VERTEX_BUFFERS | 1 << VALIDATION_ASPECT_INDEX_BUFFER |
@@ -360,11 +365,25 @@ MaybeError CommandBufferStateTracker::ValidateCanDispatch() {
 }
 
 MaybeError CommandBufferStateTracker::ValidateCanDraw() {
-    return ValidateOperation(kDrawAspects);
+    DAWN_TRY(ValidateOperation(kDrawAspects));
+    DAWN_INVALID_IF(GetRenderPipeline()->IsMeshPipeline(),
+                    "%s is a mesh pipeline; draw with DrawMeshTasks.", GetRenderPipeline());
+    return {};
 }
 
 MaybeError CommandBufferStateTracker::ValidateCanDrawIndexed() {
-    return ValidateOperation(kDrawIndexedAspects);
+    DAWN_TRY(ValidateOperation(kDrawIndexedAspects));
+    DAWN_INVALID_IF(GetRenderPipeline()->IsMeshPipeline(),
+                    "%s is a mesh pipeline; draw with DrawMeshTasks.", GetRenderPipeline());
+    return {};
+}
+
+MaybeError CommandBufferStateTracker::ValidateCanDrawMeshTasks() {
+    DAWN_TRY(ValidateOperation(kDrawMeshTasksAspects));
+    DAWN_INVALID_IF(!GetRenderPipeline()->IsMeshPipeline(),
+                    "%s has no mesh stage; DrawMeshTasks needs a mesh pipeline.",
+                    GetRenderPipeline());
+    return {};
 }
 
 MaybeError CommandBufferStateTracker::ValidateNoDifferentTextureViewsOnSameTexture() {

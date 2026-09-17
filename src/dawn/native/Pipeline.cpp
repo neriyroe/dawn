@@ -132,6 +132,22 @@ ResultOrError<ShaderModuleEntryPoint> ValidateProgrammableStage(DeviceBase* devi
 
     if (layout != nullptr) {
         DAWN_TRY(ValidateCompatibilityWithPipelineLayout(device, metadata, layout));
+        // A native blob addresses registers by binding number, so the layout must sort each of its
+        // bindings to that same index: dynamic buffers, then buffers, numbered densely from 0.
+        if (module->IsNative()) {
+            for (BindGroupIndex group : layout->GetBindGroupLayoutsMask()) {
+                const BindGroupLayoutInternalBase* bgl = layout->GetBindGroupLayout(group);
+                for (const auto& [number, info] : metadata.bindings[group]) {
+                    BindingIndex sorted = bgl->AsBindingIndex(bgl->GetAPIBindingIndex(number));
+                    DAWN_INVALID_IF(
+                        static_cast<uint32_t>(sorted) != static_cast<uint32_t>(number),
+                        "Native %s stage declares @group(%u) @binding(%u), which %s sorts to slot "
+                        "%u; number the group's buffers densely from 0, dynamic ones first.",
+                        stage, static_cast<uint32_t>(group), static_cast<uint32_t>(number), bgl,
+                        static_cast<uint32_t>(sorted));
+                }
+            }
+        }
     }
 
     DAWN_INVALID_IF(device->IsCompatibilityMode() && metadata.usesTextureLoadWithDepthTexture,

@@ -49,6 +49,71 @@
 #include "src/utils/compiler.h"
 
 namespace dawn::native::d3d12 {
+
+namespace {
+
+// One subobject of a pipeline state stream: its type tag, then the value at pointer alignment.
+template <typename T, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE kType>
+struct alignas(void*) StreamSubobject {
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type = kType;
+    T value;
+    explicit StreamSubobject(const T& given) : value(given) {}
+};
+
+// The graphics descriptor's state as a mesh pipeline stream: no vertex shader, no input layout.
+struct MeshPipelineStream {
+    StreamSubobject<ID3D12RootSignature*, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE>
+        rootSignature;
+    StreamSubobject<D3D12_SHADER_BYTECODE, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS> as;
+    StreamSubobject<D3D12_SHADER_BYTECODE, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS> ms;
+    StreamSubobject<D3D12_SHADER_BYTECODE, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS> ps;
+    StreamSubobject<D3D12_BLEND_DESC, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND> blend;
+    StreamSubobject<UINT, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK> sampleMask;
+    StreamSubobject<D3D12_RASTERIZER_DESC, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER>
+        rasterizer;
+    StreamSubobject<D3D12_DEPTH_STENCIL_DESC, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL>
+        depthStencil;
+    StreamSubobject<D3D12_PRIMITIVE_TOPOLOGY_TYPE,
+                    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY>
+        topology;
+    StreamSubobject<D3D12_RT_FORMAT_ARRAY,
+                    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS>
+        renderTargets;
+    StreamSubobject<DXGI_FORMAT, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT>
+        depthStencilFormat;
+    StreamSubobject<DXGI_SAMPLE_DESC, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC> sampleDesc;
+    StreamSubobject<UINT, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK> nodeMask;
+    StreamSubobject<D3D12_PIPELINE_STATE_FLAGS, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS> flags;
+
+    MeshPipelineStream(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc,
+                       const D3D12_SHADER_BYTECODE& task,
+                       const D3D12_SHADER_BYTECODE& mesh)
+        : rootSignature(desc.pRootSignature),
+          as(task),
+          ms(mesh),
+          ps(desc.PS),
+          blend(desc.BlendState),
+          sampleMask(desc.SampleMask),
+          rasterizer(desc.RasterizerState),
+          depthStencil(desc.DepthStencilState),
+          topology(desc.PrimitiveTopologyType),
+          renderTargets(RenderTargetFormats(desc)),
+          depthStencilFormat(desc.DSVFormat),
+          sampleDesc(desc.SampleDesc),
+          nodeMask(desc.NodeMask),
+          flags(desc.Flags) {}
+
+    static D3D12_RT_FORMAT_ARRAY RenderTargetFormats(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc) {
+        D3D12_RT_FORMAT_ARRAY formats = {};
+        formats.NumRenderTargets = desc.NumRenderTargets;
+        for (UINT at = 0; at < desc.NumRenderTargets; at++) {
+            formats.RTFormats[at] = desc.RTVFormats[at];
+        }
+        return formats;
+    }
+};
+
+}  // namespace
 namespace {
 
 D3D12_INPUT_CLASSIFICATION VertexStepModeFunction(wgpu::VertexStepMode mode) {
@@ -367,9 +432,13 @@ MaybeError RenderPipeline::InitializeImpl() {
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC descriptorD3D12 = {};
 
+    // The task and mesh blobs have no slot in the graphics descriptor; the stream below takes them.
+    D3D12_SHADER_BYTECODE taskBytecode = {}, meshBytecode = {};
     PerStage<D3D12_SHADER_BYTECODE*> shaders;
     shaders[SingleShaderStage::Vertex] = &descriptorD3D12.VS;
     shaders[SingleShaderStage::Fragment] = &descriptorD3D12.PS;
+    shaders[SingleShaderStage::Task] = &taskBytecode;
+    shaders[SingleShaderStage::Mesh] = &meshBytecode;
 
     PerStage<d3d::CompiledShader> compiledShader;
     std::optional<dawn::native::d3d::InterStageShaderVariablesMask> usedInterstageVariables;
@@ -412,7 +481,7 @@ MaybeError RenderPipeline::InitializeImpl() {
 
     // D3D12 logs warnings if any empty input state is used
     std::array<D3D12_INPUT_ELEMENT_DESC, kMaxVertexAttributes> inputElementDescriptors{};
-    if (GetAttributeLocationsUsed().any()) {
+    if (!IsMeshPipeline() && GetAttributeLocationsUsed().any()) {
         descriptorD3D12.InputLayout = ComputeInputLayout(&inputElementDescriptors);
     }
 
@@ -485,6 +554,19 @@ MaybeError RenderPipeline::InitializeImpl() {
     // condition on whether it fails appropriately.
     auto* d3d12Device = device->GetD3D12Device();
     platform::metrics::DawnHistogramTimer cacheTimer(device->GetPlatform());
+    if (IsMeshPipeline()) {
+        // The same raster, blend and target state as a stream of subobjects, with MS/AS in place
+        // of VS and the input layout; the blob cache is not consulted for these.
+        MeshPipelineStream stream(descriptorD3D12, taskBytecode, meshBytecode);
+        D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = {sizeof(stream), &stream};
+        DAWN_INVALID_IF(device->GetD3D12Device2() == nullptr,
+                        "Mesh pipelines need ID3D12Device2.");
+        DAWN_TRY(CheckHRESULT(device->GetD3D12Device2()->CreatePipelineState(
+                                  &streamDesc, IID_PPV_ARGS(&mPipelineState)),
+                              "D3D12 create mesh pipeline state"));
+        SetLabelImpl();
+        return {};
+    }
     HRESULT result =
         d3d12Device->CreateGraphicsPipelineState(&descriptorD3D12, IID_PPV_ARGS(&mPipelineState));
     if (cacheHit && result == D3D12_ERROR_DRIVER_VERSION_MISMATCH) {

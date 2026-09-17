@@ -38,11 +38,13 @@
 
 namespace dawn::native {
 
-enum class SingleShaderStage : uint8_t { Vertex, Fragment, Compute };
+enum class SingleShaderStage : uint8_t { Vertex, Fragment, Compute, Task, Mesh };
 
 static_assert(static_cast<uint32_t>(SingleShaderStage::Vertex) < kNumStages);
 static_assert(static_cast<uint32_t>(SingleShaderStage::Fragment) < kNumStages);
 static_assert(static_cast<uint32_t>(SingleShaderStage::Compute) < kNumStages);
+static_assert(static_cast<uint32_t>(SingleShaderStage::Task) < kNumStages);
+static_assert(static_cast<uint32_t>(SingleShaderStage::Mesh) < kNumStages);
 
 static_assert(static_cast<uint32_t>(wgpu::ShaderStage::Vertex) ==
               (1 << static_cast<uint32_t>(SingleShaderStage::Vertex)));
@@ -50,6 +52,10 @@ static_assert(static_cast<uint32_t>(wgpu::ShaderStage::Fragment) ==
               (1 << static_cast<uint32_t>(SingleShaderStage::Fragment)));
 static_assert(static_cast<uint32_t>(wgpu::ShaderStage::Compute) ==
               (1 << static_cast<uint32_t>(SingleShaderStage::Compute)));
+static_assert(static_cast<uint32_t>(wgpu::ShaderStage::Task) ==
+              (1 << static_cast<uint32_t>(SingleShaderStage::Task)));
+static_assert(static_cast<uint32_t>(wgpu::ShaderStage::Mesh) ==
+              (1 << static_cast<uint32_t>(SingleShaderStage::Mesh)));
 
 ityp::bitset<SingleShaderStage, kNumStages> IterateStages(wgpu::ShaderStage stages);
 wgpu::ShaderStage StageBit(SingleShaderStage stage);

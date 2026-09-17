@@ -31,6 +31,7 @@
 #include <windows.ui.xaml.media.dxinterop.h>
 #endif  // defined(DAWN_USE_WINDOWS_UI)
 
+#include <algorithm>
 #include <utility>
 
 #include "src/dawn/native/ChainUtils.h"
@@ -61,6 +62,8 @@ IUnknown* SwapChain::GetD3DDeviceForCreatingSwapChain() {
 void SwapChain::ReuseBuffers(SwapChainBase* previousSwapChain) {
     SwapChain* previousD3DSwapChain = ToBackend(previousSwapChain);
     mBuffers = std::move(previousD3DSwapChain->mBuffers);
+    mLatestPresent = previousD3DSwapChain->mLatestPresent;
+    mEarlierPresent = previousD3DSwapChain->mEarlierPresent;
 
     // Remember the current state of the ID3D12Resource for the current buffer if we didn't have
     // chance to present it yet.
@@ -104,6 +107,8 @@ MaybeError SwapChain::PresentImpl() {
     DAWN_TRY(queue->NextSerial());
     mBuffers[mCurrentBuffer].lastUsed = queue->GetLastSubmittedCommandSerial();
     mBuffers[mCurrentBuffer].acquireState = D3D12_RESOURCE_STATE_COMMON;
+    mEarlierPresent = mLatestPresent;
+    mLatestPresent = mBuffers[mCurrentBuffer].lastUsed;
 
     mApiTexture->APIDestroy();
     mApiTexture = nullptr;
@@ -114,14 +119,13 @@ MaybeError SwapChain::PresentImpl() {
 ResultOrError<SwapChainTextureInfo> SwapChain::GetCurrentTextureImpl() {
     Queue* queue = ToBackend(GetDevice()->GetQueue());
 
-    // Synchronously wait until previous operations on the next swapchain buffer are finished.
-    // This is the logic that performs frame pacing.
-    // TODO(crbug.com/dawn/269): Consider whether this should  be lifted for Mailbox so that
-    // there is not frame pacing.
+    // Synchronously wait until previous operations on the next swapchain buffer are finished, and until
+    // the frame before the last presented one is through: that is what paces the CPU one frame ahead of
+    // the GPU, while the third buffer spares the GPU the wait for the shown one's release.
     mCurrentBuffer = GetDXGISwapChain()->GetCurrentBackBufferIndex();
     const Buffer& buffer = mBuffers[mCurrentBuffer];
 
-    DAWN_TRY(queue->WaitForSerial(buffer.lastUsed));
+    DAWN_TRY(queue->WaitForSerial(std::max(buffer.lastUsed, mEarlierPresent)));
 
     // Create the API side objects for this use of the swapchain's buffer.
     TextureDescriptor descriptor = GetSwapChainBaseTextureDescriptor(this);

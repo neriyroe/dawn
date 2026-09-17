@@ -57,6 +57,7 @@ struct D3D12DeviceInfo {
     bool supportsRootSignatureVersion1_1;
     bool use64KBAlignedMSAATexture;
     bool supportsHeapFlagCreateNotZeroed;
+    bool supportsMeshShaderTier1;
     bool supportsTextureCopyBetweenDimensions;
     bool supportsTextureCompressionUnaligned;
     bool supportsUnrestrictedBufferTextureCopyPitch;

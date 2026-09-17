@@ -570,6 +570,12 @@ absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConv
         case SingleShaderStage::Fragment:
             s->Append("Fragment");
             break;
+        case SingleShaderStage::Task:
+            s->Append("Task");
+            break;
+        case SingleShaderStage::Mesh:
+            s->Append("Mesh");
+            break;
     }
     return {true};
 }

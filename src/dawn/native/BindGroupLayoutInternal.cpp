@@ -106,6 +106,11 @@ MaybeError ValidateBindGroupLayoutEntry(DeviceBase* device,
                                         const UnpackedPtr<BindGroupLayoutEntry>& entry,
                                         bool allowInternalBinding) {
     DAWN_TRY(ValidateShaderStage(entry->visibility));
+    DAWN_INVALID_IF(
+        (entry->visibility & (wgpu::ShaderStage::Task | wgpu::ShaderStage::Mesh)) &&
+            !device->HasFeature(Feature::DawnMeshShader),
+        "Visibility (%s) names a task or mesh stage without the %s feature.", entry->visibility,
+        wgpu::FeatureName::DawnMeshShader);
 
     uint32_t arraySize = std::max(1u, entry->bindingArraySize);
 

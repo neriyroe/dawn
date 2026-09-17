@@ -92,6 +92,7 @@ ResultOrError<Ref<Device>> Device::Create(AdapterBase* adapter,
 
 MaybeError Device::Initialize(const UnpackedPtr<DeviceDescriptor>& descriptor) {
     mD3d12Device = ToBackend(GetPhysicalDevice())->GetDevice();
+    mD3d12Device.As(&mD3d12Device2);
 
     // Querying for the ID3D12DebugDevice interface will tell us whether the debug layer
     // is enabled. The debug layer can be enabled internally via command line flags or externally
@@ -287,6 +288,10 @@ void Device::Flush11On12DeviceToAvoidLeaks() {
 
 ComPtr<ID3D12CommandSignature> Device::GetDispatchIndirectSignature() const {
     return mDispatchIndirectSignature;
+}
+
+ID3D12Device2* Device::GetD3D12Device2() const {
+    return mD3d12Device2.Get();
 }
 
 ComPtr<ID3D12CommandSignature> Device::GetDrawIndirectSignature() const {

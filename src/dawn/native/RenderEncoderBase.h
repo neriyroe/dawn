@@ -60,6 +60,7 @@ class RenderEncoderBase : public ProgrammableEncoder {
 
     void APIDrawIndirect(BufferBase* indirectBuffer, uint64_t indirectOffset);
     void APIDrawIndexedIndirect(BufferBase* indirectBuffer, uint64_t indirectOffset);
+    void APIDrawMeshTasks(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
 
     void APIMultiDrawIndirect(BufferBase* indirectBuffer,
                               uint64_t indirectOffset,

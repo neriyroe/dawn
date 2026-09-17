@@ -777,12 +777,12 @@ ResultOrError<ShaderModuleEntryPoint> ValidateFragmentState(DeviceBase* device,
 }
 
 MaybeError ValidateInterStageMatching(DeviceBase* device,
-                                      const VertexState& vertexState,
+                                      const ShaderModuleBase* preRasterModule,
                                       const ShaderModuleEntryPoint& vertexEntryPoint,
                                       const FragmentState& fragmentState,
                                       const ShaderModuleEntryPoint& fragmentEntryPoint) {
     const EntryPointMetadata& vertexMetadata =
-        vertexState.module->GetEntryPoint(vertexEntryPoint.name);
+        preRasterModule->GetEntryPoint(vertexEntryPoint.name);
     const EntryPointMetadata& fragmentMetadata =
         fragmentState.module->GetEntryPoint(fragmentEntryPoint.name);
 
@@ -884,11 +884,39 @@ MaybeError ValidateRenderPipelineDescriptor(DeviceBase* device,
         DAWN_TRY(device->ValidateObject(descriptor->layout));
     }
 
+    // The pre-raster stage is either the vertex state or a chained task+mesh state.
     ShaderModuleEntryPoint vertexEntryPoint;
-    DAWN_TRY_ASSIGN_CONTEXT(vertexEntryPoint,
-                            ValidateVertexState(device, &descriptor->vertex, descriptor->layout,
-                                                descriptor->primitive.topology),
-                            "validating vertex state.");
+    const ShaderModuleBase* preRasterModule = descriptor->vertex.module;
+    if (const auto* meshState = unpacked.Get<DawnMeshPipelineState>()) {
+        DAWN_INVALID_IF(!device->HasFeature(Feature::DawnMeshShader),
+                        "Mesh pipeline state used without %s enabled.",
+                        wgpu::FeatureName::DawnMeshShader);
+        DAWN_INVALID_IF(descriptor->vertex.module != nullptr || !descriptor->vertex.buffers.empty(),
+                        "A mesh pipeline has no vertex state.");
+        DAWN_INVALID_IF(descriptor->primitive.topology != wgpu::PrimitiveTopology::TriangleList &&
+                            descriptor->primitive.topology != wgpu::PrimitiveTopology::Undefined,
+                        "A mesh pipeline draws triangle lists, not %s.",
+                        descriptor->primitive.topology);
+        if (meshState->task != nullptr) {
+            DAWN_TRY_CONTEXT(ValidateProgrammableStage(device, meshState->task->module,
+                                                       meshState->task->entryPoint,
+                                                       meshState->task->constants,
+                                                       descriptor->layout, SingleShaderStage::Task),
+                             "validating task state.");
+        }
+        DAWN_TRY_ASSIGN_CONTEXT(
+            vertexEntryPoint,
+            ValidateProgrammableStage(device, meshState->mesh.module, meshState->mesh.entryPoint,
+                                      meshState->mesh.constants, descriptor->layout,
+                                      SingleShaderStage::Mesh),
+            "validating mesh state.");
+        preRasterModule = meshState->mesh.module;
+    } else {
+        DAWN_TRY_ASSIGN_CONTEXT(vertexEntryPoint,
+                                ValidateVertexState(device, &descriptor->vertex, descriptor->layout,
+                                                    descriptor->primitive.topology),
+                                "validating vertex state.");
+    }
 
     DAWN_TRY_CONTEXT(ValidatePrimitiveState(device, &descriptor->primitive),
                      "validating primitive state.");
@@ -914,7 +942,7 @@ MaybeError ValidateRenderPipelineDescriptor(DeviceBase* device,
                                   descriptor->depthStencil, descriptor->multisample),
             "validating fragment state.");
 
-        DAWN_TRY(ValidateInterStageMatching(device, descriptor->vertex, vertexEntryPoint,
+        DAWN_TRY(ValidateInterStageMatching(device, preRasterModule, vertexEntryPoint,
                                             *(descriptor->fragment), fragmentEntryPoint));
     }
 
@@ -931,10 +959,19 @@ MaybeError ValidateRenderPipelineDescriptor(DeviceBase* device,
 
 std::vector<StageAndDescriptor> GetRenderStagesAndSetPlaceholderShader(
     DeviceBase* device,
-    const RenderPipelineDescriptor* descriptor) {
+    const UnpackedPtr<RenderPipelineDescriptor>& descriptor) {
     std::vector<StageAndDescriptor> stages;
-    stages.push_back({SingleShaderStage::Vertex, descriptor->vertex.module,
-                      descriptor->vertex.entryPoint, descriptor->vertex.constants});
+    if (const auto* meshState = descriptor.Get<DawnMeshPipelineState>()) {
+        if (meshState->task != nullptr) {
+            stages.push_back({SingleShaderStage::Task, meshState->task->module,
+                              meshState->task->entryPoint, meshState->task->constants});
+        }
+        stages.push_back({SingleShaderStage::Mesh, meshState->mesh.module,
+                          meshState->mesh.entryPoint, meshState->mesh.constants});
+    } else {
+        stages.push_back({SingleShaderStage::Vertex, descriptor->vertex.module,
+                          descriptor->vertex.entryPoint, descriptor->vertex.constants});
+    }
     if (descriptor->fragment != nullptr) {
         stages.push_back({SingleShaderStage::Fragment, descriptor->fragment->module,
                           descriptor->fragment->entryPoint, descriptor->fragment->constants});
@@ -956,7 +993,7 @@ RenderPipelineBase::RenderPipelineBase(DeviceBase* device,
     : PipelineBase(device,
                    descriptor->layout,
                    descriptor->label,
-                   GetRenderStagesAndSetPlaceholderShader(device, *descriptor)),
+                   GetRenderStagesAndSetPlaceholderShader(device, descriptor)),
       mAttachmentState(device->GetOrCreateAttachmentState(descriptor, GetLayout())) {
     mVertexBufferCount = descriptor->vertex.buffers.size();
 
@@ -1090,6 +1127,10 @@ RenderPipelineBase::RenderPipelineBase(DeviceBase* device,
 
 MaybeError RenderPipelineBase::InitializeWithShaders() {
     return InitializeImpl();
+}
+
+bool RenderPipelineBase::IsMeshPipeline() const {
+    return HasStage(SingleShaderStage::Mesh);
 }
 
 RenderPipelineBase::RenderPipelineBase(DeviceBase* device,

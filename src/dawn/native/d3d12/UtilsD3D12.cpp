@@ -158,6 +158,14 @@ D3D12_SHADER_VISIBILITY ShaderVisibilityType(wgpu::ShaderStage visibility) {
         return D3D12_SHADER_VISIBILITY_PIXEL;
     }
 
+    if (visibility == wgpu::ShaderStage::Task) {
+        return D3D12_SHADER_VISIBILITY_AMPLIFICATION;
+    }
+
+    if (visibility == wgpu::ShaderStage::Mesh) {
+        return D3D12_SHADER_VISIBILITY_MESH;
+    }
+
     // For compute or any two combination of stages, visibility must be ALL
     return D3D12_SHADER_VISIBILITY_ALL;
 }

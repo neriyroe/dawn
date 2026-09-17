@@ -56,6 +56,7 @@ void CommandRecordingContext::Open(ComPtr<ID3D12GraphicsCommandList> commandList
     mD3d12CommandList = std::move(commandList);
     mD3d12CommandList.As(&mD3d12CommandList1);
     mD3d12CommandList.As(&mD3d12CommandList4);
+    mD3d12CommandList.As(&mD3d12CommandList6);
     mNeedsSubmit = false;
 }
 
@@ -151,10 +152,16 @@ ID3D12GraphicsCommandList4* CommandRecordingContext::GetCommandList4() const {
     return mD3d12CommandList4.Get();
 }
 
+ID3D12GraphicsCommandList6* CommandRecordingContext::GetCommandList6() const {
+    DAWN_ASSERT(mD3d12CommandList != nullptr);
+    return mD3d12CommandList6.Get();
+}
+
 void CommandRecordingContext::Release() {
     mD3d12CommandList.Reset();
     mD3d12CommandList1.Reset();
     mD3d12CommandList4.Reset();
+    mD3d12CommandList6.Reset();
 
     mNeedsSubmit = false;
 

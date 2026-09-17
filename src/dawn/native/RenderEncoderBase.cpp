@@ -100,6 +100,46 @@ Ref<AttachmentState> RenderEncoderBase::AcquireAttachmentState() {
     return std::move(mAttachmentState);
 }
 
+// D3D12's DispatchMesh bounds, the tighter of the backends' limits.
+static constexpr uint32_t kMaxMeshTaskGroupsPerAxis = 65535;
+static constexpr uint64_t kMaxMeshTaskGroups = 1u << 22;
+
+void RenderEncoderBase::APIDrawMeshTasks(uint32_t groupCountX,
+                                         uint32_t groupCountY,
+                                         uint32_t groupCountZ) {
+    mEncodingContext->TryEncode(
+        this,
+        [&](CommandAllocator* allocator) -> MaybeError {
+            if (IsValidationEnabled()) {
+                DAWN_INVALID_IF(!GetDevice()->HasFeature(Feature::DawnMeshShader),
+                                "DrawMeshTasks used without %s enabled.",
+                                wgpu::FeatureName::DawnMeshShader);
+                DAWN_TRY(mCommandBufferState.ValidateCanDrawMeshTasks());
+                if (!GetDevice()->HasFlexibleTextureViews()) {
+                    DAWN_TRY(mCommandBufferState.ValidateNoDifferentTextureViewsOnSameTexture());
+                }
+                DAWN_INVALID_IF(groupCountX > kMaxMeshTaskGroupsPerAxis ||
+                                    groupCountY > kMaxMeshTaskGroupsPerAxis ||
+                                    groupCountZ > kMaxMeshTaskGroupsPerAxis ||
+                                    uint64_t{groupCountX} * groupCountY * groupCountZ >
+                                        kMaxMeshTaskGroups,
+                                "Mesh task group counts (%u, %u, %u) exceed %u per axis or %u total.",
+                                groupCountX, groupCountY, groupCountZ, kMaxMeshTaskGroupsPerAxis,
+                                kMaxMeshTaskGroups);
+            }
+
+            DrawMeshTasksCmd* draw = allocator->Allocate<DrawMeshTasksCmd>(Command::DrawMeshTasks);
+            draw->groupCountX = groupCountX;
+            draw->groupCountY = groupCountY;
+            draw->groupCountZ = groupCountZ;
+
+            mDrawCount++;
+
+            return {};
+        },
+        "encoding %s.DrawMeshTasks(%u, %u, %u).", this, groupCountX, groupCountY, groupCountZ);
+}
+
 void RenderEncoderBase::APIDraw(uint32_t vertexCount,
                                 uint32_t instanceCount,
                                 uint32_t firstVertex,

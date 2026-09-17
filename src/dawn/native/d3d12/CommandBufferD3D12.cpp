@@ -1868,6 +1868,16 @@ MaybeError CommandBuffer::RecordRenderPass(CommandRecordingContext* commandConte
                 break;
             }
 
+            case Command::DrawMeshTasks: {
+                DrawMeshTasksCmd* draw = iter->NextCommand<DrawMeshTasksCmd>();
+
+                DAWN_TRY(bindingTracker->Apply(commandContext, &immediates));
+                immediates.Apply(commandContext);
+                commandContext->GetCommandList6()->DispatchMesh(draw->groupCountX, draw->groupCountY,
+                                                                draw->groupCountZ);
+                break;
+            }
+
             case Command::DrawIndexedIndirect: {
                 DrawIndexedIndirectCmd* draw = iter->NextCommand<DrawIndexedIndirectCmd>();
 

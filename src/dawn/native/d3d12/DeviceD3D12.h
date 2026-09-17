@@ -73,6 +73,8 @@ class Device final : public d3d::Device {
     MaybeError TickImpl() override;
 
     ID3D12Device* GetD3D12Device() const;
+    /** The ID3D12Device2 view of the device, for stream pipeline state; null before Windows 1703. */
+    ID3D12Device2* GetD3D12Device2() const;
     ComPtr<ID3D11On12Device> GetOrCreateD3D11On12Device();
     ComPtr<ID3D12CommandQueue> GetD3D12CommandQueue() const;
 
@@ -240,6 +242,7 @@ class Device final : public d3d::Device {
     MaybeError CreateZeroBuffer();
 
     ComPtr<ID3D12Device> mD3d12Device;  // Device is owned by adapter and will not be outlived.
+    ComPtr<ID3D12Device2> mD3d12Device2;
     bool mIsDebugLayerEnabled = false;
 
     // 11on12 device corresponding to queue's mCommandQueue.

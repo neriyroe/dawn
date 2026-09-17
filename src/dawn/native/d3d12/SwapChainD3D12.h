@@ -78,6 +78,11 @@ class SwapChain final : public d3d::SwapChain {
     std::vector<Buffer> mBuffers;
     uint32_t mCurrentBuffer = 0;
 
+    // The serials of the last two presents. Acquiring waits for the earlier one, which keeps the CPU a
+    // single frame ahead of the GPU however many buffers the chain rotates through.
+    ExecutionSerial mLatestPresent = ExecutionSerial(0u);
+    ExecutionSerial mEarlierPresent = ExecutionSerial(0u);
+
     Ref<Texture> mApiTexture;
 };
 

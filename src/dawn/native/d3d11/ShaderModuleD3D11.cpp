@@ -108,6 +108,9 @@ ResultOrError<d3d::CompiledShader> ShaderModule::Compile(
         case SingleShaderStage::Compute:
             req.bytecode.fxcShaderProfile = "cs_5_0";
             break;
+        case SingleShaderStage::Task:
+        case SingleShaderStage::Mesh:
+            DAWN_UNREACHABLE();
     }
 
     tint::Bindings bindings =

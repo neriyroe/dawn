@@ -260,9 +260,11 @@ ResultOrError<Ref<PipelineLayoutBase>> ValidateLayoutAndGetRenderPipelineDescrip
     if (descriptor.layout == nullptr) {
         // Ref will keep the pipeline layout alive until the end of the function where
         // the pipeline will take another reference.
+        UnpackedPtr<RenderPipelineDescriptor> unpacked;
+        DAWN_TRY_ASSIGN(unpacked, ValidateAndUnpack(&descriptor));
         DAWN_TRY_ASSIGN(layoutRef,
                         PipelineLayoutBase::CreateDefault(
-                            device, GetRenderStagesAndSetPlaceholderShader(device, &descriptor),
+                            device, GetRenderStagesAndSetPlaceholderShader(device, unpacked),
                             allowInternalBinding));
         outDescriptor->layout = layoutRef.Get();
     }
@@ -2292,7 +2294,8 @@ ResultOrError<Ref<ShaderModuleBase>> DeviceBase::CreateShaderModule(
                                Branch<ShaderSourceSPIRV, DawnShaderModuleSPIRVOptionsDescriptor,
                                       ShaderModuleCompilationOptions>,
                                Branch<DawnShaderSourceSPIRV, DawnShaderModuleSPIRVOptionsDescriptor,
-                                      ShaderModuleCompilationOptions>>()));
+                                      ShaderModuleCompilationOptions>,
+                               Branch<DawnShaderSourceNative>>()));
 
     // Module type specific validation
     switch (moduleType) {
@@ -2309,6 +2312,25 @@ ResultOrError<Ref<ShaderModuleBase>> DeviceBase::CreateShaderModule(
                                 !HasFeature(Feature::ShaderModuleCompilationOptions),
                             "Shader module compilation options used without %s enabled.",
                             wgpu::FeatureName::ShaderModuleCompilationOptions);
+            break;
+        }
+        case wgpu::SType::DawnShaderSourceNative: {
+            const auto* native = unpacked.Get<DawnShaderSourceNative>();
+            DAWN_INVALID_IF(!HasFeature(Feature::DawnMeshShader),
+                            "Native shader source used without %s enabled.",
+                            wgpu::FeatureName::DawnMeshShader);
+            DAWN_INVALID_IF(native->stage != wgpu::ShaderStage::Task &&
+                                native->stage != wgpu::ShaderStage::Mesh,
+                            "Native shader stage (%s) is not Task or Mesh.", native->stage);
+            DAWN_INVALID_IF(native->entryPoint.length == 0, "Native shader has no entry point.");
+            DAWN_INVALID_IF(native->dxil.empty() && native->spirv.empty(),
+                            "Native shader carries neither DXIL nor SPIR-V.");
+            for (const DawnNativeBinding& binding : native->bindings) {
+                DAWN_INVALID_IF(binding.group >= kMaxBindGroups,
+                                "Native shader binding group (%u) exceeds the bind group count.",
+                                binding.group);
+                DAWN_TRY(ValidateBufferBindingType(binding.type));
+            }
             break;
         }
         default:

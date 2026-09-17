@@ -1476,6 +1476,10 @@ void ShaderModuleParseResult::SetValidationError(std::unique_ptr<ErrorData>&& er
 
 void DumpShaderFromDescriptor(LogEmitter* logEmitter,
                               const UnpackedPtr<ShaderModuleDescriptor>& shaderModuleDesc) {
+    // A native blob has no source to dump.
+    if (shaderModuleDesc.Has<DawnShaderSourceNative>()) {
+        return;
+    }
 #if TINT_BUILD_SPV_READER
     [[maybe_unused]] Span<const uint32_t> spirv;
     if (const auto* spirvDesc = shaderModuleDesc.Get<ShaderSourceSPIRV>()) {
@@ -1830,6 +1834,14 @@ ShaderModuleBase::ShaderModuleBase(DeviceBase* device,
         mType = Type::Wgsl;
         mWgsl = std::string(wgslDesc->code);
         shaderCode = SpanAsBytes(Span<const char>(mWgsl));
+    } else if (auto* nativeDesc = descriptor.Get<DawnShaderSourceNative>()) {
+        mType = Type::Native;
+        mNative.stage = nativeDesc->stage;
+        mNative.entryPoint = std::string(nativeDesc->entryPoint);
+        mNative.dxil.assign(nativeDesc->dxil.begin(), nativeDesc->dxil.end());
+        mNative.spirv.assign(nativeDesc->spirv.begin(), nativeDesc->spirv.end());
+        mNative.bindings.assign(nativeDesc->bindings.begin(), nativeDesc->bindings.end());
+        shaderCode = SpanAsBytes(Span<const uint8_t>(mNative.dxil));
     } else {
         DAWN_ASSERT(false);
     }
@@ -1855,8 +1867,43 @@ ShaderModuleBase::ShaderModuleBase(DeviceBase* device,
     // Hash the shader code and its size.
     hasher.Update(ByteSpanFromRef(shaderCode.size()));
     hasher.Update(shaderCode);
+    if (mType == Type::Native) {
+        hasher.Update(ByteSpanFromRef(mNative.stage));
+        hasher.Update(ByteSpanFromRef(mNative.entryPoint.size()));
+        hasher.Update(SpanAsBytes(Span<const char>(mNative.entryPoint)));
+        hasher.Update(ByteSpanFromRef(mNative.spirv.size()));
+        hasher.Update(SpanAsBytes(Span<const uint32_t>(mNative.spirv)));
+        hasher.Update(ByteSpanFromRef(mNative.bindings.size()));
+        hasher.Update(SpanAsBytes(Span<const DawnNativeBinding>(mNative.bindings)));
+    }
 
     mHash = hasher.Finalize();
+}
+
+// The metadata Tint would have reflected, built from the declaration a native module carries.
+std::unique_ptr<EntryPointMetadata> ShaderModuleBase::BuildNativeMetadata() const {
+    auto metadata = std::make_unique<EntryPointMetadata>();
+    metadata->stage = mNative.stage == wgpu::ShaderStage::Task ? SingleShaderStage::Task
+                                                               : SingleShaderStage::Mesh;
+    for (const DawnNativeBinding& declared : mNative.bindings) {
+        ShaderBindingInfo info;
+        info.binding = BindingNumber(declared.binding);
+        info.arraySize = BindingIndex{1u};
+        info.name = "native_" + std::to_string(declared.group) + "_" + std::to_string(declared.binding);
+        BufferBindingInfo buffer;
+        buffer.type = declared.type;
+        buffer.minBindingSize = declared.minBindingSize;
+        buffer.hasDynamicOffset = false;
+        info.bindingInfo = buffer;
+        metadata->bindings[BindGroupIndex(declared.group)][BindingNumber(declared.binding)] =
+            std::move(info);
+    }
+    const uint32_t maxInterStageShaderVariables =
+        GetDevice()->GetLimits().v1.maxInterStageShaderVariables;
+    metadata->usedInterStageVariables.resize(maxInterStageShaderVariables);
+    metadata->interStageVariables.resize(maxInterStageShaderVariables);
+    metadata->totalInterStageShaderVariables = 0;
+    return metadata;
 }
 
 ShaderModuleBase::ShaderModuleBase(DeviceBase* device,
@@ -1896,6 +1943,19 @@ void ShaderModuleBase::Initialize() {
         CompiledState resultState;
         auto taskMaybeError = [&resultState, shaderModule = static_cast<const ShaderModuleBase*>(
                                                  this)]() -> MaybeError {
+            // A native module has nothing to parse: its one entry point is what it declares.
+            if (shaderModule->IsNative()) {
+                resultState.compilationMessages =
+                    std::make_unique<OwnedCompilationMessages>(ParsedCompilationMessages{});
+                for (auto stage : IterateStages(kAllStages)) {
+                    resultState.entryPointCounts[stage] = 0;
+                }
+                std::unique_ptr<EntryPointMetadata> metadata = shaderModule->BuildNativeMetadata();
+                resultState.defaultEntryPointNames[metadata->stage] = shaderModule->mNative.entryPoint;
+                resultState.entryPointCounts[metadata->stage] = 1;
+                resultState.entryPoints[shaderModule->mNative.entryPoint] = std::move(metadata);
+                return {};
+            }
             // Check blob cache first before calling ParseShaderModule. ShaderModuleParseResult
             // returned from blob cache or ParseShaderModule will hold compilation messages and
             // validation errors if any. ShaderModuleParseResult from ParseShaderModule also

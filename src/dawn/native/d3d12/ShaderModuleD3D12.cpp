@@ -127,6 +127,13 @@ ResultOrError<d3d::CompiledShader> ShaderModule::Compile(
     TRACE_EVENT(DAWN_TRACE_CATEGORY(), "ShaderModuleD3D12::Compile");
     DAWN_ASSERT(!IsError());
 
+    // A native module is already DXIL, signed offline; its registers are the binding numbers.
+    if (IsNative()) {
+        d3d::CompiledShader native;
+        native.shaderBlob = Blob::Create(std::vector<uint8_t>(GetNativeDxil()));
+        return native;
+    }
+
     d3d::D3DCompilationRequest req = {};
     req.tracePlatform = UnsafeUnserializedValue(device->GetPlatform());
     req.hlsl.shaderModel = ToBackend(device->GetPhysicalDevice())
@@ -160,6 +167,9 @@ ResultOrError<d3d::CompiledShader> ShaderModule::Compile(
             case SingleShaderStage::Compute:
                 req.bytecode.fxcShaderProfile = "cs_5_1";
                 break;
+            case SingleShaderStage::Task:
+            case SingleShaderStage::Mesh:
+                DAWN_UNREACHABLE();
         }
     }
 

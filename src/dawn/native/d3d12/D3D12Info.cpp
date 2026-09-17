@@ -177,6 +177,7 @@ ResultOrError<D3D12DeviceInfo> GatherDeviceInfo(const PhysicalDevice& physicalDe
     if (SUCCEEDED(d3d12Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &featureOptions7,
                                                    sizeof(featureOptions7)))) {
         info.supportsHeapFlagCreateNotZeroed = true;
+        info.supportsMeshShaderTier1 = featureOptions7.MeshShaderTier >= D3D12_MESH_SHADER_TIER_1;
     }
 
     D3D12_FEATURE_DATA_D3D12_OPTIONS8 featureOptions8 = {};

@@ -403,6 +403,11 @@ static constexpr auto kFeatureInfo = std::to_array<FeatureEnumAndInfo>({
       "https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/dawn/features/"
       "multi_draw_indirect.md",
       FeatureInfo::FeatureState::Experimental}},
+    {Feature::DawnMeshShader,
+     {"Render pipelines whose pre-raster stages are a native task and mesh shader (DawnMeshPipelineState, "
+      "DawnShaderSourceNative) and DrawMeshTasks on render pass and bundle encoders.",
+      "https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/dawn/features/mesh_shader.md",
+      FeatureInfo::FeatureState::Experimental}},
     {Feature::ClipDistances,
      {"Support the \"enable clip_distances;\" directive in WGSL.",
       "https://gpuweb.github.io/gpuweb/#dom-gpufeaturename-clip-distances",

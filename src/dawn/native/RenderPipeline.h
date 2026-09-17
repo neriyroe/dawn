@@ -63,7 +63,7 @@ MaybeError ValidateRenderPipelineDescriptor(DeviceBase* device,
 
 std::vector<StageAndDescriptor> GetRenderStagesAndSetPlaceholderShader(
     DeviceBase* device,
-    const RenderPipelineDescriptor* descriptor);
+    const UnpackedPtr<RenderPipelineDescriptor>& descriptor);
 
 size_t IndexFormatSize(wgpu::IndexFormat format);
 
@@ -106,6 +106,8 @@ class RenderPipelineBase : public PipelineBase,
     const VertexBufferMask& GetVertexBuffersUsedAsInstanceBuffer() const;
     const VertexBufferInfo& GetVertexBuffer(VertexBufferSlot slot) const;
     VertexBufferSlot GetVertexBufferCount() const;
+    /** Whether the pre-raster stages are task+mesh rather than a vertex stage. */
+    bool IsMeshPipeline() const;
 
     // Color attachment getters
     const ColorTargetState* GetColorTargetState(ColorAttachmentIndex attachmentSlot) const;

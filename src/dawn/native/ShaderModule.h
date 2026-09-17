@@ -411,6 +411,13 @@ class ShaderModuleBase : public RefCountedWithExternalCount<ApiObjectBase>,
     using ScopedUseTintProgram = APIRef<ShaderModuleBase>;
     ScopedUseTintProgram UseTintProgram();
 
+    // A native module carries precompiled task/mesh stage blobs (DawnShaderSourceNative) and no
+    // Tint program; the backends take the blob for their API as is.
+    bool IsNative() const { return mType == Type::Native; }
+    const std::vector<uint8_t>& GetNativeDxil() const { return mNative.dxil; }
+    const std::vector<uint32_t>& GetNativeSpirv() const { return mNative.spirv; }
+    const std::string& GetNativeEntryPoint() const { return mNative.entryPoint; }
+
     // Get tintProgram, (re)create it if necessary.
     Ref<TintProgram> GetTintProgram();
 
@@ -440,11 +447,21 @@ class ShaderModuleBase : public RefCountedWithExternalCount<ApiObjectBase>,
     ShaderModuleParseRequest GenerateShaderModuleParseRequest(bool needReflection) const;
 
     // The original data in the descriptor for caching.
-    enum class Type : uint8_t { Undefined, Spirv, Wgsl };
+    enum class Type : uint8_t { Undefined, Spirv, Wgsl, Native };
     Type mType = Type::Undefined;
     bool mAllowSpirvNonUniformDerivatives = false;
     std::vector<uint32_t> mOriginalSpirv;
     std::string mWgsl;
+
+    struct NativeSource {
+        wgpu::ShaderStage stage = wgpu::ShaderStage::None;
+        std::string entryPoint;
+        std::vector<uint8_t> dxil;
+        std::vector<uint32_t> spirv;
+        std::vector<DawnNativeBinding> bindings;
+    };
+    NativeSource mNative;
+    std::unique_ptr<EntryPointMetadata> BuildNativeMetadata() const;
 
     // Secure hash computed from shader code and other metadata to be used as a cache key
     // representing the shader module.
