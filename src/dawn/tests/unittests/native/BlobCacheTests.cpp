@@ -26,6 +26,9 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <vector>
+#include <future>
+#include <thread>
+#include <atomic>
 
 #include "dawn/dawn_version.h"
 #include "gmock/gmock.h"
@@ -93,6 +96,31 @@ TEST(BlobCacheTests, StoreAndLoad) {
 
     EXPECT_EQ(loadedBlob.Size(), value.size());
     EXPECT_TRUE(std::ranges::equal(loadedBlob.Data(), value));
+}
+
+TEST(BlobCacheTests, CompilationLeaseSerializesTheFullKey) {
+    wgpu::DawnCacheDeviceDescriptor desc = {};
+    BlobCache cache(*FromCppAPI(&desc), false);
+    auto key = CreateValidKey();
+    auto different = key;
+    different.push_back(std::byte{1});
+    std::promise<void> attempting;
+    std::atomic<bool> acquired = false;
+    std::thread waiter;
+    {
+        auto first = cache.AcquireCompilation(key);
+        waiter = std::thread([&] {
+            attempting.set_value();
+            auto second = cache.AcquireCompilation(key);
+            acquired = true;
+        });
+        attempting.get_future().wait();
+        auto independent = cache.AcquireCompilation(different);
+        EXPECT_FALSE(acquired);
+    }
+    waiter.join();
+    EXPECT_TRUE(acquired);
+    auto retry = cache.AcquireCompilation(key);
 }
 
 }  // namespace

@@ -105,6 +105,21 @@ ResultOrError<Blob> BlobCache::Load(const CacheKey& key) {
     return LoadInternal(key);
 }
 
+BlobCache::CompilationLease BlobCache::AcquireCompilation(const CacheKey& key) {
+    std::shared_ptr<std::mutex> mutex;
+    {
+        std::lock_guard lock(mCompilationMutex);
+        std::erase_if(mCompilations, [](const auto& entry) { return entry.second.expired(); });
+        auto& held = mCompilations[key];
+        mutex = held.lock();
+        if (!mutex) {
+            mutex = std::make_shared<std::mutex>();
+            held = mutex;
+        }
+    }
+    return CompilationLease(std::move(mutex));
+}
+
 void BlobCache::Store(const CacheKey& key, std::span<const std::byte> value) {
     StoreInternal(key, value);
 }

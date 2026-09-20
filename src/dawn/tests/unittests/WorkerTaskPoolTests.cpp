@@ -26,6 +26,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <memory>
+#include <atomic>
+#include <future>
 
 #include "dawn/platform/DawnPlatform.h"
 #include "gtest/gtest.h"
@@ -50,6 +52,67 @@ class WorkerTaskPoolTests : public testing::Test {
 // Verifies that clients can create Dawn's default worker task pool with a custom thread count.
 TEST(WorkerTaskPoolFactoryTests, CreateDawnDefault) {
     EXPECT_THAT(platform::WorkerTaskPool::CreateDawnDefault(1), NotNull());
+}
+
+TEST(WorkerTaskPoolFactoryTests, ActiveAndQueuedTasksDrainOnDestruction) {
+    auto pool = platform::WorkerTaskPool::CreateDawnDefault(1);
+    EXPECT_TRUE(pool->IsIdle());
+    struct Work {
+        std::promise<void> entered;
+        std::promise<void> release;
+        std::atomic<int> completed = 0;
+    } work;
+    auto first = pool->PostWorkerTask([](void* data) {
+        auto& work = *static_cast<Work*>(data);
+        work.entered.set_value();
+        work.release.get_future().wait();
+        work.completed++;
+    }, &work);
+    work.entered.get_future().wait();
+    auto second = pool->PostWorkerTask([](void* data) {
+        static_cast<Work*>(data)->completed++;
+    }, &work);
+    EXPECT_FALSE(pool->IsIdle());
+    work.release.set_value();
+    pool.reset();
+    EXPECT_EQ(work.completed, 2);
+    EXPECT_TRUE(first->IsComplete());
+    EXPECT_TRUE(second->IsComplete());
+}
+
+TEST(WorkerTaskPoolFactoryTests, SleepingWorkersWakeForNewTasksAndShutdown) {
+    auto pool = platform::WorkerTaskPool::CreateDawnDefault(4);
+    std::atomic<int> completed = 0;
+    for (int round = 0; round < 32; round++) {
+        auto event = pool->PostWorkerTask([](void* data) {
+            (*static_cast<std::atomic<int>*>(data))++;
+        }, &completed);
+        event->Wait();
+    }
+    pool.reset();
+    EXPECT_EQ(completed, 32);
+}
+
+TEST(WorkerTaskPoolFactoryTests, ShutdownCancelsJobsBeforeDrainingTasks) {
+    auto pool = platform::WorkerTaskPool::CreateDawnDefault(2);
+    struct Work {
+        platform::WorkerTaskPool* pool;
+        std::atomic<int> completed = 0;
+        std::promise<void> entered;
+        bool posted = false;
+    } work{pool.get()};
+    auto job = pool->PostWorkerJob([](void* data) {
+        auto& work = *static_cast<Work*>(data);
+        work.pool->PostWorkerTask([](void* data) {
+            static_cast<Work*>(data)->completed++;
+        }, &work);
+        if (!work.posted) { work.posted = true; work.entered.set_value(); }
+        return platform::JobStatus::Continue;
+    }, &work);
+    work.entered.get_future().wait();
+    pool.reset();
+    EXPECT_GT(work.completed, 0);
+    job->Join();
 }
 
 // Verifies that a task does work on another thread and we can wait on it.

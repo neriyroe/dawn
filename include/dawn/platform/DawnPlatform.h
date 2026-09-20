@@ -124,6 +124,9 @@ class DAWN_PLATFORM_EXPORT WorkerTaskPool {
     // Platform implementations may use this when overriding Platform::CreateWorkerTaskPool().
     static std::unique_ptr<WorkerTaskPool> CreateDawnDefault(uint32_t maxThreadCount);
 
+    // Reports queued and active finite tasks; long-running jobs have separate lifetimes.
+    virtual bool IsIdle() { return true; }
+
     virtual std::unique_ptr<WaitableEvent> PostWorkerTask(PostWorkerTaskCallback,
                                                           void* userdata) = 0;
 

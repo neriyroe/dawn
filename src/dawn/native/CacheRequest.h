@@ -105,6 +105,18 @@ class CacheRequestImpl {
                           CacheHitFn cacheHitFn,
                           CacheMissFn cacheMissFn,
                           const std::string& cacheMetricName = "") {
+        auto key = r.CreateCacheKey(device);
+        return LoadOrRun(device, std::move(key), std::move(r), cacheHitFn, cacheMissFn,
+                         cacheMetricName);
+    }
+
+    template <typename CacheHitFn, typename CacheMissFn>
+    friend auto LoadOrRun(DeviceBase* device,
+                          CacheKey key,
+                          Request&& r,
+                          CacheHitFn cacheHitFn,
+                          CacheMissFn cacheMissFn,
+                          const std::string& cacheMetricName = "") {
         // Get return types and check that CacheMissReturnType can be cast to a raw function
         // pointer. This means it's not a std::function or lambda that captures additional data.
         using CacheHitReturnType = decltype(cacheHitFn(std::declval<Blob>()));
@@ -124,7 +136,6 @@ class CacheRequestImpl {
         using CacheResultType = CacheResult<UnwrappedReturnType>;
         using ReturnType = ResultOrError<CacheResultType>;
 
-        CacheKey key = r.CreateCacheKey(device);
         platform::metrics::DawnHistogramTimer cacheTimer(
             cacheMetricName.empty() ? nullptr : device->GetPlatform());
 

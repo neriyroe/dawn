@@ -29,6 +29,8 @@
 #define SRC_DAWN_NATIVE_BLOBCACHE_H_
 
 #include <algorithm>
+#include <map>
+#include <memory>
 #include <mutex>
 #include <span>
 #include <vector>
@@ -55,6 +57,17 @@ std::vector<std::byte> GenerateHashPrefixedPayload(std::span<const std::byte> va
 // This class should always be thread-safe because it may be called asynchronously.
 class BlobCache {
   public:
+    class CompilationLease {
+      public:
+        explicit CompilationLease(std::shared_ptr<std::mutex> mutex)
+            : mMutex(std::move(mutex)), mLock(*mMutex) {}
+      private:
+        std::shared_ptr<std::mutex> mMutex;
+        std::unique_lock<std::mutex> mLock;
+    };
+
+    // Hold through cache lookup, compilation and publication for the full request key.
+    CompilationLease AcquireCompilation(const CacheKey& key);
     BlobCache(const dawn::native::DawnCacheDeviceDescriptor& desc, bool enableHashValidation);
 
     // Returns empty blob if the key is not found in the cache. Returns an internal error if hash
@@ -79,8 +92,7 @@ class BlobCache {
     Blob GenerateActualStoredBlobForTesting(std::span<const std::byte> value);
 
   private:
-    // Non-thread safe internal implementations of load and store. Exposed callers that use
-    // these helpers need to make sure that these are entered with `mMutex` held.
+    // Cache callbacks support concurrent requests for independent keys.
     // If hash validation enabled:
     //   * StoreInternal insert the hash of |value| as prefix,
     //   * LoadInternal validate that the hash of the content after the prefix matches.
@@ -95,6 +107,8 @@ class BlobCache {
     const bool mHashValidation;
     const WGPUDawnLoadCacheDataCallbackInfo mLoadCallbackInfo;
     const WGPUDawnStoreCacheDataCallbackInfo mStoreCallbackInfo;
+    std::mutex mCompilationMutex;
+    std::map<std::vector<std::byte>, std::weak_ptr<std::mutex>> mCompilations;
 };
 
 }  // namespace dawn::native

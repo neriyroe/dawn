@@ -394,8 +394,10 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
     }
 
     CacheResult<CompiledSpirv> compilation;
+    auto cacheKey = req.CreateCacheKey(GetDevice());
+    auto compilationLease = GetDevice()->GetBlobCache()->AcquireCompilation(cacheKey);
     DAWN_TRY_LOAD_OR_RUN(
-        compilation, GetDevice(), std::move(req), CompiledSpirv::FromValidatedBlob,
+        compilation, GetDevice(), std::move(cacheKey), std::move(req), CompiledSpirv::FromValidatedBlob,
         [](SpirvCompilationRequest r) -> ResultOrError<CompiledSpirv> {
             TRACE_EVENT(DAWN_TRACE_CATEGORY(), "tint::spirv::writer::Generate()");
 

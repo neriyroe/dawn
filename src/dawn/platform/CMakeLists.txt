@@ -47,6 +47,9 @@ dawn_add_library(
 )
 
 target_compile_definitions(dawn_platform PRIVATE "DAWN_PLATFORM_IMPLEMENTATION")
+if(DAWN_BUILD_MONOLITHIC_LIBRARY STREQUAL SHARED)
+  target_compile_definitions(dawn_platform PRIVATE "DAWN_PLATFORM_SHARED_LIBRARY")
+endif()
 if(BUILD_SHARED_LIBS)
   target_compile_definitions(dawn_platform PUBLIC "DAWN_PLATFORM_SHARED_LIBRARY")
 endif()

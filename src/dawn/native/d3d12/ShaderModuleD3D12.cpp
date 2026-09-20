@@ -390,7 +390,9 @@ ResultOrError<d3d::CompiledShader> ShaderModule::Compile(
     req.hlsl.usesSubgroupMatrix = programmableStage.metadata->usesSubgroupMatrix;
 
     CacheResult<d3d::CompiledShader> compiledShader;
-    DAWN_TRY_LOAD_OR_RUN(compiledShader, device, std::move(req),
+    auto cacheKey = req.CreateCacheKey(device);
+    auto compilationLease = device->GetBlobCache()->AcquireCompilation(cacheKey);
+    DAWN_TRY_LOAD_OR_RUN(compiledShader, device, std::move(cacheKey), std::move(req),
                          d3d::CompiledShader::FromValidatedBlob, d3d::CompileShader,
                          "D3D12.CompileShader");
 

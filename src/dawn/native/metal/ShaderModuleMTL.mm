@@ -382,8 +382,10 @@ ResultOrError<CacheResult<MslCompilation>> TranslateToMSL(
     req.maxSubgroupSize = device->GetAdapter()->GetPhysicalDevice()->GetSubgroupMaxSize();
 
     CacheResult<MslCompilation> mslCompilation;
+    auto cacheKey = req.CreateCacheKey(device);
+    auto compilationLease = device->GetBlobCache()->AcquireCompilation(cacheKey);
     DAWN_TRY_LOAD_OR_RUN(
-        mslCompilation, device, std::move(req), MslCompilation::FromValidatedBlob,
+        mslCompilation, device, std::move(cacheKey), std::move(req), MslCompilation::FromValidatedBlob,
         [](MslCompilationRequest r) -> ResultOrError<MslCompilation> {
             TRACE_EVENT(DAWN_TRACE_CATEGORY(), "tint::msl::writer::Generate");
             // Requires Tint Program here right before actual using.

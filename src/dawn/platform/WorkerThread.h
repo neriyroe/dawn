@@ -90,6 +90,7 @@ class AsyncWorkerThreadPool : public WorkerTaskPool, public NonCopyable {
 
     explicit AsyncWorkerThreadPool(uint32_t maxThreadCount = kDefaultTaskHandlingJobCount);
     ~AsyncWorkerThreadPool() override;
+    bool IsIdle() override;
 
     std::unique_ptr<WaitableEvent> PostWorkerTask(PostWorkerTaskCallback callback,
                                                   void* userdata) override;
@@ -98,6 +99,8 @@ class AsyncWorkerThreadPool : public WorkerTaskPool, public NonCopyable {
   private:
     struct TaskTracking {
         uint32_t numJobs = 0;
+        uint32_t active = 0;
+        bool stopping = false;
         std::queue<dawn::Ref<AsyncTaskHandleImpl>> tasks;
     };
 
@@ -109,6 +112,7 @@ class AsyncWorkerThreadPool : public WorkerTaskPool, public NonCopyable {
 
     // Threads used to handle potentially long-running worker jobs.
     MutexProtected<std::vector<dawn::Ref<AsyncJobHandleImpl>>> mJobHandles;
+    MutexProtected<std::vector<dawn::Ref<AsyncJobHandleImpl>>> mTaskHandles;
 
     // Threads used to handle worker tasks, and the pending tasks they are working on.
     MutexCondVarProtected<TaskTracking> mTaskTracking;

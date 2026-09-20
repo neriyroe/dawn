@@ -64,6 +64,15 @@ endif()
 ################################################################################
 
 add_executable(dawn_allocator_tests "unittests/BuddyMemoryAllocatorTests.cpp")
+add_executable(dawn_loading_tests
+    "unittests/WorkerTaskPoolTests.cpp"
+    "unittests/AsyncTaskTests.cpp"
+    "unittests/native/BlobCacheTests.cpp"
+)
+common_compile_options(dawn_loading_tests)
+target_link_libraries(dawn_loading_tests PRIVATE
+    dawn_common dawn_internal_config dawn_native dawn_native_objects dawn_platform gmock gtest_main
+)
 if (DAWN_ENABLE_VULKAN)
     target_sources(dawn_allocator_tests PRIVATE "unittests/vulkan/MemoryTypeSelectorTests.cpp")
 endif()

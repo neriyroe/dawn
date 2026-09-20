@@ -1089,6 +1089,9 @@ if (DAWN_BUILD_MONOLITHIC_LIBRARY)
     string(TOUPPER "${DAWN_BUILD_MONOLITHIC_LIBRARY}" BUNDLE_LINK_TYPE)
     bundle_libraries(webgpu_dawn ${BUNDLE_LINK_TYPE} webgpu_dawn_objects)
     add_library(dawn::webgpu_dawn ALIAS webgpu_dawn)
+    if (DAWN_BUILD_MONOLITHIC_LIBRARY STREQUAL SHARED)
+        target_compile_definitions(webgpu_dawn INTERFACE "DAWN_PLATFORM_SHARED_LIBRARY")
+    endif()
 
     # Since this is a bundled library, the only dependency is the config needed to use it.
     target_link_libraries(
@@ -1100,7 +1103,7 @@ if (DAWN_BUILD_MONOLITHIC_LIBRARY)
     )
 
     set(webgpu_dawn_public_headers)
-    foreach(dawn_target_name IN ITEMS dawn_headers dawncpp_headers dawn_native_objects)
+    foreach(dawn_target_name IN ITEMS dawn_headers dawncpp_headers dawn_native_objects dawn_platform)
         get_target_property(headers "${dawn_target_name}" INTERFACE_SOURCES)
         list(INSERT webgpu_dawn_public_headers 0 "${headers}")
     endforeach()

@@ -113,7 +113,7 @@ void AsyncJobHandleImpl::JobThreadLoop(PostWorkerJobCallback cb, void* userdata)
 
 AsyncWorkerThreadPool::AsyncWorkerThreadPool(uint32_t maxThreadCount)
     : mMaxTaskThreads(maxThreadCount) {
-    mJobHandles->reserve(mMaxTaskThreads);
+    mTaskHandles->reserve(mMaxTaskThreads);
 }
 
 AsyncWorkerThreadPool::~AsyncWorkerThreadPool() {
@@ -126,6 +126,19 @@ AsyncWorkerThreadPool::~AsyncWorkerThreadPool() {
     for (auto& job : jobs) {
         job->Join();
     }
+    mTaskTracking.Use<NotifyType::All>([](auto tracking) {
+        tracking.Wait([](auto& state) { return state.tasks.empty() && state.active == 0; });
+        tracking->stopping = true;
+    });
+    mTaskHandles.Use([&](auto handles) { jobs = std::move(*handles); });
+    for (auto& job : jobs) job->Cancel();
+    for (auto& job : jobs) job->Join();
+}
+
+bool AsyncWorkerThreadPool::IsIdle() {
+    return mTaskTracking.Use([](auto tracking) {
+        return tracking->tasks.empty() && tracking->active == 0;
+    });
 }
 
 std::unique_ptr<WaitableEvent> AsyncWorkerThreadPool::PostWorkerTask(
@@ -133,7 +146,8 @@ std::unique_ptr<WaitableEvent> AsyncWorkerThreadPool::PostWorkerTask(
     void* userdata) {
     Ref<AsyncTaskHandleImpl> handle = AcquireRef(new AsyncTaskHandleImpl(callback, userdata));
     Ref<AsyncJobHandleImpl> job;
-    mTaskTracking.Use<NotifyType::One>([&](auto taskTracking) {
+    mTaskTracking.Use<NotifyType::All>([&](auto taskTracking) {
+        DAWN_ASSERT(!taskTracking->stopping);
         taskTracking->tasks.emplace(handle);
 
         // Ensure that there are threads to process the task. This is inlined because it's a bit
@@ -144,7 +158,7 @@ std::unique_ptr<WaitableEvent> AsyncWorkerThreadPool::PostWorkerTask(
 
         // If we currently have more tasks than jobs start a new job up to the pool limit.
         // TODO(crbug.com/430452846): Better heuristic for this?
-        if (taskTracking->numJobs < taskTracking->tasks.size()) {
+        if (taskTracking->numJobs < taskTracking->tasks.size() + taskTracking->active) {
             job = AcquireRef(new AsyncJobHandleImpl(
                 [](void* self) {
                     return static_cast<AsyncWorkerThreadPool*>(self)->TaskHandlingJobLoop();
@@ -155,7 +169,7 @@ std::unique_ptr<WaitableEvent> AsyncWorkerThreadPool::PostWorkerTask(
     });
 
     if (job) {
-        mJobHandles->push_back(job);
+        mTaskHandles->push_back(job);
     }
 
     return std::make_unique<AsyncWaitableEvent>(handle);
@@ -169,21 +183,23 @@ std::unique_ptr<JobHandle> AsyncWorkerThreadPool::PostWorkerJob(PostWorkerJobCal
 }
 
 JobStatus AsyncWorkerThreadPool::TaskHandlingJobLoop() {
-    // By default, wait for 100ms between yielding.
-    static constexpr Nanoseconds kWaitDuration = Nanoseconds(100000000u);
-
     Ref<AsyncTaskHandleImpl> task = nullptr;
     mTaskTracking.Use<NotifyType::None>([&](auto taskTracking) {
-        if (taskTracking.WaitFor(kWaitDuration, [](auto& x) { return !(x.tasks.empty()); })) {
+        taskTracking.Wait([](auto& state) { return state.stopping || !state.tasks.empty(); });
+        if (!taskTracking->tasks.empty()) {
             task = taskTracking->tasks.front();
             taskTracking->tasks.pop();
+            taskTracking->active++;
         }
     });
 
     if (task) {
         task->Complete();
+        task = nullptr;
+        mTaskTracking.Use<NotifyType::All>([](auto tracking) { tracking->active--; });
+        return JobStatus::Continue;
     }
-    return JobStatus::Continue;
+    return JobStatus::Completed;
 }
 
 }  // namespace dawn::platform
