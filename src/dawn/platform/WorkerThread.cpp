@@ -135,7 +135,7 @@ AsyncWorkerThreadPool::~AsyncWorkerThreadPool() {
     for (auto& job : jobs) job->Join();
 }
 
-bool AsyncWorkerThreadPool::IsIdle() {
+bool AsyncWorkerThreadPool::IsIdle() const {
     return mTaskTracking.Use([](auto tracking) {
         return tracking->tasks.empty() && tracking->active == 0;
     });

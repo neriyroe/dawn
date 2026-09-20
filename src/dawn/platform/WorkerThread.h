@@ -90,7 +90,7 @@ class AsyncWorkerThreadPool : public WorkerTaskPool, public NonCopyable {
 
     explicit AsyncWorkerThreadPool(uint32_t maxThreadCount = kDefaultTaskHandlingJobCount);
     ~AsyncWorkerThreadPool() override;
-    bool IsIdle() override;
+    bool IsIdle() const override;
 
     std::unique_ptr<WaitableEvent> PostWorkerTask(PostWorkerTaskCallback callback,
                                                   void* userdata) override;

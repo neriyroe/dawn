@@ -56,7 +56,8 @@ TEST(WorkerTaskPoolFactoryTests, CreateDawnDefault) {
 
 TEST(WorkerTaskPoolFactoryTests, ActiveAndQueuedTasksDrainOnDestruction) {
     auto pool = platform::WorkerTaskPool::CreateDawnDefault(1);
-    EXPECT_TRUE(pool->IsIdle());
+    const auto& observed = *pool;
+    EXPECT_TRUE(observed.IsIdle());
     struct Work {
         std::promise<void> entered;
         std::promise<void> release;
@@ -72,7 +73,7 @@ TEST(WorkerTaskPoolFactoryTests, ActiveAndQueuedTasksDrainOnDestruction) {
     auto second = pool->PostWorkerTask([](void* data) {
         static_cast<Work*>(data)->completed++;
     }, &work);
-    EXPECT_FALSE(pool->IsIdle());
+    EXPECT_FALSE(observed.IsIdle());
     work.release.set_value();
     pool.reset();
     EXPECT_EQ(work.completed, 2);
