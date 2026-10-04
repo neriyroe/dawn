@@ -1620,8 +1620,9 @@ ResultOrError<PhysicalDeviceSurfaceCapabilities> PhysicalDevice::GetSurfaceCapab
 
         VkSurfaceKHR vkSurface;
         DAWN_TRY_ASSIGN(vkSurface, CreateVulkanSurface(instance, this, surface));
-        DAWN_TRY_ASSIGN_WITH_CLEANUP(vkCaps, GatherSurfaceInfo(*this, vkSurface),
-                                     { fn.DestroySurfaceKHR(vkInstance, vkSurface, nullptr); });
+        DAWN_TRY_ASSIGN_WITH_CLEANUP(vkCaps, GatherSurfaceInfo(*this, vkSurface), {
+            fn.DestroySurfaceKHR(vkInstance, vkSurface, nullptr);
+        });
 
         fn.DestroySurfaceKHR(vkInstance, vkSurface, nullptr);
     }
@@ -1665,11 +1666,28 @@ ResultOrError<PhysicalDeviceSurfaceCapabilities> PhysicalDevice::GetSurfaceCapab
                 return wgpu::TextureFormat::Undefined;
         }
     };
+    bool scRgb = false;
     for (VkSurfaceFormatKHR surfaceFormat : vkCaps.formats) {
+        const bool extended = surfaceFormat.format == VK_FORMAT_R16G16B16A16_SFLOAT &&
+                              surfaceFormat.colorSpace == VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT;
+        const bool hdr10 = surfaceFormat.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 &&
+                           surfaceFormat.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT;
+        scRgb |= extended;
+        capabilities.extendedToneMapping |= extended || hdr10;
+        if (surfaceFormat.colorSpace != VK_COLOR_SPACE_SRGB_NONLINEAR_KHR && !hdr10) {
+            continue;
+        }
         wgpu::TextureFormat format = ToWGPUSwapChainFormat(surfaceFormat.format);
-        if (format != wgpu::TextureFormat::Undefined) {
+        if (format != wgpu::TextureFormat::Undefined &&
+            std::find(capabilities.formats.begin(), capabilities.formats.end(), format) ==
+                capabilities.formats.end()) {
             capabilities.formats.push_back(format);
         }
+    }
+    if (scRgb && std::find(capabilities.formats.begin(),
+                           capabilities.formats.end(),
+                           wgpu::TextureFormat::RGBA16Float) == capabilities.formats.end()) {
+        capabilities.formats.push_back(wgpu::TextureFormat::RGBA16Float);
     }
 
     // Convert known present modes

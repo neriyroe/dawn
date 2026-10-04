@@ -49,6 +49,7 @@ static constexpr std::array<InstanceExtInfo, kInstanceExtCount> sInstanceExtInfo
     {InstanceExt::XcbSurface, "VK_KHR_xcb_surface"},
     {InstanceExt::XlibSurface, "VK_KHR_xlib_surface"},
     {InstanceExt::AndroidSurface, "VK_KHR_android_surface"},
+    {InstanceExt::SwapchainColorspace, "VK_EXT_swapchain_colorspace"},
 
     {InstanceExt::DebugUtils, "VK_EXT_debug_utils"},
     {InstanceExt::ValidationFeatures, "VK_EXT_validation_features"},
@@ -102,6 +103,7 @@ InstanceExtSet EnsureDependencies(const InstanceExtSet& advertisedExts) {
             case InstanceExt::Win32Surface:
             case InstanceExt::XcbSurface:
             case InstanceExt::XlibSurface:
+            case InstanceExt::SwapchainColorspace:
                 hasDependencies = HasDep(InstanceExt::Surface);
                 break;
 
@@ -149,6 +151,7 @@ static constexpr std::array<DeviceExtInfo, kDeviceExtCount> sDeviceExtInfos{{
     {DeviceExt::DepthClipEnable, "VK_EXT_depth_clip_enable"},
     {DeviceExt::ImageDrmFormatModifier, "VK_EXT_image_drm_format_modifier"},
     {DeviceExt::Swapchain, "VK_KHR_swapchain"},
+    {DeviceExt::HdrMetadata, "VK_EXT_hdr_metadata"},
     {DeviceExt::QueueFamilyForeign, "VK_EXT_queue_family_foreign"},
     {DeviceExt::Robustness2, "VK_EXT_robustness2"},
     {DeviceExt::DisplayTiming, "VK_GOOGLE_display_timing"},
@@ -266,6 +269,7 @@ DeviceExtSet EnsureDependencies(const DeviceExtSet& advertisedExts,
                 break;
 
             case DeviceExt::DisplayTiming:
+            case DeviceExt::HdrMetadata:
                 hasDependencies = HasDep(DeviceExt::Swapchain);
                 break;
 

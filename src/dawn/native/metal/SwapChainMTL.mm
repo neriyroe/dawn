@@ -63,7 +63,8 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
         // and GPU are completely finished with the previous swapchain.
         DAWN_INVALID_IF(previousSwapChain->GetBackendType() != wgpu::BackendType::Metal,
                         "Metal SwapChain cannot switch backend types from %s to %s.",
-                        previousSwapChain->GetBackendType(), wgpu::BackendType::Metal);
+                        previousSwapChain->GetBackendType(),
+                        wgpu::BackendType::Metal);
 
         previousSwapChain->DetachFromSurface();
     }
@@ -86,9 +87,12 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
     // Extended range. Both properties are set either way rather than only on the way in: the layer belongs
     // to the window and outlives this swapchain, so a configure back to standard has to put it back.
     if (GetToneMappingMode() == wgpu::ToneMappingMode::Extended) {
-        const CFStringRef named = GetColorSpace() == wgpu::PredefinedColorSpace::DisplayP3
-                                      ? kCGColorSpaceExtendedDisplayP3
-                                      : kCGColorSpaceExtendedSRGB;
+        CFStringRef named = kCGColorSpaceExtendedSRGB;
+        if (GetColorSpace() == wgpu::PredefinedColorSpace::SRGBLinear) {
+            named = kCGColorSpaceExtendedLinearSRGB;
+        } else if (GetColorSpace() == wgpu::PredefinedColorSpace::DisplayP3) {
+            named = kCGColorSpaceExtendedDisplayP3;
+        }
         CGColorSpaceRef space = CGColorSpaceCreateWithName(named);
         [*mLayer setColorspace:space];
         CGColorSpaceRelease(space);

@@ -28,6 +28,7 @@
 #ifndef SRC_DAWN_NATIVE_VULKAN_SWAPCHAINVK_H_
 #define SRC_DAWN_NATIVE_VULKAN_SWAPCHAINVK_H_
 
+#include <memory>
 #include <vector>
 
 #include "src/dawn/common/vulkan_platform.h"
@@ -51,6 +52,12 @@ class SwapChain : public SwapChainBase {
                                                 const SurfaceConfiguration* config);
 
     ~SwapChain() override;
+
+    MaybeError DetachAndWaitForDeallocation() override;
+    bool SetHDRMetadata(const VkHdrMetadataEXT& metadata);
+    uint32_t GetImageCount() const {
+        return static_cast<uint32_t>(mImages.size());
+    }
 
   private:
     using SwapChainBase::SwapChainBase;
@@ -87,6 +94,7 @@ class SwapChain : public SwapChainBase {
 
     VkSurfaceKHR mVkSurface = VK_NULL_HANDLE;
     VkSwapchainKHR mSwapChain = VK_NULL_HANDLE;
+    std::unique_ptr<VkHdrMetadataEXT> mHdrMetadata;
 
     struct PerImage {
         VkImage image;

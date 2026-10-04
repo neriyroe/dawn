@@ -69,6 +69,8 @@ DAWN_NATIVE_EXPORT VkCommandBuffer GetPendingVkCommandBuffer(WGPUDevice device);
 
 // The image behind a wgpu texture, and the layout Dawn believes each of its subresources is in.
 DAWN_NATIVE_EXPORT ::VkImage GetVkImage(WGPUTexture texture);
+// Base creation description for device.CreateTexture images, with all pointer fields null.
+DAWN_NATIVE_EXPORT VkImageCreateInfo GetVkImageCreateInfo(WGPUTexture texture);
 DAWN_NATIVE_EXPORT VkImageLayout GetVkImageLayout(WGPUTexture texture);
 // The layout Dawn would put the texture in for that usage. Asked rather than assumed: the answer
 // depends on the whole usage set the texture was created with, not on `usage` alone.
@@ -144,11 +146,17 @@ struct VulkanSwapchainProcs {
     PFN_vkGetSwapchainImagesKHR GetSwapchainImagesKHR = nullptr;
     PFN_vkAcquireNextImageKHR AcquireNextImageKHR = nullptr;
     PFN_vkQueuePresentKHR QueuePresentKHR = nullptr;
+    PFN_vkSetHdrMetadataEXT SetHdrMetadataEXT = nullptr;
 };
 
 using VulkanSwapchainInterposer = void (*)(VulkanSwapchainProcs* procs);
 
 DAWN_NATIVE_EXPORT void RequestSwapchainInterposer(VulkanSwapchainInterposer hook);
+
+// Updates HDR10 mastering metadata where VK_EXT_hdr_metadata is enabled. False for other surfaces.
+DAWN_NATIVE_EXPORT bool SetHDRMetadata(WGPUSurface surface, const VkHdrMetadataEXT& metadata);
+// The configured chain's actual image count, or zero when it is not a Vulkan chain.
+DAWN_NATIVE_EXPORT uint32_t GetSwapchainImageCount(WGPUSurface surface);
 
 enum class NeedsDedicatedAllocation {
     Yes,

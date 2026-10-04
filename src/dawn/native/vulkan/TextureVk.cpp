@@ -1449,18 +1449,9 @@ ResultOrError<Ref<InternalTexture>> InternalTexture::Create(
     return std::move(texture);
 }
 
-MaybeError InternalTexture::Initialize(VkImageUsageFlags extraUsages) {
+VkImageCreateInfo Texture::GetVkImageCreateInfo(VkImageUsageFlags extraUsages) const {
+    // Allocation and native interop share these flags; SDK resource tags must match the real image.
     Device* device = ToBackend(GetDevice());
-
-    // If this triggers, it means it's time to add tests and implement support for readonly
-    // depth-stencil attachments that are also used as readonly storage bindings in the pass.
-    // Have fun! :)
-    DAWN_ASSERT(
-        !(GetFormat().HasDepthOrStencil() && (GetUsage() & wgpu::TextureUsage::StorageBinding)));
-
-    // Create the Vulkan image "container". We don't need to check that the format supports the
-    // combination of sample, usage etc. because validation should have been done in the Dawn
-    // frontend already based on the minimum supported formats in the Vulkan spec
     VkImageCreateInfo createInfo = {};
     FillVulkanCreateInfoSizesAndType(*this, &createInfo);
     createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -1472,33 +1463,41 @@ MaybeError InternalTexture::Initialize(VkImageUsageFlags extraUsages) {
     createInfo.flags =
         VulkanImageCreateFlags(device, GetInternalUsage(), GetFormat(), GetSampleCount());
 
-    std::vector<VkFormat> viewFormats;
-    bool requiresViewFormatsList = GetViewFormats().any();
-    // As current SPIR-V SPEC doesn't support 'bgra8' as a valid image format, to support the
-    // STORAGE usage of BGRA8Unorm we have to create an RGBA8Unorm image view on the BGRA8Unorm
-    // storage texture and polyfill it as RGBA8Unorm in Tint. See http://crbug.com/dawn/1641 for
-    // more details.
-    if (createInfo.format == VK_FORMAT_B8G8R8A8_UNORM &&
-        createInfo.usage & VK_IMAGE_USAGE_STORAGE_BIT) {
-        viewFormats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
-        requiresViewFormatsList = true;
-    }
-    if (GetFormat().IsMultiPlanar() || requiresViewFormatsList) {
-        // Multi-planar image needs to have VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT in order to be able
-        // to create per-plane view. See
-        // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkImageCreateFlagBits.html
-        //
-        // Note: we cannot include R8 & RG8 in the viewFormats list of
-        // G8_B8R8_2PLANE_420_UNORM. The Vulkan validation layer will disallow that.
+    // Multi-planar views and Tint's RGBA view of BGRA storage require a mutable format.
+    if (GetFormat().IsMultiPlanar() || GetViewFormats().any() ||
+        (createInfo.format == VK_FORMAT_B8G8R8A8_UNORM &&
+         (createInfo.usage & VK_IMAGE_USAGE_STORAGE_BIT))) {
         createInfo.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
     }
+
+    if (GetArrayLayers() >= 6 && GetBaseSize().width == GetBaseSize().height) {
+        createInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    }
+    if (createInfo.imageType == VK_IMAGE_TYPE_3D &&
+        (createInfo.usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)) {
+        createInfo.flags |= VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT;
+    }
+    // Initialization and workarounds require transfer destinations except on transient images.
+    if (!(GetInternalUsage() & wgpu::TextureUsage::TransientAttachment)) {
+        createInfo.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    }
+    return createInfo;
+}
+
+MaybeError InternalTexture::Initialize(VkImageUsageFlags extraUsages) {
+    Device* device = ToBackend(GetDevice());
+    DAWN_ASSERT(
+        !(GetFormat().HasDepthOrStencil() && (GetUsage() & wgpu::TextureUsage::StorageBinding)));
+
+    VkImageCreateInfo createInfo = GetVkImageCreateInfo(extraUsages);
 
     // Add the view format list only when the usage does not have storage. Otherwise, the VVL will
     // say creation of the texture is invalid.
     // See https://github.com/gpuweb/gpuweb/issues/4426.
     VkImageFormatListCreateInfo imageFormatListInfo = {};
+    std::vector<VkFormat> viewFormats;
     PNextChainBuilder createInfoChain(&createInfo);
-    if (requiresViewFormatsList && device->GetDeviceInfo().HasExt(DeviceExt::ImageFormatList) &&
+    if (GetViewFormats().any() && device->GetDeviceInfo().HasExt(DeviceExt::ImageFormatList) &&
         !(createInfo.usage & VK_IMAGE_USAGE_STORAGE_BIT)) {
         createInfoChain.Add(&imageFormatListInfo, VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO);
         viewFormats.push_back(VulkanImageFormat(device, GetFormat().format));
@@ -1512,22 +1511,6 @@ MaybeError InternalTexture::Initialize(VkImageUsageFlags extraUsages) {
     }
 
     DAWN_ASSERT(IsSampleCountSupported(device, createInfo));
-
-    if (GetArrayLayers() >= 6 && GetBaseSize().width == GetBaseSize().height) {
-        createInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-    }
-
-    if (createInfo.imageType == VK_IMAGE_TYPE_3D &&
-        createInfo.usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) {
-        createInfo.flags |= VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT;
-    }
-
-    // Zero initialization and various workarounds need to copy to the images. Always add
-    // VK_IMAGE_USAGE_TRANSFER_DST_BIT to allow for these use cases, unless the image is a transient
-    // attachment and incompatible with transfers.
-    if (!(GetInternalUsage() & wgpu::TextureUsage::TransientAttachment)) {
-        createInfo.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    }
 
     DAWN_TRY(CheckVkOOMThenSuccess(
         device->fn.CreateImage(device->GetVkDevice(), &createInfo, nullptr, &*mHandle),
@@ -1545,11 +1528,13 @@ MaybeError InternalTexture::Initialize(VkImageUsageFlags extraUsages) {
     auto memoryKind = (GetInternalUsage() & wgpu::TextureUsage::TransientAttachment)
                           ? MemoryKind::LazilyAllocated
                           : MemoryKind::DeviceLocal;
-    DAWN_TRY_ASSIGN(mMemoryAllocation, device->GetResourceMemoryAllocator()->Allocate(
-                                           requirements, memoryKind, forceDisableSubAllocation));
+    DAWN_TRY_ASSIGN(mMemoryAllocation,
+                    device->GetResourceMemoryAllocator()->Allocate(
+                        requirements, memoryKind, forceDisableSubAllocation));
 
     DAWN_TRY(CheckVkSuccess(
-        device->fn.BindImageMemory(device->GetVkDevice(), mHandle,
+        device->fn.BindImageMemory(device->GetVkDevice(),
+                                   mHandle,
                                    ToBackend(mMemoryAllocation.GetResourceHeap())->GetMemory(),
                                    mMemoryAllocation.GetOffset()),
         "BindImageMemory"));
@@ -1570,13 +1555,15 @@ MaybeError InternalTexture::Initialize(VkImageUsageFlags extraUsages) {
         textureIsBuggy &= IsPowerOfTwo(GetBaseSize().width) && IsPowerOfTwo(GetBaseSize().height);
         if (textureIsBuggy) {
             DAWN_TRY(ClearTexture(ToBackend(GetDevice()->GetQueue())->GetPendingRecordingContext(),
-                                  GetAllSubresources(), TextureBase::ClearValue::Zero));
+                                  GetAllSubresources(),
+                                  TextureBase::ClearValue::Zero));
         }
     }
 
     if (device->IsToggleEnabled(Toggle::NonzeroClearResourcesOnCreationForTesting)) {
         DAWN_TRY(ClearTexture(ToBackend(GetDevice()->GetQueue())->GetPendingRecordingContext(),
-                              GetAllSubresources(), TextureBase::ClearValue::NonZero));
+                              GetAllSubresources(),
+                              TextureBase::ClearValue::NonZero));
     }
 
     SetLabelImpl();

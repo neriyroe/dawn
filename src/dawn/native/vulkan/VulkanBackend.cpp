@@ -38,6 +38,7 @@
 #include "dawn/native/VulkanBackend.h"
 #include "src/dawn/native/Adapter.h"
 #include "src/dawn/native/PhysicalDevice.h"
+#include "src/dawn/native/Surface.h"
 #include "src/dawn/native/vulkan/BackendVk.h"
 #include "src/dawn/native/vulkan/CommandRecordingContextVk.h"
 #include "src/dawn/native/vulkan/DeviceVk.h"
@@ -47,6 +48,7 @@
 #include "src/dawn/native/vulkan/QueueVk.h"
 #include "src/dawn/native/vulkan/ResourceMemoryAllocatorVk.h"
 #include "src/dawn/native/vulkan/SwapchainHooksVk.h"
+#include "src/dawn/native/vulkan/SwapChainVk.h"
 #include "src/dawn/native/vulkan/TextureVk.h"
 
 namespace dawn::native::vulkan {
@@ -85,7 +87,37 @@ Texture* AsVulkan(WGPUTexture texture) {
     return ToBackend(base);
 }
 
+SwapChain* AsVulkan(WGPUSurface surface) {
+    Surface* target = FromAPI(surface);
+    if (target == nullptr || target->IsError()) {
+        return nullptr;
+    }
+    SwapChainBase* chain = target->GetCurrentSwapChain();
+    if (chain == nullptr || chain->GetBackendType() != wgpu::BackendType::Vulkan) {
+        return nullptr;
+    }
+    return ToBackend(chain);
+}
+
 }  // namespace
+
+bool SetHDRMetadata(WGPUSurface surface, const VkHdrMetadataEXT& metadata) {
+    SwapChain* chain = AsVulkan(surface);
+    if (chain == nullptr) {
+        return false;
+    }
+    auto guard = chain->GetDevice()->GetGuard();
+    return chain->SetHDRMetadata(metadata);
+}
+
+uint32_t GetSwapchainImageCount(WGPUSurface surface) {
+    SwapChain* chain = AsVulkan(surface);
+    if (chain == nullptr) {
+        return 0;
+    }
+    auto guard = chain->GetDevice()->GetGuard();
+    return chain->GetImageCount();
+}
 
 VkInstance GetInstance(WGPUDevice device) {
     Device* backendDevice = ToBackend(FromAPI(device));
@@ -186,6 +218,15 @@ VkCommandBuffer GetPendingVkCommandBuffer(WGPUDevice device) {
 ::VkImage GetVkImage(WGPUTexture texture) {
     Texture* backendTexture = AsVulkan(texture);
     return backendTexture == nullptr ? VK_NULL_HANDLE : backendTexture->GetHandle();
+}
+
+VkImageCreateInfo GetVkImageCreateInfo(WGPUTexture texture) {
+    Texture* backendTexture = AsVulkan(texture);
+    if (backendTexture == nullptr) {
+        return {};
+    }
+    auto deviceGuard = backendTexture->GetDevice()->GetGuard();
+    return backendTexture->GetVkImageCreateInfo();
 }
 
 VkImageLayout GetVkImageLayout(WGPUTexture texture) {

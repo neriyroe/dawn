@@ -233,31 +233,43 @@ MaybeError ValidateSurfaceConfiguration(DeviceBase* device,
     DAWN_INVALID_IF(!IsSubset(config->usage, capabilities.usages),
                     "Usages requested (%s) are not supported by the adapter (%s) which supports "
                     "only %s for this surface.",
-                    config->usage, config->device->GetAdapter(), capabilities.usages);
+                    config->usage,
+                    config->device->GetAdapter(),
+                    capabilities.usages);
 
     auto formatIt =
         std::find(capabilities.formats.begin(), capabilities.formats.end(), config->format);
     DAWN_INVALID_IF(formatIt == capabilities.formats.end(),
                     "Format (%s) is not supported by the adapter (%s) for this surface.",
-                    config->format, config->device->GetAdapter());
+                    config->format,
+                    config->device->GetAdapter());
 
-    auto presentModeIt = std::find(capabilities.presentModes.begin(),
-                                   capabilities.presentModes.end(), config->presentMode);
+    auto presentModeIt = std::find(
+        capabilities.presentModes.begin(), capabilities.presentModes.end(), config->presentMode);
     DAWN_INVALID_IF(presentModeIt == capabilities.presentModes.end(),
                     "Present mode (%s) is not supported by the adapter (%s) for this surface.",
-                    config->presentMode, config->device->GetAdapter());
+                    config->presentMode,
+                    config->device->GetAdapter());
 
-    auto alphaModeIt = std::find(capabilities.alphaModes.begin(), capabilities.alphaModes.end(),
-                                 config->alphaMode);
+    auto alphaModeIt = std::find(
+        capabilities.alphaModes.begin(), capabilities.alphaModes.end(), config->alphaMode);
     DAWN_INVALID_IF(alphaModeIt == capabilities.alphaModes.end(),
                     "Alpha mode (%s) is not supported by the adapter (%s) for this surface.",
-                    config->alphaMode, config->device->GetAdapter());
+                    config->alphaMode,
+                    config->device->GetAdapter());
 
     if (auto* colour = unpacked.Get<SurfaceColorManagement>()) {
-        DAWN_INVALID_IF(colour->toneMappingMode == wgpu::ToneMappingMode::Extended &&
-                            !capabilities.extendedToneMapping,
-                        "Extended tone mapping is not supported by the adapter (%s) for this surface.",
-                        config->device->GetAdapter());
+        DAWN_INVALID_IF(
+            colour->colorSpace == wgpu::PredefinedColorSpace::Rec2100PQ &&
+                (device->GetPhysicalDevice()->GetBackendType() != wgpu::BackendType::Vulkan ||
+                 config->format != wgpu::TextureFormat::RGB10A2Unorm ||
+                 colour->toneMappingMode != wgpu::ToneMappingMode::Extended),
+            "Rec2100PQ output requires Vulkan RGB10A2Unorm with extended tone mapping.");
+        DAWN_INVALID_IF(
+            colour->toneMappingMode == wgpu::ToneMappingMode::Extended &&
+                !capabilities.extendedToneMapping,
+            "Extended tone mapping is not supported by the adapter (%s) for this surface.",
+            config->device->GetAdapter());
     }
 
     // Validate the surface would produce valid textures.
@@ -271,28 +283,11 @@ MaybeError ValidateSurfaceConfiguration(DeviceBase* device,
     UnpackedPtr<TextureDescriptor> unpackedTextureDesc;
     DAWN_TRY_ASSIGN(unpackedTextureDesc, ValidateAndUnpack(&textureDesc));
     DAWN_TRY_CONTEXT(ValidateTextureDescriptor(device, unpackedTextureDesc),
-                     "validating the configuration of %s would produce valid textures", surface);
+                     "validating the configuration of %s would produce valid textures",
+                     surface);
 
     return {};
 }
-
-class AdapterSurfaceCapCache {
-  public:
-    template <typename F>
-    MaybeError WithAdapterCapabilities(AdapterBase* adapter, const Surface* surface, F f) {
-        if (mCachedCapabilitiesAdapter.Promote().Get() != adapter) {
-            const PhysicalDeviceBase* physicalDevice = adapter->GetPhysicalDevice();
-            DAWN_TRY_ASSIGN(mCachedCapabilities, physicalDevice->GetSurfaceCapabilities(
-                                                     adapter->GetInstance(), surface));
-            mCachedCapabilitiesAdapter = GetWeakRef(adapter);
-        }
-        return f(mCachedCapabilities);
-    }
-
-  private:
-    WeakRef<AdapterBase> mCachedCapabilitiesAdapter = nullptr;
-    PhysicalDeviceSurfaceCapabilities mCachedCapabilities;
-};
 
 // static
 Ref<Surface> Surface::MakeError(InstanceBase* instance) {
@@ -302,20 +297,20 @@ Ref<Surface> Surface::MakeError(InstanceBase* instance) {
 Surface::Surface(InstanceBase* instance, ErrorTag tag) : ErrorMonad(tag), mInstance(instance) {}
 
 Surface::Surface(InstanceBase* instance, const UnpackedPtr<SurfaceDescriptor>& descriptor)
-    : ErrorMonad(),
-      mInstance(instance),
-      mCapabilityCache(std::make_unique<AdapterSurfaceCapCache>()) {
+    : ErrorMonad(), mInstance(instance) {
     mLabel = std::string(descriptor->label);
 
     // Type is validated in validation, otherwise this may crash with an assert failure.
     wgpu::SType type =
         descriptor
-            .ValidateBranches<
-                Branch<SurfaceSourceAndroidNativeWindow>, Branch<SurfaceSourceMetalLayer>,
-                Branch<SurfaceSourceWindowsHWND>, Branch<SurfaceDescriptorFromWindowsCoreWindow>,
-                Branch<SurfaceDescriptorFromWindowsUWPSwapChainPanel>,
-                Branch<SurfaceDescriptorFromWindowsWinUISwapChainPanel>,
-                Branch<SurfaceSourceXlibWindow>, Branch<SurfaceSourceWaylandSurface>>()
+            .ValidateBranches<Branch<SurfaceSourceAndroidNativeWindow>,
+                              Branch<SurfaceSourceMetalLayer>,
+                              Branch<SurfaceSourceWindowsHWND>,
+                              Branch<SurfaceDescriptorFromWindowsCoreWindow>,
+                              Branch<SurfaceDescriptorFromWindowsUWPSwapChainPanel>,
+                              Branch<SurfaceDescriptorFromWindowsWinUISwapChainPanel>,
+                              Branch<SurfaceSourceXlibWindow>,
+                              Branch<SurfaceSourceWaylandSurface>>()
             .AcquireSuccess();
     switch (type) {
         case wgpu::SType::SurfaceSourceAndroidNativeWindow: {
@@ -483,16 +478,15 @@ MaybeError Surface::Configure(const SurfaceConfiguration* configIn) {
 
     DAWN_INVALID_IF(IsError(), "%s is invalid.", this);
 
-    DAWN_TRY(mCapabilityCache->WithAdapterCapabilities(
-        GetCurrentDevice()->GetAdapter(), this,
-        [&](const PhysicalDeviceSurfaceCapabilities& caps) -> MaybeError {
-            // The auto alphaMode default to alphaModes[0].
-            if (config.alphaMode == wgpu::CompositeAlphaMode::Auto) {
-                config.alphaMode = caps.alphaModes[0];
-            }
-
-            return ValidateSurfaceConfiguration(GetCurrentDevice(), caps, &config, this);
-        }));
+    // Output formats and color spaces can change when the window moves between displays.
+    AdapterBase* adapter = GetCurrentDevice()->GetAdapter();
+    PhysicalDeviceSurfaceCapabilities caps;
+    DAWN_TRY_ASSIGN(
+        caps, adapter->GetPhysicalDevice()->GetSurfaceCapabilities(adapter->GetInstance(), this));
+    if (config.alphaMode == wgpu::CompositeAlphaMode::Auto) {
+        config.alphaMode = caps.alphaModes[0];
+    }
+    DAWN_TRY(ValidateSurfaceConfiguration(GetCurrentDevice(), caps, &config, this));
 
     // Reuse the swapchain of the previous Configure, if any. Unconfigure() releases its swapchain
     // synchronously so there is never one left over from it.
@@ -547,16 +541,14 @@ MaybeError Surface::Unconfigure() {
 MaybeError Surface::GetCapabilities(AdapterBase* adapter, SurfaceCapabilities* capabilities) const {
     DAWN_INVALID_IF(IsError(), "%s is invalid.", this);
 
-    DAWN_TRY(mCapabilityCache->WithAdapterCapabilities(
-        adapter, this,
-        [&capabilities](const PhysicalDeviceSurfaceCapabilities& caps) -> MaybeError {
-            capabilities->nextInChain = nullptr;
-            capabilities->usages = caps.usages;
-            capabilities->formats = utils::AllocateApiSeqFromStdVector(caps.formats);
-            capabilities->presentModes = utils::AllocateApiSeqFromStdVector(caps.presentModes);
-            capabilities->alphaModes = utils::AllocateApiSeqFromStdVector(caps.alphaModes);
-            return {};
-        }));
+    PhysicalDeviceSurfaceCapabilities caps;
+    DAWN_TRY_ASSIGN(
+        caps, adapter->GetPhysicalDevice()->GetSurfaceCapabilities(adapter->GetInstance(), this));
+    capabilities->nextInChain = nullptr;
+    capabilities->usages = caps.usages;
+    capabilities->formats = utils::AllocateApiSeqFromStdVector(caps.formats);
+    capabilities->presentModes = utils::AllocateApiSeqFromStdVector(caps.presentModes);
+    capabilities->alphaModes = utils::AllocateApiSeqFromStdVector(caps.alphaModes);
 
     return {};
 }

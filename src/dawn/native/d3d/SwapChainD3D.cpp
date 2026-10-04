@@ -147,6 +147,10 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
     mConfig.format = d3d::DXGITextureFormat(GetDevice(), GetFormat());
     mConfig.swapChainFlags = PresentModeToSwapChainFlags(GetBackendType(), GetPresentMode());
     mConfig.usage = ToDXGIUsage(GetDevice(), GetFormat(), GetUsage());
+    DAWN_INVALID_IF(GetToneMappingMode() == wgpu::ToneMappingMode::Extended &&
+                        (GetFormat() != wgpu::TextureFormat::RGBA16Float ||
+                         GetColorSpace() != wgpu::PredefinedColorSpace::SRGBLinear),
+                    "D3D extended output requires RGBA16Float with scRGB primaries.");
 
     // There is no previous swapchain so we can create one directly and don't have anything else
     // to do.
@@ -159,7 +163,8 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
     // and GPU are completely finished with the previous swapchain.
     DAWN_INVALID_IF(previousSwapChain->GetBackendType() != GetBackendType(),
                     "D3D SwapChain cannot switch backend types from %s to %s.",
-                    previousSwapChain->GetBackendType(), GetBackendType());
+                    previousSwapChain->GetBackendType(),
+                    GetBackendType());
 
     SwapChain* previousD3DSwapChain = ToBackend(previousSwapChain);
 
@@ -198,7 +203,7 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
                            GetPresentMode() == previousSwapChain->GetPresentMode();
     if (canReuseBuffers) {
         this->ReuseBuffers(previousSwapChain);
-        return {};
+        return ConfigureColorSpace();
     }
 
     // We can't reuse the buffers so we need to resize, IDXGSwapChain->ResizeBuffers requires
@@ -211,10 +216,11 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
     } else {
         previousD3DSwapChain->DetachFromSurface();
     }
-    DAWN_TRY(
-        CheckHRESULT(mDXGISwapChain->ResizeBuffers(mConfig.bufferCount, GetWidth(), GetHeight(),
-                                                   mConfig.format, mConfig.swapChainFlags),
-                     "IDXGISwapChain::ResizeBuffer"));
+    DAWN_TRY(CheckHRESULT(
+        mDXGISwapChain->ResizeBuffers(
+            mConfig.bufferCount, GetWidth(), GetHeight(), mConfig.format, mConfig.swapChainFlags),
+        "IDXGISwapChain::ResizeBuffer"));
+    DAWN_TRY(ConfigureColorSpace());
     return CollectSwapChainBuffers();
 }
 
@@ -247,7 +253,10 @@ MaybeError SwapChain::InitializeSwapChainFromScratch() {
             DAWN_TRY(CheckHRESULT(
                 factory2->CreateSwapChainForHwnd(GetD3DDeviceForCreatingSwapChain(),
                                                  static_cast<HWND>(GetSurface()->GetHWND()),
-                                                 &swapChainDesc, nullptr, nullptr, &swapChain1),
+                                                 &swapChainDesc,
+                                                 nullptr,
+                                                 nullptr,
+                                                 &swapChain1),
                 "Creating the IDXGISwapChain1"));
 
             DAWN_TRY(
@@ -260,15 +269,17 @@ MaybeError SwapChain::InitializeSwapChainFromScratch() {
             DAWN_TRY(CheckHRESULT(
                 factory2->CreateSwapChainForCoreWindow(GetD3DDeviceForCreatingSwapChain(),
                                                        GetSurface()->GetCoreWindow(),
-                                                       &swapChainDesc, nullptr, &swapChain1),
+                                                       &swapChainDesc,
+                                                       nullptr,
+                                                       &swapChain1),
                 "Creating the IDXGISwapChain1"));
             break;
         }
 #if defined(DAWN_USE_WINDOWS_UI)
         case Surface::Type::WindowsUWPSwapChainPanel: {
             DAWN_TRY(CheckHRESULT(
-                factory2->CreateSwapChainForComposition(GetD3DDeviceForCreatingSwapChain(),
-                                                        &swapChainDesc, nullptr, &swapChain1),
+                factory2->CreateSwapChainForComposition(
+                    GetD3DDeviceForCreatingSwapChain(), &swapChainDesc, nullptr, &swapChain1),
                 "Creating the IDXGISwapChain1"));
             ComPtr<ISwapChainPanelNative> swapChainPanelNative;
             DAWN_TRY(CheckHRESULT(GetSurface()->GetUWPSwapChainPanel()->QueryInterface(
@@ -280,8 +291,8 @@ MaybeError SwapChain::InitializeSwapChainFromScratch() {
         }
         case Surface::Type::WindowsWinUISwapChainPanel: {
             DAWN_TRY(CheckHRESULT(
-                factory2->CreateSwapChainForComposition(GetD3DDeviceForCreatingSwapChain(),
-                                                        &swapChainDesc, nullptr, &swapChain1),
+                factory2->CreateSwapChainForComposition(
+                    GetD3DDeviceForCreatingSwapChain(), &swapChainDesc, nullptr, &swapChain1),
                 "Creating the IDXGISwapChain1"));
             ComPtr<IWinUISwapChainPanelNative> swapChainPanelNative;
             DAWN_TRY(CheckHRESULT(GetSurface()->GetWinUISwapChainPanel()->QueryInterface(
@@ -298,17 +309,7 @@ MaybeError SwapChain::InitializeSwapChainFromScratch() {
 
     DAWN_TRY(CheckHRESULT(swapChain1.As(&mDXGISwapChain), "Gettting IDXGISwapChain1"));
 
-    // TODO(hdr-windows): honour SurfaceColorManagement here. The shape, for whoever picks this up:
-    //   - PhysicalDeviceD3D sets capabilities.extendedToneMapping, which is what lets a page ask at all.
-    //   - Extended + sRGB-linear means scRGB: DXGI_FORMAT_R16G16B16A16_FLOAT with
-    //     mDXGISwapChain->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709), checking
-    //     CheckColorSpaceSupport first. scRGB is LINEAR light where 1.0 is 80 nits, not the encoded,
-    //     white-relative space the Apple path uses -- so the engine reports nitsPerWhite 80 and sets the
-    //     shader's hdrMode lane to 1, which is what makes infHdrOut hand back linear instead of encoded.
-    //   - HDR10 (RGB10A2 + G2084_P2020, PQ) is deliberately out of scope: the shared display shader has
-    //     no PQ curve, and adding one is a second encode path rather than a flag.
-    //   - The headroom the engine asks for comes from IDXGIOutput6::GetDesc1 MaxLuminance over the
-    //     DISPLAYCONFIG_SDR_WHITE_LEVEL of the output the window is on, not from Dawn.
+    DAWN_TRY(ConfigureColorSpace());
 
     // With the waitable object the app absorbs the present queue's wait itself, so queue no more
     // frames than there are back buffers to rotate through.
@@ -320,6 +321,20 @@ MaybeError SwapChain::InitializeSwapChainFromScratch() {
     }
 
     return CollectSwapChainBuffers();
+}
+
+MaybeError SwapChain::ConfigureColorSpace() {
+    // Reused buffers still need the output encoding updated after SDR/HDR transitions.
+    const auto colorSpace = GetToneMappingMode() == wgpu::ToneMappingMode::Extended
+                                ? DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709
+                                : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+    UINT support = 0;
+    DAWN_TRY(CheckHRESULT(mDXGISwapChain->CheckColorSpaceSupport(colorSpace, &support),
+                          "IDXGISwapChain3::CheckColorSpaceSupport"));
+    DAWN_INVALID_IF((support & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT) == 0,
+                    "The DXGI swapchain does not support the requested output color space.");
+    return CheckHRESULT(mDXGISwapChain->SetColorSpace1(colorSpace),
+                        "IDXGISwapChain3::SetColorSpace1");
 }
 
 MaybeError SwapChain::PresentDXGISwapChain() {

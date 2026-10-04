@@ -47,6 +47,7 @@ enum class InstanceExt : uint32_t {
     XcbSurface,
     XlibSurface,
     AndroidSurface,
+    SwapchainColorspace,
 
     // Others
     DebugUtils,
@@ -108,6 +109,7 @@ enum class DeviceExt : uint32_t {
     DepthClipEnable,
     ImageDrmFormatModifier,
     Swapchain,
+    HdrMetadata,
     QueueFamilyForeign,
     Robustness2,
     DisplayTiming,

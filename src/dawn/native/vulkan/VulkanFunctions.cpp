@@ -444,6 +444,10 @@ MaybeError VulkanFunctions::LoadDeviceProcs(VkInstance instance,
         GET_DEVICE_PROC(GetSemaphoreFdKHR);
     }
 
+    if (deviceInfo.HasExt(DeviceExt::HdrMetadata)) {
+        GET_DEVICE_PROC(SetHdrMetadataEXT);
+    }
+
     if (deviceInfo.HasExt(DeviceExt::Swapchain)) {
         GET_DEVICE_PROC(CreateSwapchainKHR);
         GET_DEVICE_PROC(DestroySwapchainKHR);
@@ -455,14 +459,19 @@ MaybeError VulkanFunctions::LoadDeviceProcs(VkInstance instance,
         // Whatever the embedder puts in their place presents this device from here on. It is handed the
         // driver's own so it has something to fall through to on the frames it does not stand in for.
         if (VulkanSwapchainInterposer interpose = MutableSwapchainInterposer()) {
-            VulkanSwapchainProcs procs{CreateSwapchainKHR, DestroySwapchainKHR, GetSwapchainImagesKHR,
-                                       AcquireNextImageKHR, QueuePresentKHR};
+            VulkanSwapchainProcs procs{CreateSwapchainKHR,
+                                       DestroySwapchainKHR,
+                                       GetSwapchainImagesKHR,
+                                       AcquireNextImageKHR,
+                                       QueuePresentKHR,
+                                       SetHdrMetadataEXT};
             interpose(&procs);
             CreateSwapchainKHR = procs.CreateSwapchainKHR;
             DestroySwapchainKHR = procs.DestroySwapchainKHR;
             GetSwapchainImagesKHR = procs.GetSwapchainImagesKHR;
             AcquireNextImageKHR = procs.AcquireNextImageKHR;
             QueuePresentKHR = procs.QueuePresentKHR;
+            SetHdrMetadataEXT = procs.SetHdrMetadataEXT;
         }
 #endif
     }

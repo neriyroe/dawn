@@ -126,15 +126,26 @@ ResultOrError<Ref<SwapChain>> SwapChain::Create(Device* device,
 
 SwapChain::~SwapChain() = default;
 
+bool SwapChain::SetHDRMetadata(const VkHdrMetadataEXT& metadata) {
+    Device* device = ToBackend(GetDevice());
+    if (mSwapChain == VK_NULL_HANDLE || mConfig.colorSpace != VK_COLOR_SPACE_HDR10_ST2084_EXT ||
+        device->fn.SetHdrMetadataEXT == nullptr) {
+        return false;
+    }
+    // Retain HDR-only metadata so out-of-date swapchain recreation preserves mastering luminance.
+    if (!mHdrMetadata) {
+        mHdrMetadata = std::make_unique<VkHdrMetadataEXT>();
+    }
+    *mHdrMetadata = metadata;
+    mHdrMetadata->sType = VK_STRUCTURE_TYPE_HDR_METADATA_EXT;
+    mHdrMetadata->pNext = nullptr;
+    device->fn.SetHdrMetadataEXT(
+        device->GetVkDevice(), 1, AsVkArray(&mSwapChain), mHdrMetadata.get());
+    return true;
+}
+
 // Note that when we need to re-create the swapchain because it is out of date,
 // previousSwapChain can be set to `this`.
-// TODO(hdr-vulkan): honour SurfaceColorManagement. The shape, for whoever picks this up:
-//   - Enable VK_EXT_swapchain_colorspace on the instance, then look for the pair
-//     (VK_FORMAT_R16G16B16A16_SFLOAT, VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT) in the surface formats,
-//     and only then set capabilities.extendedToneMapping in PhysicalDeviceVk.
-//   - LINEAR_EXT is scRGB and wants linear light, so the engine reports nitsPerWhite 80 and sets the
-//     shader's hdrMode lane to 1; a driver offering NONLINEAR_EXT instead keeps mode 0 and the encode.
-//   - Android takes the same path, with Display.getHdrSdrRatio as the headroom the engine asks for.
 MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
     Device* device = ToBackend(GetDevice());
     PhysicalDevice* physicalDevice = ToBackend(GetDevice()->GetPhysicalDevice());
@@ -150,7 +161,8 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
         // and GPU are completely finished with the previous swapchain.
         DAWN_INVALID_IF(previousSwapChain->GetBackendType() != wgpu::BackendType::Vulkan,
                         "Vulkan SwapChain cannot switch backend types from %s to %s.",
-                        previousSwapChain->GetBackendType(), wgpu::BackendType::Vulkan);
+                        previousSwapChain->GetBackendType(),
+                        wgpu::BackendType::Vulkan);
 
         SwapChain* previousVulkanSwapChain = ToBackend(previousSwapChain);
 
@@ -211,6 +223,10 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
         device->fn.CreateSwapchainKHR(device->GetVkDevice(), &createInfo, nullptr, &*mSwapChain),
         "CreateSwapChain"));
 
+    if (mHdrMetadata) {
+        SetHDRMetadata(*mHdrMetadata);
+    }
+
     // Gather the swapchain's images. Implementations are allowed to return more images than the
     // number we asked for.
     uint32_t count = 0;
@@ -219,9 +235,10 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
         "GetSwapChainImages1"));
 
     std::vector<VkImage> vkImages(count);
-    DAWN_TRY(CheckVkSuccess(device->fn.GetSwapchainImagesKHR(device->GetVkDevice(), mSwapChain,
-                                                             &count, AsVkArray(vkImages.data())),
-                            "GetSwapChainImages2"));
+    DAWN_TRY(
+        CheckVkSuccess(device->fn.GetSwapchainImagesKHR(
+                           device->GetVkDevice(), mSwapChain, &count, AsVkArray(vkImages.data())),
+                       "GetSwapChainImages2"));
 
     mImages.resize(count);
     for (uint32_t i = 0; i < count; i++) {
@@ -298,7 +315,9 @@ ResultOrError<SwapChain::Config> SwapChain::ChooseConfig(
     if (extentRefused) {
         dawn::WarningLog() << absl::StrFormat(
             "swapchain falls back to a per-frame blit: the surface caps %ux%u to between %ux%u and %ux%u",
-            GetWidth(), GetHeight(), surfaceInfo.capabilities.minImageExtent.width,
+            GetWidth(),
+            GetHeight(),
+            surfaceInfo.capabilities.minImageExtent.width,
             surfaceInfo.capabilities.minImageExtent.height,
             surfaceInfo.capabilities.maxImageExtent.width,
             surfaceInfo.capabilities.maxImageExtent.height);
@@ -306,13 +325,22 @@ ResultOrError<SwapChain::Config> SwapChain::ChooseConfig(
     if (usageRefused) {
         dawn::WarningLog() << absl::StrFormat(
             "swapchain falls back to a per-frame blit: usage 0x%x asks for more than the surface's 0x%x",
-            targetUsages, supportedUsages);
+            targetUsages,
+            supportedUsages);
     }
 
-    // Only support BGRA8Unorm (and RGBA8Unorm on android) with SRGB color space for now.
+    const bool extended = GetToneMappingMode() == wgpu::ToneMappingMode::Extended;
+    const bool scRgb = GetFormat() == wgpu::TextureFormat::RGBA16Float &&
+                       GetColorSpace() == wgpu::PredefinedColorSpace::SRGBLinear;
+    const bool hdr10 = GetFormat() == wgpu::TextureFormat::RGB10A2Unorm &&
+                       GetColorSpace() == wgpu::PredefinedColorSpace::Rec2100PQ;
+    DAWN_INVALID_IF(extended && !scRgb && !hdr10,
+                    "Vulkan extended output requires RGBA16Float scRGB or RGB10A2Unorm Rec2100PQ.");
     config.wgpuFormat = GetFormat();
     config.format = VulkanImageFormat(ToBackend(GetDevice()), config.wgpuFormat);
-    config.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    config.colorSpace = !extended ? VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+                        : hdr10   ? VK_COLOR_SPACE_HDR10_ST2084_EXT
+                                  : VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT;
 
     bool formatIsSupported = false;
     for (const VkSurfaceFormatKHR& format : surfaceInfo.formats) {
@@ -322,8 +350,10 @@ ResultOrError<SwapChain::Config> SwapChain::ChooseConfig(
         }
     }
     if (!formatIsSupported) {
-        return DAWN_INTERNAL_ERROR(absl::StrFormat(
-            "Vulkan SwapChain must support %s with sRGB colorspace.", config.wgpuFormat));
+        return DAWN_INTERNAL_ERROR(
+            absl::StrFormat("Vulkan SwapChain does not support %s with color space %d.",
+                            config.wgpuFormat,
+                            static_cast<int>(config.colorSpace)));
     }
 
     // Only the identity transform with opaque alpha is supported for now.
@@ -614,6 +644,23 @@ ResultOrError<SwapChainTextureInfo> SwapChain::GetCurrentTextureInternal(bool is
                                                           VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
     swapChainTextureInfo.texture = mBlitTexture;
     return swapChainTextureInfo;
+}
+
+MaybeError SwapChain::DetachAndWaitForDeallocation() {
+    Device* device = ToBackend(GetDevice());
+    Queue* queue = ToBackend(device->GetQueue());
+    DetachFromSurface();
+
+    // Submit the deletion serial even when the last present leaves no recorded commands.
+    queue->GetPendingRecordingContext();
+    DAWN_TRY(queue->EnsureCommandsFlushed(queue->GetPendingCommandSerial()));
+    DAWN_TRY(
+        CheckVkSuccess(device->fn.QueueWaitIdle(queue->GetVkQueue()), "WaitForSwapChainRelease"));
+    DAWN_TRY(queue->WaitForQueueSerial(queue->GetLastSubmittedCommandSerial(),
+                                       std::numeric_limits<Nanoseconds>::max()));
+    // The best-effort deleter must release the window before another swapchain can claim it.
+    device->GetFencedDeleter()->UpdateCompletedSerialTo(queue->GetCompletedCommandSerial());
+    return {};
 }
 
 void SwapChain::DetachFromSurfaceImpl() {

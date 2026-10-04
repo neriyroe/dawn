@@ -51,9 +51,6 @@ namespace dawn::native {
 
 struct PhysicalDeviceSurfaceCapabilities;
 
-// Adapter surface capabilities are cached by the surface
-class AdapterSurfaceCapCache;
-
 ResultOrError<UnpackedPtr<SurfaceDescriptor>> ValidateSurfaceDescriptor(
     InstanceBase* instance,
     const SurfaceDescriptor* rawDescriptor);
@@ -149,9 +146,6 @@ class Surface final : public ErrorMonad {
     // The swapchain is created when configuring the surface (but may still be
     // null even if it's in the "configured" state).
     Ref<SwapChainBase> mSwapChain;
-
-    // A cache is mutable because potentially modified in const-qualified getters
-    std::unique_ptr<AdapterSurfaceCapCache> mCapabilityCache;
 
     // MetalLayer
     raw_ptr<void> mMetalLayer = nullptr;

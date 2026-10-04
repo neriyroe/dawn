@@ -82,6 +82,7 @@ class SwapChain : public SwapChainBase {
   private:
     // Does the swapchain initialization steps assuming there is nothing we can reuse.
     MaybeError InitializeSwapChainFromScratch();
+    MaybeError ConfigureColorSpace();
 
     Config mConfig;
     ComPtr<IDXGISwapChain3> mDXGISwapChain;

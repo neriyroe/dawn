@@ -75,6 +75,7 @@ bool IsSampleCountSupported(const dawn::native::vulkan::Device* device,
 class Texture : public TextureBase {
   public:
     VkImage GetHandle() const;
+    VkImageCreateInfo GetVkImageCreateInfo(VkImageUsageFlags extraUsages = 0) const;
     // Returns the aspects used for tracking of Vulkan state. These can be the combined aspects.
     Aspect GetDisjointVulkanAspects() const;
 
