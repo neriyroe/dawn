@@ -29,12 +29,17 @@
 # Dawn version
 ###############################################################################
 
+set(DAWN_VERSION_FILE "" CACHE FILEPATH "Optional source version file for local compiler changes")
+set(DAWN_VERSION_PARAMETERS --dawn-dir "${Dawn_SOURCE_DIR}")
+if(DAWN_VERSION_FILE)
+    list(APPEND DAWN_VERSION_PARAMETERS --version-file "${DAWN_VERSION_FILE}")
+endif()
+
 DawnGenerator(
     SCRIPT "${Dawn_SOURCE_DIR}/generator/dawn_version_generator.py"
     PRINT_NAME "Dawn version based utilities"
     OUTPUT_HEADERS DAWN_VERSION_AUTOGEN_HEADERS
-    EXTRA_PARAMETERS "--dawn-dir"
-         "${Dawn_SOURCE_DIR}"
+    EXTRA_PARAMETERS ${DAWN_VERSION_PARAMETERS}
 )
 
 dawn_add_library(

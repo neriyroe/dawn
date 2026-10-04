@@ -153,6 +153,9 @@ struct State {
                             BitcastToIntOverloadCall(call);  // See crbug.com/tint/1550.
                         });
                         break;
+                    case core::BuiltinFn::kFirstTrailingBit:
+                        call_worklist.push_back([this, call] { BitcastToIntOverloadCall(call); });
+                        break;
                     case core::BuiltinFn::kDot4I8Packed:
                         call_worklist.push_back([this, call] { Dot4I8Packed(call); });
                         break;

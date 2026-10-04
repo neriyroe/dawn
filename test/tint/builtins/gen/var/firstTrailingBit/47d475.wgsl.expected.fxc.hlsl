@@ -5,16 +5,7 @@
 RWByteAddressBuffer prevent_dce : register(u0);
 uint firstTrailingBit_47d475() {
   uint arg_0 = 1u;
-  uint v = arg_0;
-  uint v_1 = ((((v & 65535u) == 0u)) ? (16u) : (0u));
-  uint v_2 = (v >> v_1);
-  uint v_3 = ((((v_2 & 255u) == 0u)) ? (8u) : (0u));
-  uint v_4 = (v_2 >> v_3);
-  uint v_5 = ((((v_4 & 15u) == 0u)) ? (4u) : (0u));
-  uint v_6 = (v_4 >> v_5);
-  uint v_7 = ((((v_6 & 3u) == 0u)) ? (2u) : (0u));
-  uint v_8 = (v_6 >> v_7);
-  uint res = (((v_8 == 0u)) ? (4294967295u) : ((v_1 | (v_3 | (v_5 | (v_7 | ((((v_8 & 1u) == 0u)) ? (1u) : (0u))))))));
+  uint res = firstbitlow(arg_0);
   return res;
 }
 
@@ -29,16 +20,7 @@ void fragment_main() {
 RWByteAddressBuffer prevent_dce : register(u0);
 uint firstTrailingBit_47d475() {
   uint arg_0 = 1u;
-  uint v = arg_0;
-  uint v_1 = ((((v & 65535u) == 0u)) ? (16u) : (0u));
-  uint v_2 = (v >> v_1);
-  uint v_3 = ((((v_2 & 255u) == 0u)) ? (8u) : (0u));
-  uint v_4 = (v_2 >> v_3);
-  uint v_5 = ((((v_4 & 15u) == 0u)) ? (4u) : (0u));
-  uint v_6 = (v_4 >> v_5);
-  uint v_7 = ((((v_6 & 3u) == 0u)) ? (2u) : (0u));
-  uint v_8 = (v_6 >> v_7);
-  uint res = (((v_8 == 0u)) ? (4294967295u) : ((v_1 | (v_3 | (v_5 | (v_7 | ((((v_8 & 1u) == 0u)) ? (1u) : (0u))))))));
+  uint res = firstbitlow(arg_0);
   return res;
 }
 
@@ -63,30 +45,21 @@ struct vertex_main_outputs {
 
 uint firstTrailingBit_47d475() {
   uint arg_0 = 1u;
-  uint v = arg_0;
-  uint v_1 = ((((v & 65535u) == 0u)) ? (16u) : (0u));
-  uint v_2 = (v >> v_1);
-  uint v_3 = ((((v_2 & 255u) == 0u)) ? (8u) : (0u));
-  uint v_4 = (v_2 >> v_3);
-  uint v_5 = ((((v_4 & 15u) == 0u)) ? (4u) : (0u));
-  uint v_6 = (v_4 >> v_5);
-  uint v_7 = ((((v_6 & 3u) == 0u)) ? (2u) : (0u));
-  uint v_8 = (v_6 >> v_7);
-  uint res = (((v_8 == 0u)) ? (4294967295u) : ((v_1 | (v_3 | (v_5 | (v_7 | ((((v_8 & 1u) == 0u)) ? (1u) : (0u))))))));
+  uint res = firstbitlow(arg_0);
   return res;
 }
 
 VertexOutput vertex_main_inner() {
-  VertexOutput v_9 = (VertexOutput)0;
-  v_9.pos = (0.0f).xxxx;
-  v_9.prevent_dce = firstTrailingBit_47d475();
-  VertexOutput v_10 = v_9;
-  return v_10;
+  VertexOutput v = (VertexOutput)0;
+  v.pos = (0.0f).xxxx;
+  v.prevent_dce = firstTrailingBit_47d475();
+  VertexOutput v_1 = v;
+  return v_1;
 }
 
 vertex_main_outputs vertex_main() {
-  VertexOutput v_11 = vertex_main_inner();
-  vertex_main_outputs v_12 = {v_11.prevent_dce, v_11.pos};
-  return v_12;
+  VertexOutput v_2 = vertex_main_inner();
+  vertex_main_outputs v_3 = {v_2.prevent_dce, v_2.pos};
+  return v_3;
 }
 

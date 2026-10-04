@@ -25,6 +25,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <tuple>
+
 #include "gtest/gtest.h"
 #include "src/tint/lang/core/fluent_types.h"
 #include "src/tint/lang/core/ir/function.h"
@@ -45,6 +47,41 @@ using namespace tint::core::number_suffixes;  // NOLINT
 
 namespace tint::hlsl::writer {
 namespace {
+
+using HlslBuiltinFirstTrailingBit =
+    HlslWriterTestWithParam<std::tuple<bool, uint32_t, Options::Compiler>>;
+
+TEST_P(HlslBuiltinFirstTrailingBit, NativeIntrinsic) {
+    auto [signed_input, width, compiler] = GetParam();
+    const core::type::Type* type = ty.u32();
+    if (signed_input) {
+        type = ty.i32();
+    }
+    if (width > 1) {
+        type = ty.vec(type, width);
+    }
+    auto* func = b.Function("main", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    b.Append(func->Block(), [&] {
+        auto* input = b.Var("input", b.Zero(type));
+        b.Let("result", b.Call(type, core::BuiltinFn::kFirstTrailingBit, b.Load(input)));
+        b.Return(func);
+    });
+
+    Options options;
+    options.compiler = compiler;
+    auto result = Generate(options);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.hlsl;
+    const auto intrinsic = signed_input ? "asint(firstbitlow(asuint(input)))" : "firstbitlow(input)";
+    EXPECT_NE(output_.hlsl.find(intrinsic), std::string::npos) << output_.hlsl;
+    EXPECT_EQ(output_.hlsl.find("tint_first_trailing_bit"), std::string::npos) << output_.hlsl;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    HlslWriterTest,
+    HlslBuiltinFirstTrailingBit,
+    testing::Combine(testing::Bool(), testing::Values(1u, 2u, 3u, 4u),
+                     testing::Values(Options::Compiler::kFXC, Options::Compiler::kDXC_2018,
+                                     Options::Compiler::kDXC_2021)));
 
 TEST_F(HlslWriterTest, BuiltinSelectScalar) {
     auto* func = b.Function("main", ty.void_(), core::ir::Function::PipelineStage::kFragment);

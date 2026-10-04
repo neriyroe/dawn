@@ -1176,6 +1176,9 @@ class Printer : public tint::TextGenerator {
             case core::BuiltinFn::kFaceForward:
                 out << "faceforward";
                 break;
+            case core::BuiltinFn::kFirstTrailingBit:  // uint
+                out << "firstbitlow";
+                break;
             case core::BuiltinFn::kFract:
                 out << "frac";
                 break;

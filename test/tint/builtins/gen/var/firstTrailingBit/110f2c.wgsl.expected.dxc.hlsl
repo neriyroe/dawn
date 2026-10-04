@@ -5,16 +5,7 @@
 RWByteAddressBuffer prevent_dce : register(u0);
 uint4 firstTrailingBit_110f2c() {
   uint4 arg_0 = (1u).xxxx;
-  uint4 v = arg_0;
-  uint4 v_1 = select(((v & (65535u).xxxx) == (0u).xxxx), (16u).xxxx, (0u).xxxx);
-  uint4 v_2 = (v >> v_1);
-  uint4 v_3 = select(((v_2 & (255u).xxxx) == (0u).xxxx), (8u).xxxx, (0u).xxxx);
-  uint4 v_4 = (v_2 >> v_3);
-  uint4 v_5 = select(((v_4 & (15u).xxxx) == (0u).xxxx), (4u).xxxx, (0u).xxxx);
-  uint4 v_6 = (v_4 >> v_5);
-  uint4 v_7 = select(((v_6 & (3u).xxxx) == (0u).xxxx), (2u).xxxx, (0u).xxxx);
-  uint4 v_8 = (v_6 >> v_7);
-  uint4 res = select((v_8 == (0u).xxxx), (4294967295u).xxxx, (v_1 | (v_3 | (v_5 | (v_7 | select(((v_8 & (1u).xxxx) == (0u).xxxx), (1u).xxxx, (0u).xxxx))))));
+  uint4 res = firstbitlow(arg_0);
   return res;
 }
 
@@ -29,16 +20,7 @@ void fragment_main() {
 RWByteAddressBuffer prevent_dce : register(u0);
 uint4 firstTrailingBit_110f2c() {
   uint4 arg_0 = (1u).xxxx;
-  uint4 v = arg_0;
-  uint4 v_1 = select(((v & (65535u).xxxx) == (0u).xxxx), (16u).xxxx, (0u).xxxx);
-  uint4 v_2 = (v >> v_1);
-  uint4 v_3 = select(((v_2 & (255u).xxxx) == (0u).xxxx), (8u).xxxx, (0u).xxxx);
-  uint4 v_4 = (v_2 >> v_3);
-  uint4 v_5 = select(((v_4 & (15u).xxxx) == (0u).xxxx), (4u).xxxx, (0u).xxxx);
-  uint4 v_6 = (v_4 >> v_5);
-  uint4 v_7 = select(((v_6 & (3u).xxxx) == (0u).xxxx), (2u).xxxx, (0u).xxxx);
-  uint4 v_8 = (v_6 >> v_7);
-  uint4 res = select((v_8 == (0u).xxxx), (4294967295u).xxxx, (v_1 | (v_3 | (v_5 | (v_7 | select(((v_8 & (1u).xxxx) == (0u).xxxx), (1u).xxxx, (0u).xxxx))))));
+  uint4 res = firstbitlow(arg_0);
   return res;
 }
 
@@ -63,30 +45,21 @@ struct vertex_main_outputs {
 
 uint4 firstTrailingBit_110f2c() {
   uint4 arg_0 = (1u).xxxx;
-  uint4 v = arg_0;
-  uint4 v_1 = select(((v & (65535u).xxxx) == (0u).xxxx), (16u).xxxx, (0u).xxxx);
-  uint4 v_2 = (v >> v_1);
-  uint4 v_3 = select(((v_2 & (255u).xxxx) == (0u).xxxx), (8u).xxxx, (0u).xxxx);
-  uint4 v_4 = (v_2 >> v_3);
-  uint4 v_5 = select(((v_4 & (15u).xxxx) == (0u).xxxx), (4u).xxxx, (0u).xxxx);
-  uint4 v_6 = (v_4 >> v_5);
-  uint4 v_7 = select(((v_6 & (3u).xxxx) == (0u).xxxx), (2u).xxxx, (0u).xxxx);
-  uint4 v_8 = (v_6 >> v_7);
-  uint4 res = select((v_8 == (0u).xxxx), (4294967295u).xxxx, (v_1 | (v_3 | (v_5 | (v_7 | select(((v_8 & (1u).xxxx) == (0u).xxxx), (1u).xxxx, (0u).xxxx))))));
+  uint4 res = firstbitlow(arg_0);
   return res;
 }
 
 VertexOutput vertex_main_inner() {
-  VertexOutput v_9 = (VertexOutput)0;
-  v_9.pos = (0.0f).xxxx;
-  v_9.prevent_dce = firstTrailingBit_110f2c();
-  VertexOutput v_10 = v_9;
-  return v_10;
+  VertexOutput v = (VertexOutput)0;
+  v.pos = (0.0f).xxxx;
+  v.prevent_dce = firstTrailingBit_110f2c();
+  VertexOutput v_1 = v;
+  return v_1;
 }
 
 vertex_main_outputs vertex_main() {
-  VertexOutput v_11 = vertex_main_inner();
-  vertex_main_outputs v_12 = {v_11.prevent_dce, v_11.pos};
-  return v_12;
+  VertexOutput v_2 = vertex_main_inner();
+  vertex_main_outputs v_3 = {v_2.prevent_dce, v_2.pos};
+  return v_3;
 }
 
