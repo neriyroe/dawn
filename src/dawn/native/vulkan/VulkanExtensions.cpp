@@ -152,6 +152,7 @@ static constexpr std::array<DeviceExtInfo, kDeviceExtCount> sDeviceExtInfos{{
     {DeviceExt::ImageDrmFormatModifier, "VK_EXT_image_drm_format_modifier"},
     {DeviceExt::Swapchain, "VK_KHR_swapchain"},
     {DeviceExt::HdrMetadata, "VK_EXT_hdr_metadata"},
+    {DeviceExt::SwapchainMutableFormat, "VK_KHR_swapchain_mutable_format"},
     {DeviceExt::QueueFamilyForeign, "VK_EXT_queue_family_foreign"},
     {DeviceExt::Robustness2, "VK_EXT_robustness2"},
     {DeviceExt::DisplayTiming, "VK_GOOGLE_display_timing"},
@@ -254,6 +255,12 @@ DeviceExtSet EnsureDependencies(const DeviceExtSet& advertisedExts,
 
             case DeviceExt::Swapchain:
                 hasDependencies = instanceExts[InstanceExt::Surface];
+                break;
+
+            // Also requires VK_KHR_maintenance2 which is core in Vulkan 1.1.
+            case DeviceExt::SwapchainMutableFormat:
+                hasDependencies =
+                    HasDep(DeviceExt::Swapchain) && HasDep(DeviceExt::ImageFormatList);
                 break;
 
             case DeviceExt::ExternalMemoryAndroidHardwareBuffer:

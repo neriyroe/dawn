@@ -28,6 +28,7 @@
 #ifndef SRC_DAWN_NATIVE_D3D11_TEXTURED3D11_H_
 #define SRC_DAWN_NATIVE_D3D11_TEXTURED3D11_H_
 
+#include <array>
 #include <utility>
 #include <vector>
 
@@ -87,10 +88,10 @@ class Texture final : public TextureBase {
                      const SubresourceRange& subresources,
                      const Origin3D& origin,
                      const Extent3D& size,
-                     const uint8_t* data,
+                     Span<const std::byte> data,
                      uint32_t bytesPerRow,
                      uint32_t rowsPerImage);
-    using ReadCallback = std::function<MaybeError(const uint8_t* data, size_t offset, size_t size)>;
+    using ReadCallback = std::function<MaybeError(Span<const std::byte> data, size_t offset)>;
     MaybeError Read(const ScopedCommandRecordingContext* commandContext,
                     const SubresourceRange& subresources,
                     const Origin3D& origin,
@@ -100,6 +101,11 @@ class Texture final : public TextureBase {
                     ReadCallback callback);
     static MaybeError Copy(const ScopedCommandRecordingContext* commandContext,
                            CopyTextureToTextureCmd* copy);
+
+    // Returns a Span of mappedResource with the correct size:
+    // totalBytes = (depth - 1) × DepthPitch + (heightInBlocks - 1) × RowPitch + bytesPerRow
+    Span<const std::byte> GetMappedData(const D3D11_MAPPED_SUBRESOURCE& mappedResource) const;
+    Span<std::byte> GetMappedData(const D3D11_MAPPED_SUBRESOURCE& mappedResource);
 
     // As D3D11 SRV doesn't support 'Shader4ComponentMapping' for depth-stencil textures, we can't
     // sample the stencil component directly. As a workaround we create an internal R8Uint texture,
@@ -126,7 +132,7 @@ class Texture final : public TextureBase {
     enum class Kind { Normal, Staging, Interim };
 
     struct D3D11ClearValue {
-        float color[4];
+        std::array<float, 4> color;
         float depth;
         uint8_t stencil;
     };
@@ -179,7 +185,7 @@ class Texture final : public TextureBase {
                              const SubresourceRange& subresources,
                              const Origin3D& origin,
                              const Extent3D& size,
-                             const uint8_t* data,
+                             Span<const std::byte> data,
                              uint32_t bytesPerRow,
                              uint32_t rowsPerImage);
 
@@ -188,7 +194,7 @@ class Texture final : public TextureBase {
                                          const SubresourceRange& subresources,
                                          const Origin3D& origin,
                                          const Extent3D& size,
-                                         const uint8_t* data,
+                                         Span<const std::byte> data,
                                          uint32_t bytesPerRow,
                                          uint32_t rowsPerImage);
 

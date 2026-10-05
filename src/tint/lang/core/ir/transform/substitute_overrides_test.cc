@@ -34,9 +34,9 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "src/tint/lang/core/fluent_types.h"
+#include "src/tint/lang/core/ir/array_count.h"
 #include "src/tint/lang/core/ir/override.h"
 #include "src/tint/lang/core/ir/transform/helper_test.h"
-#include "src/tint/lang/core/ir/type/array_count.h"
 #include "src/tint/lang/core/ir/var.h"
 #include "src/tint/lang/core/type/array.h"
 
@@ -249,11 +249,12 @@ $B1: {  # root
 TEST_F(IR_SubstituteOverridesTest, OverrideWithComplexInitNoOverrides) {
     core::ir::Override* o = nullptr;
     b.Append(mod.root_block, [&] {
-        auto* add = b.Add(2_u, 4_u);
+        auto* add = b.Append(mod.CreateInstruction<core::ir::CoreBinary>(
+            b.InstructionResult(ty.u32()), BinaryOp::kAdd, b.Constant(2_u), b.Constant(4_u)));
 
         o = b.Override(Source{{1, 2}}, "a", ty.u32());
         o->SetOverrideId({1});
-        o->SetInitializer(add);
+        o->SetInitializer(add->Result());
     });
 
     auto* func = b.Function("foo", ty.u32());
@@ -291,11 +292,12 @@ $B1: {  # root
 TEST_F(IR_SubstituteOverridesTest, OverrideWithComplexInitComponentOverride) {
     core::ir::Override* o = nullptr;
     b.Append(mod.root_block, [&] {
-        auto* add = b.Add(2_u, 4_u);
+        auto* add = b.Append(mod.CreateInstruction<core::ir::CoreBinary>(
+            b.InstructionResult(ty.u32()), BinaryOp::kAdd, b.Constant(2_u), b.Constant(4_u)));
 
         o = b.Override(Source{{1, 2}}, "a", ty.u32());
         o->SetOverrideId({1});
-        o->SetInitializer(add);
+        o->SetInitializer(add->Result());
     });
 
     auto* func = b.Function("foo", ty.u32());
@@ -392,7 +394,7 @@ TEST_F(IR_SubstituteOverridesTest, OverrideWithSubgroupShuffle) {
     auto* func = b.Function("foo", ty.u32());
     b.Append(func->Block(), [&] {
         auto* shuffle_func = b.Call(ty.u32(), core::BuiltinFn::kSubgroupShuffle, 1_u, o);
-        b.Return(func, shuffle_func->Result());
+        b.Return(func, shuffle_func);
     });
 
     auto* src = R"(
@@ -415,8 +417,9 @@ $B1: {  # root
     cfg.map[OverrideId{2}] = 125.0;
     auto result = RunWithFailure(SubstituteOverrides, cfg);
     ASSERT_NE(result, Success);
-    EXPECT_EQ(result.Failure().reason,
-              R"(error: The sourceLaneIndex argument of subgroupShuffle must be less than 128)");
+    EXPECT_EQ(
+        result.Failure().reason,
+        R"(error: subgroupShuffle: The sourceLaneIndex argument of subgroupShuffle must be less than 128)");
 }
 
 TEST_F(IR_SubstituteOverridesTest, OverrideWithQuantizeF16) {
@@ -435,7 +438,7 @@ TEST_F(IR_SubstituteOverridesTest, OverrideWithQuantizeF16) {
     auto* func = b.Function("foo", ty.f32());
     b.Append(func->Block(), [&] {
         auto* shuffle_func = b.Call(ty.f32(), core::BuiltinFn::kQuantizeToF16, o);
-        b.Return(func, shuffle_func->Result());
+        b.Return(func, shuffle_func);
     });
 
     auto* src = R"(
@@ -530,8 +533,9 @@ $B1: {  # root
     cfg.map[OverrideId{1}] = 125.0;
     auto result = RunWithFailure(SubstituteOverrides, cfg);
     ASSERT_NE(result, Success);
-    EXPECT_EQ(result.Failure().reason,
-              R"(error: shift left value must be less than the bit width of the lhs, which is 32)");
+    EXPECT_EQ(
+        result.Failure().reason,
+        R"(error: binary: shift left value must be less than the bit width of the lhs, which is 32)");
 }
 
 TEST_F(IR_SubstituteOverridesTest, Override_ShiftRightAmountTooLarge_ConstLHS) {
@@ -605,7 +609,7 @@ $B1: {  # root
     ASSERT_NE(result, Success);
     EXPECT_EQ(
         result.Failure().reason,
-        R"(error: shift right value must be less than the bit width of the lhs, which is 32)");
+        R"(error: binary: shift right value must be less than the bit width of the lhs, which is 32)");
 }
 
 TEST_F(IR_SubstituteOverridesTest, OverrideWithComplexGenError) {
@@ -1657,8 +1661,8 @@ TEST_F(IR_SubstituteOverridesTest, ConstExprIfInsideKernel) {
         auto* constexpr_if = b.ConstExprIf(o);
         constexpr_if->SetResult(b.InstructionResult(ty.bool_()));
         b.Append(constexpr_if->True(), [&] {
-            auto* k4 = b.Add(10_u, 5_u);
-            auto* k = b.Divide(k4, x);
+            auto* k4 = b.Add(x, 5_u);
+            auto* k = b.Divide(k4, 10_u);
             auto* k2 = b.Equal(k, 10_u);
             b.ExitIf(constexpr_if, k2);
         });
@@ -1678,8 +1682,8 @@ $B1: {  # root
   $B2: {
     %4:bool = constexpr_if %y [t: $B3, f: $B4] {  # constexpr_if_1
       $B3: {  # true
-        %5:u32 = add 10u, 5u
-        %6:u32 = div %5, %x
+        %5:u32 = add %x, 5u
+        %6:u32 = div %5, 10u
         %7:bool = eq %6, 10u
         exit_if %7  # constexpr_if_1
       }
@@ -1878,7 +1882,7 @@ TEST_F(IR_SubstituteOverridesTest, OverrideConstruct) {
         auto* e = b.Construct(ty.vec4h(), o0, o1, o2, o3);
         // auto* e = b.Splat(ty.vec4h(), 1.0_h);
         auto* call_func = b.Call(ty.vec4(ty.f16()), core::BuiltinFn::kCeil, e);
-        global = b.Var<private_>("global", call_func->Result());
+        global = b.Var<private_>("global", call_func);
         // global = b.Var<private_>("global", e);//e->Result());
     });
 
@@ -2338,7 +2342,7 @@ $B1: {  # root
     ASSERT_NE(result, Success);
     EXPECT_EQ(
         result.Failure().reason,
-        R"(error: invalid buffer size (12 bytes) when used with bufferView (16 bytes required))");
+        R"(error: var: invalid buffer size (12 bytes) when used with bufferView (16 bytes required))");
 }
 
 TEST_F(IR_SubstituteOverridesTest, OverrideSizedBuffer_BufferView_FixedSize_ConstOffset) {
@@ -2383,7 +2387,7 @@ $B1: {  # root
     ASSERT_NE(result, Success);
     EXPECT_EQ(
         result.Failure().reason,
-        R"(error: invalid buffer size (16 bytes) when used with bufferView (20 bytes required))");
+        R"(error: var: invalid buffer size (16 bytes) when used with bufferView (20 bytes required))");
 }
 
 TEST_F(IR_SubstituteOverridesTest, OverrideSizedBuffer_BufferView_RuntimeArray) {
@@ -2428,7 +2432,7 @@ $B1: {  # root
     ASSERT_NE(result, Success);
     EXPECT_EQ(
         result.Failure().reason,
-        R"(error: invalid buffer size (12 bytes) when used with bufferView (16 bytes required))");
+        R"(error: var: invalid buffer size (12 bytes) when used with bufferView (16 bytes required))");
 }
 
 TEST_F(IR_SubstituteOverridesTest, OverrideSizedBuffer_BufferView_RuntimeArray_ConstOffset) {
@@ -2473,7 +2477,7 @@ $B1: {  # root
     ASSERT_NE(result, Success);
     EXPECT_EQ(
         result.Failure().reason,
-        R"(error: invalid buffer size (16 bytes) when used with bufferView (20 bytes required))");
+        R"(error: var: invalid buffer size (16 bytes) when used with bufferView (20 bytes required))");
 }
 
 TEST_F(IR_SubstituteOverridesTest, OverrideSizedBuffer_BufferView_RuntimeStruct) {
@@ -2528,7 +2532,7 @@ $B1: {  # root
     ASSERT_NE(result, Success);
     EXPECT_EQ(
         result.Failure().reason,
-        R"(error: invalid buffer size (16 bytes) when used with bufferView (20 bytes required))");
+        R"(error: var: invalid buffer size (16 bytes) when used with bufferView (20 bytes required))");
 }
 
 TEST_F(IR_SubstituteOverridesTest, OverrideSizedBuffer_BufferView_RuntimeStruct_ConstOffset) {
@@ -2583,7 +2587,7 @@ $B1: {  # root
     ASSERT_NE(result, Success);
     EXPECT_EQ(
         result.Failure().reason,
-        R"(error: invalid buffer size (20 bytes) when used with bufferView (24 bytes required))");
+        R"(error: var: invalid buffer size (20 bytes) when used with bufferView (24 bytes required))");
 }
 
 TEST_F(IR_SubstituteOverridesTest, BufferView_OverrideSizedOffset) {
@@ -2624,7 +2628,7 @@ $B1: {  # root
     ASSERT_NE(result, Success);
     EXPECT_EQ(
         result.Failure().reason,
-        R"(error: bufferView offset (3 bytes) must be a multiple of result alignment (4 bytes))");
+        R"(error: bufferView: bufferView offset (3 bytes) must be a multiple of result alignment (4 bytes))");
 }
 
 TEST_F(IR_SubstituteOverridesTest, BufferArrayView_BufferSize) {
@@ -2687,7 +2691,7 @@ $B1: {  # root
     ASSERT_NE(result, Success);
     EXPECT_EQ(
         result.Failure().reason,
-        R"(error: invalid buffer size (24 bytes) when used with bufferArrayView (36 bytes required))");
+        R"(error: var: invalid buffer size (24 bytes) when used with bufferArrayView (36 bytes required))");
 }
 
 TEST_F(IR_SubstituteOverridesTest, BufferArrayView_Size) {
@@ -2748,8 +2752,9 @@ $B1: {  # root
     cfg.map[OverrideId{3}] = 16;
     auto result = RunWithFailure(SubstituteOverrides, cfg);
     ASSERT_NE(result, Success);
-    EXPECT_EQ(result.Failure().reason,
-              R"(error: bufferArrayView has invalid size (16 bytes, requires 20 bytes))");
+    EXPECT_EQ(
+        result.Failure().reason,
+        R"(error: bufferArrayView: bufferArrayView has invalid size (16 bytes, requires 20 bytes))");
 }
 
 TEST_F(IR_SubstituteOverridesTest, BufferArrayView_SizeMultiple) {
@@ -2812,7 +2817,7 @@ $B1: {  # root
     ASSERT_NE(result, Success);
     EXPECT_EQ(
         result.Failure().reason,
-        R"(error: bufferArrayView size (21 bytes) minus type offset (16 bytes) must be a multiple of the type stride (4 bytes))");
+        R"(error: bufferArrayView: bufferArrayView size (21 bytes) minus type offset (16 bytes) must be a multiple of the type stride (4 bytes))");
 }
 
 TEST_F(IR_SubstituteOverridesTest, BufferView_ThroughCall_Unsized) {
@@ -2869,7 +2874,7 @@ $B1: {  # root
     ASSERT_NE(result, Success);
     EXPECT_EQ(
         result.Failure().reason,
-        R"(error: invalid buffer size (12 bytes) when used with bufferView (16 bytes required))");
+        R"(error: var: invalid buffer size (12 bytes) when used with bufferView (16 bytes required))");
 }
 
 TEST_F(IR_SubstituteOverridesTest, BufferView_ThroughCall_SmallerSize) {
@@ -2925,7 +2930,7 @@ $B1: {  # root
     ASSERT_NE(result, Success);
     EXPECT_EQ(
         result.Failure().reason,
-        R"(error: invalid buffer size (16 bytes) when used with bufferView (20 bytes required))");
+        R"(error: var: invalid buffer size (16 bytes) when used with bufferView (20 bytes required))");
 }
 
 TEST_F(IR_SubstituteOverridesTest, Buffer_WorkgroupPtr_ThreeBytes) {
@@ -3074,21 +3079,26 @@ struct SubgroupMatrixSizes : public TransformTestWithParam<SubgroupMatrixSizesPa
         const bool load = std::get<4>(GetParam());
         auto* mat_ty = MatrixType();
         if (load) {
-            return b.CallExplicit(
-                mat_ty, BuiltinFn::kSubgroupMatrixLoad,
-                Vector<TemplateParameter, 2>{
-                    mat_ty, col_major ? Majorness::kColMajor : Majorness::kRowMajor},
-                pointer, offset, stride);
+            return b
+                .CallExplicit(mat_ty, BuiltinFn::kSubgroupMatrixLoad,
+                              Vector<TemplateParameter, 2>{
+                                  mat_ty, col_major ? Majorness::kColMajor : Majorness::kRowMajor},
+                              pointer, offset, stride)
+                ->AsInstruction<CoreBuiltinCall>();
         } else {
-            return b.CallExplicit(ty.void_(), BuiltinFn::kSubgroupMatrixStore,
-                                  Vector<TemplateParameter, 1>{col_major ? Majorness::kColMajor
-                                                                         : Majorness::kRowMajor},
-                                  pointer, offset, object, stride);
+            return b
+                .CallExplicit(ty.void_(), BuiltinFn::kSubgroupMatrixStore,
+                              Vector<TemplateParameter, 1>{col_major ? Majorness::kColMajor
+                                                                     : Majorness::kRowMajor},
+                              pointer, offset, object, stride)
+                ->AsInstruction<CoreBuiltinCall>();
         }
     }
 };
 
 TEST_P(SubgroupMatrixSizes, Stride_TooSmallForType) {
+    mod.properties.Add(ir::Property::kAllow16BitFloats);
+
     auto* mat_ty = MatrixType();
 
     if (MinStride() < ArrayStride()) {
@@ -3122,6 +3132,8 @@ TEST_P(SubgroupMatrixSizes, Stride_TooSmallForType) {
 }
 
 TEST_P(SubgroupMatrixSizes, Stride_TooLarge) {
+    mod.properties.Add(ir::Property::kAllow16BitFloats);
+
     auto* mat_ty = MatrixType();
 
     Var* v = nullptr;
@@ -3148,6 +3160,8 @@ TEST_P(SubgroupMatrixSizes, Stride_TooLarge) {
 }
 
 TEST_P(SubgroupMatrixSizes, Offset_TooLarge) {
+    mod.properties.Add(ir::Property::kAllow16BitFloats);
+
     auto* mat_ty = MatrixType();
 
     Var* v = nullptr;
@@ -3174,6 +3188,8 @@ TEST_P(SubgroupMatrixSizes, Offset_TooLarge) {
 }
 
 TEST_P(SubgroupMatrixSizes, Pointer_TooSmallForType_MinStride) {
+    mod.properties.Add(ir::Property::kAllow16BitFloats);
+
     auto* type = std::get<0>(GetParam())(ty);
     const bool load = std::get<4>(GetParam());
     auto* mat_ty = MatrixType();
@@ -3213,6 +3229,8 @@ TEST_P(SubgroupMatrixSizes, Pointer_TooSmallForType_MinStride) {
 }
 
 TEST_P(SubgroupMatrixSizes, Storage_TooSmallForType) {
+    mod.properties.Add(ir::Property::kAllow16BitFloats);
+
     auto* type = std::get<0>(GetParam())(ty);
     const bool load = std::get<4>(GetParam());
     auto* mat_ty = MatrixType();
@@ -3249,6 +3267,8 @@ TEST_P(SubgroupMatrixSizes, Storage_TooSmallForType) {
 }
 
 TEST_P(SubgroupMatrixSizes, Storage_TooSmallForType_NonConstStride) {
+    mod.properties.Add(ir::Property::kAllow16BitFloats);
+
     auto* type = std::get<0>(GetParam())(ty);
     const bool load = std::get<4>(GetParam());
     auto* mat_ty = MatrixType();
@@ -3286,6 +3306,9 @@ TEST_P(SubgroupMatrixSizes, Storage_TooSmallForType_NonConstStride) {
 }
 
 TEST_P(SubgroupMatrixSizes, Storage_TooSmall_BufferView) {
+    mod.properties.Add(ir::Property::kAllowBufferTypes);
+    mod.properties.Add(ir::Property::kAllow16BitFloats);
+
     auto* type = std::get<0>(GetParam())(ty);
     const bool load = std::get<4>(GetParam());
     auto* mat_ty = MatrixType();
@@ -3302,7 +3325,6 @@ TEST_P(SubgroupMatrixSizes, Storage_TooSmall_BufferView) {
         o = b.Override("o", ty.u32());
         o->SetOverrideId({1});
         v = b.Var("v", ty.ptr(workgroup, ty.buffer(array_size)));
-        v->SetBindingPoint(0, 0);
     });
     auto* foo = b.Function("foo", ty.void_());
     auto* value = b.FunctionParam("mat", mat_ty);
@@ -3311,8 +3333,7 @@ TEST_P(SubgroupMatrixSizes, Storage_TooSmall_BufferView) {
         auto* view = b.CallExplicit(
             ty.ptr(workgroup, ty.runtime_array(ArrayElemType())), BuiltinFn::kBufferView,
             Vector<TemplateParameter, 1>{ty.runtime_array(ArrayElemType())}, v, o->Result());
-        MakeCall(view->Result(), value, b.Constant(u32(0)),
-                 b.Constant(u32(MinStride() / ArrayStride())));
+        MakeCall(view, value, b.Constant(u32(0)), b.Constant(u32(MinStride() / ArrayStride())));
         b.Return(foo);
     });
 
@@ -3329,6 +3350,9 @@ TEST_P(SubgroupMatrixSizes, Storage_TooSmall_BufferView) {
 }
 
 TEST_P(SubgroupMatrixSizes, Storage_TooSmall_BufferView_SizedParam) {
+    mod.properties.Add(ir::Property::kAllowBufferTypes);
+    mod.properties.Add(ir::Property::kAllow16BitFloats);
+
     auto* type = std::get<0>(GetParam())(ty);
     const bool load = std::get<4>(GetParam());
     auto* mat_ty = MatrixType();
@@ -3344,19 +3368,18 @@ TEST_P(SubgroupMatrixSizes, Storage_TooSmall_BufferView_SizedParam) {
     b.Append(mod.root_block, [&] {
         o = b.Override("o", ty.u32());
         o->SetOverrideId({1});
-        v = b.Var("v", ty.ptr(storage, ty.unsized_buffer()));
+        v = b.Var("v", ty.ptr(storage, ty.buffer(array_size)));
         v->SetBindingPoint(0, 0);
     });
     auto* foo = b.Function("foo", ty.void_());
     auto* value = b.FunctionParam("mat", mat_ty);
-    auto* p = b.FunctionParam("p", ty.buffer(array_size));
+    auto* p = b.FunctionParam("p", ty.ptr(storage, ty.buffer(array_size), read_write));
     foo->SetParams({value, p});
     b.Append(foo->Block(), [&] {
         auto* view = b.CallExplicit(
-            ty.ptr(workgroup, ty.runtime_array(ArrayElemType())), BuiltinFn::kBufferView,
+            ty.ptr(storage, ty.runtime_array(ArrayElemType())), BuiltinFn::kBufferView,
             Vector<TemplateParameter, 1>{ty.runtime_array(ArrayElemType())}, p, o->Result());
-        MakeCall(view->Result(), value, b.Constant(u32(0)),
-                 b.Constant(u32(MinStride() / ArrayStride())));
+        MakeCall(view, value, b.Constant(u32(0)), b.Constant(u32(MinStride() / ArrayStride())));
         b.Return(foo);
     });
     auto* bar = b.Function("bar", ty.void_());
@@ -3380,6 +3403,9 @@ TEST_P(SubgroupMatrixSizes, Storage_TooSmall_BufferView_SizedParam) {
 }
 
 TEST_P(SubgroupMatrixSizes, Pointer_TooSmall_BufferView_Result) {
+    mod.properties.Add(ir::Property::kAllowBufferTypes);
+    mod.properties.Add(ir::Property::kAllow16BitFloats);
+
     auto* type = std::get<0>(GetParam())(ty);
     auto* mat_ty = MatrixType();
 
@@ -3400,14 +3426,13 @@ TEST_P(SubgroupMatrixSizes, Pointer_TooSmall_BufferView_Result) {
     });
     auto* foo = b.Function("foo", ty.void_());
     auto* value = b.FunctionParam("mat", mat_ty);
-    auto* p = b.FunctionParam("p", ty.buffer(2 * array_size));
+    auto* p = b.FunctionParam("p", ty.ptr(storage, ty.unsized_buffer(), read_write));
     foo->SetParams({value, p});
     b.Append(foo->Block(), [&] {
         auto* arr_ty = ty.array(ArrayElemType(), array_size / ArrayStride() - 1);
-        auto* view = b.CallExplicit(ty.ptr(workgroup, arr_ty), BuiltinFn::kBufferView,
+        auto* view = b.CallExplicit(ty.ptr(storage, arr_ty), BuiltinFn::kBufferView,
                                     Vector<TemplateParameter, 1>{arr_ty}, p, o->Result());
-        MakeCall(view->Result(), value, b.Constant(u32(0)),
-                 b.Constant(u32(MinStride() / ArrayStride())));
+        MakeCall(view, value, b.Constant(u32(0)), b.Constant(u32(MinStride() / ArrayStride())));
         b.Return(foo);
     });
     auto* bar = b.Function("bar", ty.void_());
@@ -3429,6 +3454,9 @@ TEST_P(SubgroupMatrixSizes, Pointer_TooSmall_BufferView_Result) {
 }
 
 TEST_P(SubgroupMatrixSizes, Pointer_TooSmall_BufferArrayView_SizeParam) {
+    mod.properties.Add(ir::Property::kAllowBufferTypes);
+    mod.properties.Add(ir::Property::kAllow16BitFloats);
+
     auto* type = std::get<0>(GetParam())(ty);
     auto* mat_ty = MatrixType();
 
@@ -3445,7 +3473,6 @@ TEST_P(SubgroupMatrixSizes, Pointer_TooSmall_BufferArrayView_SizeParam) {
         o = b.Override("o", ty.u32());
         o->SetOverrideId({1});
         v = b.Var("v", ty.ptr(workgroup, ty.buffer(2 * array_size)));
-        v->SetBindingPoint(0, 0);
     });
     auto* foo = b.Function("foo", ty.void_());
     auto* value = b.FunctionParam("mat", mat_ty);
@@ -3454,8 +3481,7 @@ TEST_P(SubgroupMatrixSizes, Pointer_TooSmall_BufferArrayView_SizeParam) {
         auto* view = b.CallExplicit(
             ty.ptr(workgroup, ty.runtime_array(ArrayElemType())), BuiltinFn::kBufferArrayView,
             Vector<TemplateParameter, 1>{ty.runtime_array(ArrayElemType())}, v, 0_u, o->Result());
-        MakeCall(view->Result(), value, b.Constant(u32(0)),
-                 b.Constant(u32(MinStride() / ArrayStride())));
+        MakeCall(view, value, b.Constant(u32(0)), b.Constant(u32(MinStride() / ArrayStride())));
         b.Return(foo);
     });
 
@@ -3470,6 +3496,8 @@ TEST_P(SubgroupMatrixSizes, Pointer_TooSmall_BufferArrayView_SizeParam) {
 }
 
 TEST_P(SubgroupMatrixSizes, Pointer_TooSmall_Access_Array) {
+    mod.properties.Add(ir::Property::kAllow16BitFloats);
+
     auto* type = std::get<0>(GetParam())(ty);
     auto* mat_ty = MatrixType();
 
@@ -3494,8 +3522,7 @@ TEST_P(SubgroupMatrixSizes, Pointer_TooSmall_Access_Array) {
     foo->SetParams({value});
     b.Append(foo->Block(), [&] {
         auto* access = b.Access(ty.ptr(storage, arr_ty), v, o->Result());
-        MakeCall(access->Result(), value, b.Constant(u32(0)),
-                 b.Constant(u32(MinStride() / ArrayStride())));
+        MakeCall(access, value, b.Constant(u32(0)), b.Constant(u32(MinStride() / ArrayStride())));
         b.Return(foo);
     });
 
@@ -3510,6 +3537,8 @@ TEST_P(SubgroupMatrixSizes, Pointer_TooSmall_Access_Array) {
 }
 
 TEST_P(SubgroupMatrixSizes, Pointer_TooSmall_Access_Array_Offset) {
+    mod.properties.Add(ir::Property::kAllow16BitFloats);
+
     auto* type = std::get<0>(GetParam())(ty);
     auto* mat_ty = MatrixType();
 
@@ -3534,8 +3563,7 @@ TEST_P(SubgroupMatrixSizes, Pointer_TooSmall_Access_Array_Offset) {
     foo->SetParams({value});
     b.Append(foo->Block(), [&] {
         auto* access = b.Access(ty.ptr(storage, arr_ty), v, 1_u);
-        MakeCall(access->Result(), value, o->Result(),
-                 b.Constant(u32(MinStride() / ArrayStride())));
+        MakeCall(access, value, o->Result(), b.Constant(u32(MinStride() / ArrayStride())));
         b.Return(foo);
     });
 
@@ -3550,6 +3578,8 @@ TEST_P(SubgroupMatrixSizes, Pointer_TooSmall_Access_Array_Offset) {
 }
 
 TEST_P(SubgroupMatrixSizes, Pointer_TooSmall_StructMember) {
+    mod.properties.Add(ir::Property::kAllow16BitFloats);
+
     auto* type = std::get<0>(GetParam())(ty);
     auto* mat_ty = MatrixType();
 
@@ -3579,8 +3609,7 @@ TEST_P(SubgroupMatrixSizes, Pointer_TooSmall_StructMember) {
     foo->SetParams({value});
     b.Append(foo->Block(), [&] {
         auto* access = b.Access(ty.ptr(storage, arr_ty), v, 1_u);
-        MakeCall(access->Result(), value, o->Result(),
-                 b.Constant(u32(MinStride() / ArrayStride())));
+        MakeCall(access, value, o->Result(), b.Constant(u32(MinStride() / ArrayStride())));
         b.Return(foo);
     });
 
@@ -3595,6 +3624,9 @@ TEST_P(SubgroupMatrixSizes, Pointer_TooSmall_StructMember) {
 }
 
 TEST_P(SubgroupMatrixSizes, Storage_TooSmall_BufferView_Access_Array) {
+    mod.properties.Add(ir::Property::kAllowBufferTypes);
+    mod.properties.Add(ir::Property::kAllow16BitFloats);
+
     auto* type = std::get<0>(GetParam())(ty);
     const bool load = std::get<4>(GetParam());
     auto* mat_ty = MatrixType();
@@ -3623,8 +3655,7 @@ TEST_P(SubgroupMatrixSizes, Storage_TooSmall_BufferView_Access_Array) {
             b.CallExplicit(ty.ptr(storage, ty.runtime_array(arr_ty)), BuiltinFn::kBufferView,
                            Vector<TemplateParameter, 1>{ty.runtime_array(arr_ty)}, v, o->Result());
         auto* access = b.Access(ty.ptr(storage, arr_ty), view, 1_u);
-        MakeCall(access->Result(), value, b.Constant(u32(0)),
-                 b.Constant(u32(MinStride() / ArrayStride())));
+        MakeCall(access, value, b.Constant(u32(0)), b.Constant(u32(MinStride() / ArrayStride())));
         b.Return(foo);
     });
 
@@ -3641,6 +3672,9 @@ TEST_P(SubgroupMatrixSizes, Storage_TooSmall_BufferView_Access_Array) {
 }
 
 TEST_P(SubgroupMatrixSizes, Storage_TooSmall_BufferView_Access_Struct) {
+    mod.properties.Add(ir::Property::kAllowBufferTypes);
+    mod.properties.Add(ir::Property::kAllow16BitFloats);
+
     auto* type = std::get<0>(GetParam())(ty);
     const bool load = std::get<4>(GetParam());
     auto* mat_ty = MatrixType();
@@ -3670,12 +3704,10 @@ TEST_P(SubgroupMatrixSizes, Storage_TooSmall_BufferView_Access_Struct) {
     auto* value = b.FunctionParam("mat", mat_ty);
     foo->SetParams({value});
     b.Append(foo->Block(), [&] {
-        auto* view =
-            b.CallExplicit(ty.ptr(storage, S), BuiltinFn::kBufferView,
-                           Vector<TemplateParameter, 1>{ty.runtime_array(ArrayElemType())}, v, 0_u);
+        auto* view = b.CallExplicit(ty.ptr(storage, S), BuiltinFn::kBufferView,
+                                    Vector<TemplateParameter, 1>{S}, v, 0_u);
         auto* access = b.Access(ty.ptr(storage, ty.runtime_array(ArrayElemType())), view, 1_u);
-        MakeCall(access->Result(), value, o->Result(),
-                 b.Constant(u32(MinStride() / ArrayStride())));
+        MakeCall(access, value, o->Result(), b.Constant(u32(MinStride() / ArrayStride())));
         b.Return(foo);
     });
 

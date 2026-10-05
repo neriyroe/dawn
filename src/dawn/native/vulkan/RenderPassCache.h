@@ -70,19 +70,19 @@ struct RenderPassCacheQuery {
 
     ColorAttachmentMask colorMask;
     ColorAttachmentMask resolveTargetMask;
-    PerColorAttachment<wgpu::TextureFormat> colorFormats;
-    PerColorAttachment<wgpu::LoadOp> colorLoadOp;
-    PerColorAttachment<wgpu::StoreOp> colorStoreOp;
+    PerColorAttachment<wgpu::TextureFormat> colorFormats{};
+    PerColorAttachment<wgpu::LoadOp> colorLoadOp{};
+    PerColorAttachment<wgpu::StoreOp> colorStoreOp{};
     ColorAttachmentMask expandResolveMask;
     ColorAttachmentMask renderToSingleSampleMask;
 
     bool hasDepthStencil = false;
-    wgpu::TextureFormat depthStencilFormat;
-    wgpu::LoadOp depthLoadOp;
-    wgpu::StoreOp depthStoreOp;
+    wgpu::TextureFormat depthStencilFormat{};
+    wgpu::LoadOp depthLoadOp{};
+    wgpu::StoreOp depthStoreOp{};
     bool depthReadOnly = false;
-    wgpu::LoadOp stencilLoadOp;
-    wgpu::StoreOp stencilStoreOp;
+    wgpu::LoadOp stencilLoadOp{};
+    wgpu::StoreOp stencilStoreOp{};
     bool stencilReadOnly = false;
 
     uint32_t sampleCount = 0;
@@ -102,7 +102,7 @@ class RenderPassCache {
     struct RenderPassInfo {
         VkRenderPass renderPass = VK_NULL_HANDLE;
         uint32_t mainSubpass = 0;
-        uint64_t uniqueId;
+        uint64_t uniqueId = 0;
     };
 
     ResultOrError<RenderPassInfo> GetRenderPass(const RenderPassCacheQuery& query);

@@ -33,7 +33,7 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/core_builtin_call.h"
 #include "src/tint/lang/core/ir/transform/lower_swizzle_view.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/wgsl/enums.h"
 #include "src/tint/lang/wgsl/ir/builtin_call.h"
 #include "src/tint/utils/ice/ice.h"
@@ -227,12 +227,17 @@ Result<SuccessType> Lower(core::ir::Module& mod) {
 
     auto ConvertCall = [&](wgsl::ir::BuiltinCall* call) {
         Vector<core::ir::Value*, 8> args(call->Args());
-        auto* replacement =
-            b.CallWithResult(call->DetachResult(), Convert(call->Func()), std::move(args));
-        if (!call->ExplicitTemplateParams().IsEmpty()) {
-            replacement->SetExplicitTemplateParams(call->ExplicitTemplateParams());
-        }
-        call->ReplaceWith(replacement);
+        core::ir::Value* replacement = nullptr;
+        b.InsertBefore(call, [&] {
+            if (call->ExplicitTemplateParams().IsEmpty()) {
+                replacement = b.CallReplaceResult(call->DetachResult(), Convert(call->Func()),
+                                                  std::move(args));
+            } else {
+                replacement =
+                    b.CallExplicitReplaceResult(call->DetachResult(), Convert(call->Func()),
+                                                call->ExplicitTemplateParams(), std::move(args));
+            }
+        });
     };
 
     for (auto* inst : mod.Instructions()) {
@@ -251,8 +256,8 @@ Result<SuccessType> Lower(core::ir::Module& mod) {
                     b.InsertBefore(call, [&] {
                         b.Call(ty.void_(), core::BuiltinFn::kWorkgroupBarrier);
                         if (storeType->Is<core::type::Atomic>()) {
-                            b.CallWithResult(call->DetachResult(), core::BuiltinFn::kAtomicLoad,
-                                             param0);
+                            b.CallReplaceResult(call->DetachResult(), core::BuiltinFn::kAtomicLoad,
+                                                param0);
                         } else {
                             b.LoadWithResult(call->DetachResult(), param0);
                         }

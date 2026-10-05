@@ -33,7 +33,7 @@
 #include "src/tint/lang/core/fluent_types.h"
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/traverse.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/number.h"
 #include "src/tint/lang/msl/builtin_fn.h"
 #include "src/tint/lang/msl/ir/builtin_call.h"
@@ -218,7 +218,7 @@ struct State {
         b.InsertBefore(call, [&] {
             offset_arg = b.InsertBitcastIfNeeded(ty.u32(), offset_arg);
             new_call = b.CallExplicitWithResult<msl::ir::BuiltinCall>(
-                call->DetachResult(), msl::BuiltinFn::kPointerOffset,
+                call->DetachResult(), msl::BuiltinFn::kAliasPointerOffset,
                 Vector{call->ExplicitTemplateParams()[0]}, call->Args()[0], offset_arg);
         });
     }

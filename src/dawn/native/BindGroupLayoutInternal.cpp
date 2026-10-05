@@ -69,9 +69,9 @@ bool TextureFormatSupportStorageAccess(const Format& format, wgpu::StorageTextur
     }
 }
 
-MaybeError ValidateStorageTextureFormat(DeviceBase* device,
-                                        wgpu::TextureFormat storageTextureFormat,
-                                        wgpu::StorageTextureAccess access) {
+MaybeValError ValidateStorageTextureFormat(DeviceBase* device,
+                                           wgpu::TextureFormat storageTextureFormat,
+                                           wgpu::StorageTextureAccess access) {
     const Format* format = nullptr;
     DAWN_TRY_ASSIGN(format, device->GetInternalFormat(storageTextureFormat));
     DAWN_CHECK(format != nullptr);
@@ -83,7 +83,7 @@ MaybeError ValidateStorageTextureFormat(DeviceBase* device,
     return {};
 }
 
-MaybeError ValidateStorageTextureViewDimension(wgpu::TextureViewDimension dimension) {
+MaybeValError ValidateStorageTextureViewDimension(wgpu::TextureViewDimension dimension) {
     switch (dimension) {
         case wgpu::TextureViewDimension::Cube:
         case wgpu::TextureViewDimension::CubeArray:
@@ -102,9 +102,9 @@ MaybeError ValidateStorageTextureViewDimension(wgpu::TextureViewDimension dimens
     DAWN_UNREACHABLE();
 }
 
-MaybeError ValidateBindGroupLayoutEntry(DeviceBase* device,
-                                        const UnpackedPtr<BindGroupLayoutEntry>& entry,
-                                        bool allowInternalBinding) {
+MaybeValError ValidateBindGroupLayoutEntry(DeviceBase* device,
+                                           const UnpackedPtr<BindGroupLayoutEntry>& entry,
+                                           bool allowInternalBinding) {
     DAWN_TRY(ValidateShaderStage(entry->visibility));
     DAWN_INVALID_IF(
         (entry->visibility & (wgpu::ShaderStage::Task | wgpu::ShaderStage::Mesh)) &&
@@ -297,7 +297,7 @@ MaybeError ValidateBindGroupLayoutEntry(DeviceBase* device,
     return {};
 }
 
-MaybeError ValidateStaticSamplersWithTextureBindings(
+MaybeValError ValidateStaticSamplersWithTextureBindings(
     DeviceBase* device,
     const UnpackedPtr<BindGroupLayoutDescriptor>& descriptor,
     const std::map<BindingNumber, uint32_t>& bindingNumberToIndexMap) {
@@ -340,7 +340,7 @@ MaybeError ValidateStaticSamplersWithTextureBindings(
 
 }  // anonymous namespace
 
-ResultOrError<UnpackedPtr<BindGroupLayoutDescriptor>> ValidateBindGroupLayoutDescriptor(
+ResultOrValError<UnpackedPtr<BindGroupLayoutDescriptor>> ValidateBindGroupLayoutDescriptor(
     DeviceBase* device,
     const BindGroupLayoutDescriptor* descriptorChain,
     bool allowInternalBinding) {

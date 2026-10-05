@@ -1262,17 +1262,21 @@ TEST_F(SpirvParserTest, Var_OpSpecConstantTrue_NoSpecId) {
         %f32 = OpTypeFloat 32
       %vec4f = OpTypeVector %f32 4
           %c = OpSpecConstantTrue %bool
+        %ptr = OpTypePointer Function %bool
      %voidfn = OpTypeFunction %void
        %main = OpFunction %void None %voidfn
  %main_entry = OpLabel
+          %v = OpVariable %ptr Function
           %b = OpLogicalAnd %bool %c %c
+               OpStore %v %b
                OpReturn
                OpFunctionEnd
 )",
               R"(
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
-    %2:bool = and true, true
+    %2:ptr<function, bool, read_write> = var undef
+    store %2, true
     ret
   }
 }
@@ -1325,17 +1329,21 @@ TEST_F(SpirvParserTest, Var_OpSpecConstantFalse_NoSpecId) {
         %f32 = OpTypeFloat 32
       %vec4f = OpTypeVector %f32 4
           %c = OpSpecConstantFalse %bool
+        %ptr = OpTypePointer Function %bool
      %voidfn = OpTypeFunction %void
        %main = OpFunction %void None %voidfn
  %main_entry = OpLabel
+          %v = OpVariable %ptr Function
           %b = OpLogicalAnd %bool %c %c
+               OpStore %v %b
                OpReturn
                OpFunctionEnd
 )",
               R"(
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
-    %2:bool = and false, false
+    %2:ptr<function, bool, read_write> = var undef
+    store %2, false
     ret
   }
 }
@@ -1363,13 +1371,12 @@ TEST_F(SpirvParserTest, Var_OpSpecConstantOp_LogicalAnd) {
 )",
               R"(
 $B1: {  # root
-  %1:bool = and false, true
-  %myconst:bool = override %1
+  %myconst:bool = override false
 }
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
-    %4:bool = and %myconst, %myconst
+    %3:bool = and %myconst, %myconst
     ret
   }
 }
@@ -1397,13 +1404,12 @@ TEST_F(SpirvParserTest, Var_OpSpecConstantOp_LogicalOr) {
 )",
               R"(
 $B1: {  # root
-  %1:bool = or false, true
-  %myconst:bool = override %1
+  %myconst:bool = override true
 }
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
-    %4:bool = or %myconst, %myconst
+    %3:bool = or %myconst, %myconst
     ret
   }
 }
@@ -1431,13 +1437,12 @@ TEST_F(SpirvParserTest, Var_OpSpecConstantOp_LogicalNot) {
 )",
               R"(
 $B1: {  # root
-  %1:bool = not false
-  %myconst:bool = override %1
+  %myconst:bool = override true
 }
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
-    %4:bool = not %myconst
+    %3:bool = not %myconst
     ret
   }
 }
@@ -1465,13 +1470,12 @@ TEST_F(SpirvParserTest, Var_OpSpecConstantOp_LogicalEqual) {
 )",
               R"(
 $B1: {  # root
-  %1:bool = eq true, false
-  %myconst:bool = override %1
+  %myconst:bool = override false
 }
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
-    %4:bool = eq %myconst, %myconst
+    %3:bool = eq %myconst, %myconst
     ret
   }
 }
@@ -1499,13 +1503,12 @@ TEST_F(SpirvParserTest, Var_OpSpecConstantOp_LogicalNotEqual) {
 )",
               R"(
 $B1: {  # root
-  %1:bool = neq true, false
-  %myconst:bool = override %1
+  %myconst:bool = override true
 }
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
-    %4:bool = neq %myconst, %myconst
+    %3:bool = neq %myconst, %myconst
     ret
   }
 }
@@ -1681,13 +1684,12 @@ TEST_F(SpirvParserTest, Var_OpSpecConstantOp_FConvert) {
 )",
               R"(
 $B1: {  # root
-  %1:f32 = convert 1.0h
-  %myconst:f32 = override %1
+  %myconst:f32 = override 1.0f
 }
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
-    %4:f32 = let %myconst
+    %3:f32 = let %myconst
     ret
   }
 }
@@ -2316,13 +2318,12 @@ TEST_F(SpirvParserTest, Var_OpSpecConstantOp_UDiv) {
 )",
               R"(
 $B1: {  # root
-  %1:u32 = div 1u, 2u
-  %myconst:u32 = override %1
+  %myconst:u32 = override 0u
 }
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
-    %4:u32 = let %myconst
+    %3:u32 = let %myconst
     ret
   }
 }
@@ -2351,13 +2352,12 @@ TEST_F(SpirvParserTest, Var_OpSpecConstantOp_UMod) {
 )",
               R"(
 $B1: {  # root
-  %1:u32 = mod 1u, 2u
-  %myconst:u32 = override %1
+  %myconst:u32 = override 1u
 }
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
-    %4:u32 = let %myconst
+    %3:u32 = let %myconst
     ret
   }
 }
@@ -3028,13 +3028,12 @@ TEST_F(SpirvParserTest, Var_OpSpecConstantOp_CompositeExtract) {
 )",
               R"(
 $B1: {  # root
-  %1:i32 = access vec2<i32>(1i, 2i), 1u
-  %myconst:i32 = override %1
+  %myconst:i32 = override 2i
 }
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
-    %4:i32 = let %myconst
+    %3:i32 = let %myconst
     ret
   }
 }
@@ -3518,6 +3517,43 @@ $B1: {  # root
 )");
 }
 
+TEST_F(SpirvParserTest, ViewIndex) {
+    EXPECT_IR(R"(
+               OpCapability Shader
+               OpCapability MultiView
+               OpExtension "SPV_KHR_multiview"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Fragment %main "main" %view_index
+               OpExecutionMode %main OriginUpperLeft
+               OpName %view_index "view_index"
+               OpDecorate %view_index BuiltIn ViewIndex
+               OpDecorate %view_index Flat
+       %void = OpTypeVoid
+        %u32 = OpTypeInt 32 0
+%ptr_Input_u32 = OpTypePointer Input %u32
+ %view_index = OpVariable %ptr_Input_u32 Input
+    %void_fn = OpTypeFunction %void
+       %main = OpFunction %void None %void_fn
+      %entry = OpLabel
+      %value = OpLoad %u32 %view_index
+               OpReturn
+               OpFunctionEnd
+)",
+              R"(
+$B1: {  # root
+  %view_index:ptr<__in, u32, read> = var undef @builtin(view_index)
+}
+
+%main = @fragment func():void {
+  $B2: {
+    undef = phony %view_index
+    %3:u32 = load %view_index
+    ret
+  }
+}
+)");
+}
+
 TEST_F(SpirvParserTest, UnsupportedBuiltin) {
     auto result = Run(R"(
                OpCapability Shader
@@ -3559,7 +3595,214 @@ TEST_F(SpirvParserTest, Var_UnhandledDecoration) {
                OpFunctionEnd
 )");
     EXPECT_NE(result, Success);
-    EXPECT_EQ(result.Failure().reason, "unhandled decoration 21");
+    EXPECT_EQ(result.Failure().reason, "unhandled decoration Volatile");
+}
+
+TEST_F(SpirvParserTest, UniformVar_ArrayOfUniformBuffers) {
+    auto result = Run(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %1 "main"
+               OpExecutionMode %1 LocalSize 1 1 1
+               OpMemberDecorate %str 0 Offset 0
+               OpDecorate %str Block
+               OpDecorate %var DescriptorSet 1
+               OpDecorate %var Binding 2
+        %void = OpTypeVoid
+        %uint = OpTypeInt 32 0
+      %uint_0 = OpConstant %uint 0
+      %uint_4 = OpConstant %uint 4
+         %str = OpTypeStruct %uint
+     %arr_str = OpTypeArray %str %uint_4
+%_ptr_Uniform_arr = OpTypePointer Uniform %arr_str
+%_ptr_Uniform_uint = OpTypePointer Uniform %uint
+          %5 = OpTypeFunction %void
+        %var = OpVariable %_ptr_Uniform_arr Uniform
+          %1 = OpFunction %void None %5
+          %7 = OpLabel
+      %access = OpAccessChain %_ptr_Uniform_uint %var %uint_0 %uint_0
+        %val = OpLoad %uint %access
+               OpReturn
+               OpFunctionEnd
+)");
+    EXPECT_NE(result, Success);
+    EXPECT_EQ(result.Failure().reason, "arrays of buffer types are not supported");
+}
+
+TEST_F(SpirvParserTest, StorageVar_ArrayOfStorageBuffers) {
+    auto result = Run(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %1 "main"
+               OpExecutionMode %1 LocalSize 1 1 1
+               OpMemberDecorate %str 0 Offset 0
+               OpDecorate %str BufferBlock
+               OpDecorate %var DescriptorSet 1
+               OpDecorate %var Binding 2
+        %void = OpTypeVoid
+        %uint = OpTypeInt 32 0
+      %uint_0 = OpConstant %uint 0
+      %uint_4 = OpConstant %uint 4
+         %str = OpTypeStruct %uint
+     %arr_str = OpTypeArray %str %uint_4
+%_ptr_Uniform_arr = OpTypePointer Uniform %arr_str
+%_ptr_Uniform_uint = OpTypePointer Uniform %uint
+          %5 = OpTypeFunction %void
+        %var = OpVariable %_ptr_Uniform_arr Uniform
+          %1 = OpFunction %void None %5
+          %7 = OpLabel
+      %access = OpAccessChain %_ptr_Uniform_uint %var %uint_0 %uint_0
+        %val = OpLoad %uint %access
+               OpReturn
+               OpFunctionEnd
+)");
+    EXPECT_NE(result, Success);
+    EXPECT_EQ(result.Failure().reason, "arrays of buffer types are not supported");
+}
+
+TEST_F(SpirvParserTest, Var_OpSpecConstantOp_CompositeInsert_Unsupported) {
+    auto result = Run(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+        %void = OpTypeVoid
+         %u32 = OpTypeInt 32 0
+       %v2u32 = OpTypeVector %u32 2
+          %c1 = OpSpecConstant %u32 1
+         %vec = OpSpecConstantComposite %v2u32 %c1 %c1
+          %op = OpSpecConstantOp %v2u32 CompositeInsert %c1 %vec 0
+      %voidfn = OpTypeFunction %void
+        %main = OpFunction %void None %voidfn
+  %main_entry = OpLabel
+                OpReturn
+                OpFunctionEnd
+)");
+    EXPECT_NE(result, Success);
+    EXPECT_THAT(result.Failure().reason,
+                testing::HasSubstr("can't translate OpSpecConstantOp with CompositeInsert"));
+}
+
+TEST_F(SpirvParserTest, Var_OpSpecConstantOp_VectorShuffle_Unsupported) {
+    auto result = Run(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+        %void = OpTypeVoid
+         %u32 = OpTypeInt 32 0
+       %v2u32 = OpTypeVector %u32 2
+          %c1 = OpSpecConstant %u32 1
+         %vec = OpSpecConstantComposite %v2u32 %c1 %c1
+          %op = OpSpecConstantOp %v2u32 VectorShuffle %vec %vec 0 1
+      %voidfn = OpTypeFunction %void
+        %main = OpFunction %void None %voidfn
+  %main_entry = OpLabel
+                OpReturn
+                OpFunctionEnd
+)");
+    EXPECT_NE(result, Success);
+    EXPECT_THAT(result.Failure().reason,
+                testing::HasSubstr("can't translate OpSpecConstantOp with VectorShuffle"));
+}
+
+TEST_F(SpirvParserTest, Var_OpSpecConstantOp_SelectVector_Unsupported) {
+    auto result = Run(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+        %void = OpTypeVoid
+        %bool = OpTypeBool
+      %v2bool = OpTypeVector %bool 2
+         %u32 = OpTypeInt 32 0
+       %v2u32 = OpTypeVector %u32 2
+       %btrue = OpSpecConstantTrue %bool
+      %condvec = OpSpecConstantComposite %v2bool %btrue %btrue
+          %c1 = OpSpecConstant %u32 1
+         %vec = OpSpecConstantComposite %v2u32 %c1 %c1
+          %op = OpSpecConstantOp %v2u32 Select %condvec %vec %vec
+      %voidfn = OpTypeFunction %void
+        %main = OpFunction %void None %voidfn
+  %main_entry = OpLabel
+                OpReturn
+                OpFunctionEnd
+)");
+    EXPECT_NE(result, Success);
+    EXPECT_THAT(
+        result.Failure().reason,
+        testing::HasSubstr("can't translate OpSpecConstantOp with Select that returns a vector"));
+}
+
+TEST_F(SpirvParserTest, Var_OpSpecConstantOp_CompositeExtract_Vector_Unsupported) {
+    auto result = Run(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+        %void = OpTypeVoid
+         %u32 = OpTypeInt 32 0
+       %v2u32 = OpTypeVector %u32 2
+       %strct = OpTypeStruct %v2u32
+          %c1 = OpSpecConstant %u32 1
+         %vec = OpSpecConstantComposite %v2u32 %c1 %c1
+           %s = OpSpecConstantComposite %strct %vec
+          %op = OpSpecConstantOp %v2u32 CompositeExtract %s 0
+      %voidfn = OpTypeFunction %void
+        %main = OpFunction %void None %voidfn
+  %main_entry = OpLabel
+                OpReturn
+                OpFunctionEnd
+)");
+    EXPECT_NE(result, Success);
+    EXPECT_THAT(
+        result.Failure().reason,
+        testing::HasSubstr(
+            "can't translate OpSpecConstantOp with CompositeExtract that returns a composite"));
+}
+
+TEST_F(SpirvParserTest, Var_OpSpecConstantOp_UnhandledOp) {
+    auto result = Run(R"(
+               OpCapability Shader
+               OpCapability Float16
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+        %void = OpTypeVoid
+         %f32 = OpTypeFloat 32
+         %f16 = OpTypeFloat 16
+        %half = OpSpecConstant %f32 1.5
+          %op = OpSpecConstantOp %f32 QuantizeToF16 %half
+      %voidfn = OpTypeFunction %void
+        %main = OpFunction %void None %voidfn
+  %main_entry = OpLabel
+                OpReturn
+                OpFunctionEnd
+)");
+    EXPECT_NE(result, Success);
+    EXPECT_THAT(result.Failure().reason,
+                testing::HasSubstr("Unknown spec constant operation: 116"));
+}
+
+TEST_F(SpirvParserTest, Var_OpUndef_MemoryView_Unsupported) {
+    auto result = Run(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+        %void = OpTypeVoid
+         %u32 = OpTypeInt 32 0
+     %ptr_u32 = OpTypePointer Private %u32
+       %undef = OpUndef %ptr_u32
+      %voidfn = OpTypeFunction %void
+        %main = OpFunction %void None %voidfn
+  %main_entry = OpLabel
+                OpReturn
+                OpFunctionEnd
+)");
+    EXPECT_NE(result, Success);
+    EXPECT_THAT(result.Failure().reason,
+                testing::HasSubstr("cannot create an undef memory view in WGSL"));
 }
 
 }  // namespace

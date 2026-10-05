@@ -26,6 +26,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <memory>
+#include <utility>
 
 #include "src/dawn/wire/server/Server.h"
 
@@ -33,7 +34,7 @@ namespace dawn::wire::server {
 
 WireResult Server::DoShaderModuleGetCompilationInfo(Known<WGPUShaderModule> shaderModule,
                                                     Known<WGPUInstance> instance,
-                                                    WGPUFuture future) {
+                                                    Future future) {
     auto userdata = MakeUserdata<ShaderModuleGetCompilationInfoUserdata>();
     userdata->instanceId = instance.id;
     userdata->future = future;
@@ -46,15 +47,15 @@ WireResult Server::DoShaderModuleGetCompilationInfo(Known<WGPUShaderModule> shad
 }
 
 void Server::OnShaderModuleGetCompilationInfo(ShaderModuleGetCompilationInfoUserdata* data,
-                                              WGPUCompilationInfoRequestStatus status,
-                                              const WGPUCompilationInfo* info) {
+                                              wgpu::CompilationInfoRequestStatus status,
+                                              const CompilationInfo* info) {
     ReturnShaderModuleGetCompilationInfoCallbackCmd cmd;
     cmd.instanceId = data->instanceId;
     cmd.future = data->future;
     cmd.status = status;
     cmd.info = info;
 
-    SerializeCommand(cmd);
+    SerializeCommand(std::move(cmd));
 }
 
 }  // namespace dawn::wire::server

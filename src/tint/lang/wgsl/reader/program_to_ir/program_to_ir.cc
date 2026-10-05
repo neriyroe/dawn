@@ -31,6 +31,7 @@
 #include <variant>
 
 #include "src/tint/lang/core/fluent_types.h"
+#include "src/tint/lang/core/ir/array_count.h"
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/constant.h"
 #include "src/tint/lang/core/ir/exit_if.h"
@@ -42,7 +43,6 @@
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/switch.h"
 #include "src/tint/lang/core/ir/swizzle.h"
-#include "src/tint/lang/core/ir/type/array_count.h"
 #include "src/tint/lang/core/ir/value.h"
 #include "src/tint/lang/core/type/memory_view.h"
 #include "src/tint/lang/core/type/pointer.h"
@@ -920,11 +920,12 @@ class Impl {
                             return impl.builder_.Constant(u32(indices[0]));
                         }
 
-                        core::ir::Swizzle* val;
-                        val = impl.builder_.Swizzle(ty, obj, std::move(indices));
+                        auto* val = impl.builder_.Swizzle(ty, obj, std::move(indices));
 
-                        impl.current_block_->Append(val);
-                        Bind(expr, val->Result());
+                        if (auto* val_inst = val->AsInstruction()) {
+                            impl.current_block_->Append(val_inst);
+                        }
+                        Bind(expr, val);
                         return nullptr;
                     },  //
                     TINT_ICE_ON_NO_MATCH);
@@ -936,26 +937,26 @@ class Impl {
                 // If the object is an unnamed value (a subexpression, not a let) and is the result
                 // of another access, then we can just append the index to that access.
                 if (!impl.mod.NameOf(obj).IsValid()) {
-                    if (auto* inst_res = obj->As<core::ir::InstructionResult>()) {
-                        if (auto* access = inst_res->Instruction()->As<core::ir::Access>()) {
-                            access->AddIndex(index);
-                            access->Result()->SetType(ty);
-                            bindings_.Remove(expr->object);
-                            // Move the access after the index expression.
-                            if (impl.current_block_->Back() != access) {
-                                impl.current_block_->Remove(access);
-                                impl.current_block_->Append(access);
-                            }
-                            Bind(expr, access->Result());
-                            return;
+                    if (auto* access = obj->AsInstruction<core::ir::Access>()) {
+                        access->AddIndex(index);
+                        access->Result()->SetType(ty);
+                        bindings_.Remove(expr->object);
+                        // Move the access after the index expression.
+                        if (impl.current_block_->Back() != access) {
+                            impl.current_block_->Remove(access);
+                            impl.current_block_->Append(access);
                         }
+                        Bind(expr, access->Result());
+                        return;
                     }
                 }
 
                 // Create a new access
                 auto* access = impl.builder_.Access(ty, obj, index);
-                impl.current_block_->Append(access);
-                Bind(expr, access->Result());
+                if (auto* access_inst = access->AsInstruction()) {
+                    impl.current_block_->Append(access_inst);
+                }
+                Bind(expr, access);
             }
 
             void EmitBinary(const ast::BinaryExpression* b) {
@@ -981,7 +982,7 @@ class Impl {
                 if (!val) {
                     return;
                 }
-                core::ir::Instruction* inst = nullptr;
+                core::ir::Value* value = nullptr;
                 switch (expr->op) {
                     case core::UnaryOp::kAddressOf:
                     case core::UnaryOp::kIndirection:
@@ -990,20 +991,22 @@ class Impl {
                         Bind(expr, val);
                         return;
                     case core::UnaryOp::kComplement: {
-                        inst = impl.builder_.Complement(val);
+                        value = impl.builder_.Complement(val);
                         break;
                     }
                     case core::UnaryOp::kNegation: {
-                        inst = impl.builder_.Negation(val);
+                        value = impl.builder_.Negation(val);
                         break;
                     }
                     case core::UnaryOp::kNot: {
-                        inst = impl.builder_.Not(val);
+                        value = impl.builder_.Not(val);
                         break;
                     }
                 }
-                impl.current_block_->Append(inst);
-                Bind(expr, inst->Result());
+                if (auto* inst = value->AsInstruction()) {
+                    impl.current_block_->Append(inst);
+                }
+                Bind(expr, value);
             }
 
             void EmitCall(const ast::CallExpression* expr) {
@@ -1042,7 +1045,7 @@ class Impl {
                 // If this is a builtin function, emit the specific builtin value
                 if (auto* b = sem->Target()->As<sem::BuiltinFn>()) {
                     if (b->Fn() == wgsl::BuiltinFn::kBitcast) {
-                        inst = impl.builder_.Bitcast(ty, args[0]);
+                        inst = impl.builder_.Bitcast(ty, args[0])->AsInstruction();
                     } else {
                         auto* call =
                             impl.builder_.Call<wgsl::ir::BuiltinCall>(ty, b->Fn(), std::move(args));
@@ -1072,9 +1075,9 @@ class Impl {
                         inst = call;
                     }
                 } else if (sem->Target()->As<sem::ValueConstructor>()) {
-                    inst = impl.builder_.Construct(ty, std::move(args));
+                    inst = impl.builder_.Construct(ty, std::move(args))->AsInstruction();
                 } else if (sem->Target()->Is<sem::ValueConversion>()) {
-                    inst = impl.builder_.Convert(ty, args[0]);
+                    inst = impl.builder_.Convert(ty, args[0])->AsInstruction();
                 } else if (expr->target->identifier->Is<ast::TemplatedIdentifier>()) {
                     TINT_UNIMPLEMENTED() << "missing templated ident support";
                 } else {
@@ -1204,7 +1207,7 @@ class Impl {
 
             void EndShortCircuit(const ast::BinaryExpression* b) {
                 auto res = GetValue(b);
-                auto* src = res->As<core::ir::InstructionResult>()->Instruction();
+                auto* src = res->AsInstruction();
                 auto* if_ = src->As<core::ir::If>();
                 TINT_ASSERT(if_);
                 auto rhs = GetValue(b->rhs);
@@ -1274,7 +1277,7 @@ class Impl {
         TINT_ICE() << "expression did not resolve to a value";
     }
 
-    void EmitCall(const ast::CallStatement* stmt) { (void)EmitValueExpression(stmt->expr); }
+    void EmitCall(const ast::CallStatement* stmt) { std::ignore = EmitValueExpression(stmt->expr); }
 
     void EmitVariable(const ast::Variable* var) {
         auto* sem = program_.Sem().Get(var);

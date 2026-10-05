@@ -50,6 +50,7 @@ tint_target_add_dependencies(tint_cmd_test_test_cmd test_cmd
   tint_lang_core_intrinsic_test
   tint_lang_core_ir_analysis_test
   tint_lang_core_ir_transform_test
+  tint_lang_core_ir_validator_test
   tint_lang_core_ir_test
   tint_lang_core_type_test
   tint_lang_core_test
@@ -86,6 +87,12 @@ tint_target_add_external_dependencies(tint_cmd_test_test_cmd test_cmd
   "src_utils_chromium_test_compat"
   "src_utils_crash_handler"
 )
+
+if(TINT_BUILD_FUZZERS)
+  tint_target_add_dependencies(tint_cmd_test_test_cmd test_cmd
+    tint_cmd_fuzz_common_test
+  )
+endif(TINT_BUILD_FUZZERS)
 
 if(TINT_BUILD_GLSL_VALIDATOR AND TINT_BUILD_GLSL_WRITER)
   tint_target_add_dependencies(tint_cmd_test_test_cmd test_cmd

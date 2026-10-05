@@ -35,7 +35,7 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/transform/shader_io.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/hlsl/builtin_fn.h"
 #include "src/tint/lang/hlsl/ir/builtin_call.h"
 
@@ -263,7 +263,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
                                 "global_invocation_id");
         }
 
-        if (needs_num_workgroups &&
+        if (HasBuiltinInput(core::BuiltinValue::kNumWorkgroups) &&
             !config.immediate_data_layout.HasImmediate(core::InternalImmediate::kNumWorkgroups)) {
             return Failure("num_workgroups required but no immediate offset provided");
         }
@@ -510,7 +510,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         // broadcast the resulting subgroup ID to the rest of the invocations in the subgroup.
         MakeSubgroupIdCounter(builder);
         auto* id = builder.Load(tint_subgroup_id);
-        return builder.Call<u32>(core::BuiltinFn::kSubgroupBroadcastFirst, id)->Result();
+        return builder.Call<u32>(core::BuiltinFn::kSubgroupBroadcastFirst, id);
     }
 
     core::ir::Value* PolyfillNumSubgroups(core::ir::Builder& builder) {
@@ -527,7 +527,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         MakeSubgroupIdCounter(builder);
         TINT_IR_ASSERT(ir, tint_subgroup_id_counter);
         builder.Call<void>(core::BuiltinFn::kWorkgroupBarrier);
-        return builder.Call<u32>(core::BuiltinFn::kAtomicLoad, tint_subgroup_id_counter)->Result();
+        return builder.Call<u32>(core::BuiltinFn::kAtomicLoad, tint_subgroup_id_counter);
     }
 
     core::ir::Value* GetSubgroupSize(core::ir::Builder& builder) {
@@ -567,13 +567,12 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
             auto* e0 = builder.Load(builder.Access<ptr<immediate, u32>>(str, 0_u));
             auto* e1 = builder.Load(builder.Access<ptr<immediate, u32>>(str, 1_u));
             auto* e2 = builder.Load(builder.Access<ptr<immediate, u32>>(str, 2_u));
-            return builder.Construct(ty.vec3u(), e0->Result(), e1->Result(), e2->Result())
-                ->Result();
+            return builder.Construct(ty.vec3u(), e0->Result(), e1->Result(), e2->Result());
         }
 
         auto index = input_indices[idx];
 
-        core::ir::Value* v = builder.Access(inputs[idx].type, input_param, u32(index))->Result();
+        core::ir::Value* v = builder.Access(inputs[idx].type, input_param, u32(index));
 
         if (inputs[idx].attributes.builtin == core::BuiltinValue::kPosition) {
             // If this is an input position builtin we need to invert the 'w' component of the
@@ -581,7 +580,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
             auto* w = builder.Access(ty.f32(), v, 3_u);
             auto* div = builder.Divide(1.0_f, w);
             auto* swizzle = builder.Swizzle(ty.vec3f(), v, {0, 1, 2});
-            v = builder.Construct(ty.vec4f(), swizzle, div)->Result();
+            v = builder.Construct(ty.vec4f(), swizzle, div);
         } else if (config.immediate_data_layout.HasImmediate(
                        core::InternalImmediate::kFirstVertexOffset) &&
                    inputs[idx].attributes.builtin == core::BuiltinValue::kVertexIndex) {
@@ -612,12 +611,12 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
             // Create a vector and copy array elements to it
             Vector<core::ir::Value*, 4> init;
             for (size_t i = 0; i < dst_vec_ty->Elements().count; ++i) {
-                init.Push(builder.Access<f32>(src_array, u32(src_array_first_index + i))->Result());
+                init.Push(builder.Access<f32>(src_array, u32(src_array_first_index + i)));
             }
-            dst_value = builder.Construct(dst_vec_ty, std::move(init))->Result();
+            dst_value = builder.Construct(dst_vec_ty, std::move(init));
         } else {
             TINT_IR_ASSERT(ir, outputs[output_index].type->As<core::type::Scalar>());
-            dst_value = builder.Access<f32>(src_array, u32(src_array_first_index))->Result();
+            dst_value = builder.Access<f32>(src_array, u32(src_array_first_index));
         }
         return dst_value;
     }
@@ -659,7 +658,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         }
 
         TINT_IR_ASSERT(ir, output_values.Length() == output_struct->Members().Length());
-        return builder.Construct(output_struct, std::move(output_values))->Result();
+        return builder.Construct(output_struct, std::move(output_values));
     }
 };
 }  // namespace

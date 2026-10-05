@@ -31,7 +31,7 @@
 
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/referenced_module_vars.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/binding_array.h"
 
 namespace tint::msl::writer::raise {
@@ -252,8 +252,7 @@ struct State {
                             func->AppendParam(workgroup_allocation_param);
                         }
                         decl = b.Access(ptr, workgroup_allocation_param,
-                                        u32(workgroup_struct_members.Length()))
-                                   ->Result();
+                                        u32(workgroup_struct_members.Length()));
                         workgroup_struct_members.Push(core::type::Manager::StructMemberDesc{
                             ir.symbols.New(),
                             ptr->StoreType(),
@@ -333,9 +332,9 @@ struct State {
             type = ptr->StoreType();
         }
 
-        auto* access = b.Access(type, struct_value, u32(index));
-        access->InsertBefore(inst);
-        return access->Result();
+        core::ir::Value* access = nullptr;
+        b.InsertBefore(inst, [&] { access = b.Access(type, struct_value, u32(index)); });
+        return access;
     }
 
     /// Get the function that contains an instruction.
@@ -357,6 +356,7 @@ Result<SuccessType> ModuleScopeVars(core::ir::Module& ir) {
 
     ir.properties.Add(core::ir::Property::kAllowAnyLetType);
     ir.properties.Add(core::ir::Property::kAllowMslEntryPointInterface);
+    ir.properties.Add(core::ir::Property::kAllowPointerAndHandleInAggregates);
 
     return Success;
 }

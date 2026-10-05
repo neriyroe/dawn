@@ -57,6 +57,7 @@ tint_target_add_dependencies(tint_lang_wgsl_writer lib
   tint_lang_core
   tint_lang_core_constant
   tint_lang_core_ir
+  tint_lang_core_ir_validator
   tint_lang_core_type
   tint_lang_wgsl
   tint_lang_wgsl_ast
@@ -145,7 +146,6 @@ tint_target_add_dependencies(tint_lang_wgsl_writer_fuzz fuzz
   tint_lang_wgsl_writer
   tint_lang_wgsl_writer_common
   tint_utils
-  tint_utils_bytes
   tint_utils_containers
   tint_utils_diagnostic
   tint_utils_ice

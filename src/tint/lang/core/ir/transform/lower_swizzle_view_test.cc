@@ -196,8 +196,7 @@ TEST_F(IR_LowerSwizzleViewTest, Store_MultiElement) {
   $B1: {
     %v:ptr<function, vec4<f32>, read_write> = var undef
     %3:swizzle<function, vec3<f32>, read_write, 4, 3> = swizzle %v, ywx
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    store %3, %4
+    store %3, vec3<f32>(1.0f, 2.0f, 3.0f)
     ret
   }
 }
@@ -208,14 +207,10 @@ TEST_F(IR_LowerSwizzleViewTest, Store_MultiElement) {
 %foo = func():void {
   $B1: {
     %v:ptr<function, vec4<f32>, read_write> = var undef
-    %3:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %4:vec4<f32> = load %v
-    %5:f32 = access %3, 0u
-    %6:f32 = access %3, 1u
-    %7:f32 = access %3, 2u
-    %8:f32 = access %4, 2u
-    %9:vec4<f32> = construct %7, %5, %8, %6
-    store %v, %9
+    %3:vec4<f32> = load %v
+    %4:f32 = access %3, 2u
+    %5:vec4<f32> = construct 3.0f, 1.0f, %4, 2.0f
+    store %v, %5
     ret
   }
 }
@@ -247,8 +242,7 @@ TEST_F(IR_LowerSwizzleViewTest, ChainedSwizzle_Store) {
     %v:ptr<function, vec4<f32>, read_write> = var undef
     %3:swizzle<function, vec3<f32>, read_write, 4, 3> = swizzle %v, zyx
     %4:swizzle<function, vec2<f32>, read_write, 3, 2> = swizzle %3, xz
-    %5:vec2<f32> = construct 1.0f, 2.0f
-    store %4, %5
+    store %4, vec2<f32>(1.0f, 2.0f)
     ret
   }
 }
@@ -259,14 +253,11 @@ TEST_F(IR_LowerSwizzleViewTest, ChainedSwizzle_Store) {
 %foo = func():void {
   $B1: {
     %v:ptr<function, vec4<f32>, read_write> = var undef
-    %3:vec2<f32> = construct 1.0f, 2.0f
-    %4:vec4<f32> = load %v
-    %5:f32 = access %3, 0u
-    %6:f32 = access %3, 1u
-    %7:f32 = access %4, 1u
-    %8:f32 = access %4, 3u
-    %9:vec4<f32> = construct %6, %7, %5, %8
-    store %v, %9
+    %3:vec4<f32> = load %v
+    %4:f32 = access %3, 1u
+    %5:f32 = access %3, 3u
+    %6:vec4<f32> = construct 2.0f, %4, 1.0f, %5
+    store %v, %6
     ret
   }
 }

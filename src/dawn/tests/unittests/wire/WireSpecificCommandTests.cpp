@@ -26,6 +26,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <span>
+#include <utility>
 
 #include "dawn/wire/Wire.h"
 #include "dawn/wire/WireClient.h"
@@ -51,7 +52,9 @@ using testing::MockCppCallback;
 using testing::NonEmptySizedString;
 using testing::NotNull;
 using testing::Return;
+using testing::SaveArg;
 using testing::WithArg;
+using testing::WithArgs;
 
 // Fixture that helps execute specific commands through the wire that may not be possible to trigger
 // through usage of the dawn::wire::client. It is even more change detecting than regular dawn::wire
@@ -59,12 +62,15 @@ using testing::WithArg;
 class WireSpecificCommandTests : public WireTest {
   protected:
     template <typename Cmd>
-    void AddSpecificServerCmd(const Cmd& cmd) {
+    void AddSpecificServerCmd(Cmd&& cmd) {
         CommandSerializer* c2s = GetC2SSerializer();
         ChunkedCommandSerializer serializer(c2s);
 
-        serializer.SerializeCommand(cmd, *GetWireClient()->GetImplForTesting());
+        serializer.SerializeCommand(std::forward<Cmd>(cmd), *GetWireClient()->GetImplForTesting());
     }
+
+    template <typename Cmd>
+    void AddSpecificServerCmd(Cmd&) = delete;
 
     // Intercept a command that will be sent from the client to the server. This involves first
     // capturing the command, deserializing it as if we were the server, and then re-injecting it
@@ -87,7 +93,7 @@ class WireSpecificCommandTests : public WireTest {
 
         modifier(&cmd);
         c2sBuf->SetOffsetForTesting(startOffset);
-        AddSpecificServerCmd(cmd);
+        AddSpecificServerCmd(std::move(cmd));
     }
 
   private:
@@ -117,7 +123,7 @@ TEST_F(WireSpecificCommandTests, UpdateMappedDataAfterDeviceDestroy_MappedAtCrea
     // Force a device destroy without giving the wire::client a chance to unmap client-side buffers.
     DeviceDestroyCmd cmd;
     cmd.self = device.Get();
-    AddSpecificServerCmd(cmd);
+    AddSpecificServerCmd(std::move(cmd));
 
     EXPECT_CALL(api, DeviceDestroy(apiDevice)).Times(1);
     FlushClient();
@@ -148,10 +154,11 @@ TEST_F(WireSpecificCommandTests, UpdateMappedDataAfterDeviceDestroy_MapWriteOffs
     // Map the buffer
     buffer.MapAsync(wgpu::MapMode::Write, 4, 4, wgpu::CallbackMode::AllowProcessEvents,
                     [](wgpu::MapAsyncStatus status, wgpu::StringView) {});
-    EXPECT_CALL(api, OnBufferMapAsync(apiBuffer, WGPUMapMode_Write, 4, 4, _)).WillOnce([&] {
-        api.CallBufferMapAsyncCallback(apiBuffer, WGPUMapAsyncStatus_Success,
-                                       kEmptyOutputStringView);
-    });
+    EXPECT_CALL(api, OnBufferMapAsync(apiBuffer, WGPUMapMode_Write, 4, 4, _, _))
+        .WillOnce(WithArg<5>([&](WGPUFuture future) {
+            api.CallBufferMapAsyncCallback(apiBuffer, WGPUMapAsyncStatus_Success,
+                                           kEmptyOutputStringView, future);
+        }));
 
     FlushClient();
     FlushServer();
@@ -160,7 +167,7 @@ TEST_F(WireSpecificCommandTests, UpdateMappedDataAfterDeviceDestroy_MapWriteOffs
     // Force a device destroy without giving the wire::client a chance to unmap client-side buffers.
     DeviceDestroyCmd cmd;
     cmd.self = device.Get();
-    AddSpecificServerCmd(cmd);
+    AddSpecificServerCmd(std::move(cmd));
 
     EXPECT_CALL(api, DeviceDestroy(apiDevice)).Times(1);
     FlushClient();
@@ -207,7 +214,7 @@ TEST_F(WireSpecificCommandTests, RequestDeviceIdReuseAfterInjectedUnregister) {
     UnregisterObjectCmd unregisterA = {};
     unregisterA.objectType = ObjectType::Device;
     unregisterA.objectId = requestA.deviceObjectHandle.id;
-    AddSpecificServerCmd(unregisterA);
+    AddSpecificServerCmd(std::move(unregisterA));
 
     // Add a second request for a device that attempts to reuse the same id that was originally
     // reserved for the first request.
@@ -226,14 +233,14 @@ TEST_F(WireSpecificCommandTests, RequestDeviceIdReuseAfterInjectedUnregister) {
             requestB = *cmd;
         });
 
-    EXPECT_CALL(api, OnAdapterRequestDevice(apiAdapter, NotNull(), _))
-        .WillOnce(WithArg<1>([&](const WGPUDeviceDescriptor* desc) {
+    EXPECT_CALL(api, OnAdapterRequestDevice(apiAdapter, NotNull(), _, _))
+        .WillOnce(WithArgs<1, 3>([&](const WGPUDeviceDescriptor* desc, WGPUFuture future) {
             SetDeviceCallbacks(apiDeviceA, desc);
-            futureA = api.GetLastFuture();
+            futureA = future;
         }))
-        .WillOnce(WithArg<1>([&](const WGPUDeviceDescriptor* desc) {
+        .WillOnce(WithArgs<1, 3>([&](const WGPUDeviceDescriptor* desc, WGPUFuture future) {
             SetDeviceCallbacks(apiDeviceB, desc);
-            futureB = api.GetLastFuture();
+            futureB = future;
         }));
     FlushClient();
 
@@ -308,7 +315,7 @@ TEST_F(WireSpecificCommandTests, RequestAdapterIdReuseAfterInjectedUnregister) {
     UnregisterObjectCmd unregisterA = {};
     unregisterA.objectType = ObjectType::Adapter;
     unregisterA.objectId = requestA.adapterObjectHandle.id;
-    AddSpecificServerCmd(unregisterA);
+    AddSpecificServerCmd(std::move(unregisterA));
 
     // Add a second request for an adapter that attempts to reuse the same id that was originally
     // reserved for the first request.
@@ -324,9 +331,9 @@ TEST_F(WireSpecificCommandTests, RequestAdapterIdReuseAfterInjectedUnregister) {
             requestB = *cmd;
         });
 
-    EXPECT_CALL(api, OnInstanceRequestAdapter(apiInstance, IsNull(), _))
-        .WillOnce([&]() { futureA = api.GetLastFuture(); })
-        .WillOnce([&]() { futureB = api.GetLastFuture(); });
+    EXPECT_CALL(api, OnInstanceRequestAdapter(apiInstance, IsNull(), _, _))
+        .WillOnce(SaveArg<3>(&futureA))
+        .WillOnce(SaveArg<3>(&futureB));
     FlushClient();
 
     // Emulate the backend server completing the first request for an adapter successfully. Even
@@ -392,14 +399,13 @@ TEST_F(WireSpecificCommandTests, CreateComputePipelineAsyncIdReuseAfterInjectedU
         [&](DeviceCreateComputePipelineAsyncCmd* cmd) {
             requestA = *cmd;
             // Manually fix the shader module since the [de]serialization can't handle objects.
-            const_cast<WGPUComputePipelineDescriptor*>(cmd->descriptor)->compute.module =
-                shader.Get();
+            const_cast<ComputePipelineDescriptor*>(cmd->descriptor)->compute.module = shader.Get();
         });
 
     UnregisterObjectCmd unregisterA = {};
     unregisterA.objectType = ObjectType::ComputePipeline;
     unregisterA.objectId = requestA.pipelineObjectHandle.id;
-    AddSpecificServerCmd(unregisterA);
+    AddSpecificServerCmd(std::move(unregisterA));
 
     DeviceCreateComputePipelineAsyncCmd requestB = {};
     InterceptServerCmd<DeviceCreateComputePipelineAsyncCmd>(
@@ -412,13 +418,12 @@ TEST_F(WireSpecificCommandTests, CreateComputePipelineAsyncIdReuseAfterInjectedU
             cmd->pipelineObjectHandle.generation = requestA.pipelineObjectHandle.generation + 1;
             requestB = *cmd;
             // Manually fix the shader module since the [de]serialization can't handle objects.
-            const_cast<WGPUComputePipelineDescriptor*>(cmd->descriptor)->compute.module =
-                shader.Get();
+            const_cast<ComputePipelineDescriptor*>(cmd->descriptor)->compute.module = shader.Get();
         });
 
-    EXPECT_CALL(api, OnDeviceCreateComputePipelineAsync(apiDevice, NotNull(), _))
-        .WillOnce([&]() { futureA = api.GetLastFuture(); })
-        .WillOnce([&]() { futureB = api.GetLastFuture(); });
+    EXPECT_CALL(api, OnDeviceCreateComputePipelineAsync(apiDevice, NotNull(), _, _))
+        .WillOnce(SaveArg<3>(&futureA))
+        .WillOnce(SaveArg<3>(&futureB));
     FlushClient();
 
     EXPECT_CALL(api, ComputePipelineRelease(apiPipelineA)).Times(1);
@@ -474,15 +479,15 @@ TEST_F(WireSpecificCommandTests, CreateRenderPipelineAsyncIdReuseAfterInjectedUn
         [&](DeviceCreateRenderPipelineAsyncCmd* cmd) {
             requestA = *cmd;
             // Manually fix the shader module since the [de]serialization can't handle objects.
-            auto* desc = const_cast<WGPURenderPipelineDescriptor*>(cmd->descriptor);
+            auto* desc = const_cast<RenderPipelineDescriptor*>(cmd->descriptor);
             desc->vertex.module = shader.Get();
-            const_cast<WGPUFragmentState*>(desc->fragment)->module = shader.Get();
+            const_cast<FragmentState*>(desc->fragment)->module = shader.Get();
         });
 
     UnregisterObjectCmd unregisterA = {};
     unregisterA.objectType = ObjectType::RenderPipeline;
     unregisterA.objectId = requestA.pipelineObjectHandle.id;
-    AddSpecificServerCmd(unregisterA);
+    AddSpecificServerCmd(std::move(unregisterA));
 
     DeviceCreateRenderPipelineAsyncCmd requestB = {};
     InterceptServerCmd<DeviceCreateRenderPipelineAsyncCmd>(
@@ -495,14 +500,14 @@ TEST_F(WireSpecificCommandTests, CreateRenderPipelineAsyncIdReuseAfterInjectedUn
             cmd->pipelineObjectHandle.generation = requestA.pipelineObjectHandle.generation + 1;
             requestB = *cmd;
             // Manually fix the shader module since the [de]serialization can't handle objects.
-            auto* desc = const_cast<WGPURenderPipelineDescriptor*>(cmd->descriptor);
+            auto* desc = const_cast<RenderPipelineDescriptor*>(cmd->descriptor);
             desc->vertex.module = shader.Get();
-            const_cast<WGPUFragmentState*>(desc->fragment)->module = shader.Get();
+            const_cast<FragmentState*>(desc->fragment)->module = shader.Get();
         });
 
-    EXPECT_CALL(api, OnDeviceCreateRenderPipelineAsync(apiDevice, NotNull(), _))
-        .WillOnce([&]() { futureA = api.GetLastFuture(); })
-        .WillOnce([&]() { futureB = api.GetLastFuture(); });
+    EXPECT_CALL(api, OnDeviceCreateRenderPipelineAsync(apiDevice, NotNull(), _, _))
+        .WillOnce(SaveArg<3>(&futureA))
+        .WillOnce(SaveArg<3>(&futureB));
     FlushClient();
 
     EXPECT_CALL(api, RenderPipelineRelease(apiPipelineA)).Times(1);

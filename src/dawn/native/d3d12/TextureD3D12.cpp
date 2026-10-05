@@ -356,8 +356,6 @@ void Texture::DestroyImpl(DestroyReason reason) {
     mIsExternalSwapChainTexture = false;
 }
 
-
-
 DXGI_FORMAT Texture::GetD3D12Format() const {
     return d3d::DXGITextureFormat(GetDevice(), GetFormat().format);
 }
@@ -890,7 +888,7 @@ MaybeError Texture::ClearTexture(CommandRecordingContext* commandContext,
 
             DAWN_TRY(device->GetDynamicUploader()->WithUploadReservation(
                 uploadSize, blockInfo.byteSize, [&](UploadReservation reservation) -> MaybeError {
-                    std::ranges::fill(reservation.mappedData, std::byte(clearColor));
+                    reservation.mappedData.FillBytes(std::byte(clearColor));
 
                     for (uint32_t level = range.baseMipLevel;
                          level < range.baseMipLevel + range.levelCount; ++level) {

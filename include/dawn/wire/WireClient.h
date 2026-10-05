@@ -112,12 +112,26 @@ class DAWN_WIRE_EXPORT MemoryTransferService {
     // Create a handle for sharing memory with the server.
     // This may fail and return nullptr.
     class MemoryHandle;
-    virtual std::unique_ptr<MemoryHandle> CreateMemoryHandle(size_t size) = 0;
+
+    enum class MemoryHandleUse : uint8_t {
+        BulkData,
+        MappedAtCreationData,
+        MappedBuffer,
+    };
+    // TODO(386255678): Remove the one-parameter overload when it is no longer used in Chromium.
+    virtual std::unique_ptr<MemoryHandle> CreateMemoryHandle(size_t size);
+    virtual std::unique_ptr<MemoryHandle> CreateMemoryHandle(size_t size,
+                                                             MemoryHandleUse memoryHandleUse);
 
     class DAWN_WIRE_EXPORT MemoryHandle {
       public:
         MemoryHandle();
         virtual ~MemoryHandle();
+
+        // Returns true if the memory is already known to be zero-initialized, allowing callers to
+        // skip explicitly zeroing it out.
+        // TODO(386255678): Make this function non-virtual once it is implemented in Chromium.
+        virtual bool IsInitialized() const { return false; }
 
         // Get the required serialization size for SerializeCreate
         virtual size_t GetSerializeCreateSize() const = 0;

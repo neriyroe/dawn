@@ -223,7 +223,7 @@ struct S {
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
   S v = S(0, 0.0f, A(0, float[3](0.0f, 0.0f, 0.0f)));
-  float x = v.c.e[1u];
+  float x = v.c.e[1];
 }
 )");
 }
@@ -601,9 +601,8 @@ TEST_F(GlslWriterTest, AccessChainFromUnnamedAccessChain) {
     auto* func = b.Function("main", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     b.Append(func->Block(), [&] {
         auto* x = b.Access(ty.ptr(storage, sb, core::Access::kReadWrite), var, 2_u);
-        auto* y = b.Access(ty.ptr(storage, Inner, core::Access::kReadWrite), x->Result(), 1_u);
-        b.Let("b", b.Load(b.Access(ty.ptr(storage, ty.u32(), core::Access::kReadWrite), y->Result(),
-                                   1_u)));
+        auto* y = b.Access(ty.ptr(storage, Inner, core::Access::kReadWrite), x, 1_u);
+        b.Let("b", b.Load(b.Access(ty.ptr(storage, ty.u32(), core::Access::kReadWrite), y, 1_u)));
         b.Return(func);
     });
 
@@ -858,9 +857,8 @@ TEST_F(GlslWriterTest, AccessUniformChainFromUnnamedAccessChain) {
     auto* func = b.Function("main", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     b.Append(func->Block(), [&] {
         auto* x = b.Access(ty.ptr(uniform, sb, core::Access::kRead), var, 2_u);
-        auto* y = b.Access(ty.ptr(uniform, Inner, core::Access::kRead), x->Result(), 1_u);
-        b.Let("b",
-              b.Load(b.Access(ty.ptr(uniform, ty.u32(), core::Access::kRead), y->Result(), 1_u)));
+        auto* y = b.Access(ty.ptr(uniform, Inner, core::Access::kRead), x, 1_u);
+        b.Let("b", b.Load(b.Access(ty.ptr(uniform, ty.u32(), core::Access::kRead), y, 1_u)));
         b.Return(func);
     });
 
@@ -2611,10 +2609,9 @@ int g() {
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
   int arr[4] = int[4](0, 0, 0, 0);
-  uint v = uint(f());
-  uint v_1 = min(uint(int((v + uint(1)))), 3u);
+  uint v = min(uint(int((uint(f()) + 1u))), 3u);
   int y = g();
-  int x = arr[v_1];
+  int x = arr[v];
 }
 )");
 }

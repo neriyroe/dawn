@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <memory>
 
 #include "dawn/native/ObjectType_autogen.h"
 #include "src/dawn/common/Range.h"
@@ -46,24 +47,12 @@
 #include "src/dawn/native/PassResourceUsageTracker.h"
 #include "src/dawn/native/QuerySet.h"
 #include "src/dawn/native/ResourceTable.h"
-#include "src/dawn/native/utils/WGPUHelpers.h"
+#include "src/dawn/native/utils/NativeHelpers.h"
 #include "src/utils/compiler.h"
 
 namespace dawn::native {
 
 namespace {
-
-// Neither 'enableValidation' nor 'duplicateNumWorkgroups' can be declared as 'bool' as
-// currently in WGSL type 'bool' cannot be used in address space 'uniform' as 'it is
-// non-host-shareable'.
-struct IndirectDispatchParams {
-    uint32_t maxComputeWorkgroupsPerDimension;
-    uint32_t clientOffsetInU32;
-    uint32_t enableValidation;
-    uint32_t duplicateNumWorkgroups;
-    uint32_t linearIndexing;
-    uint32_t overflowValue;
-};
 
 ResultOrError<ComputePipelineBase*> GetOrCreateIndirectDispatchValidationPipeline(
     DeviceBase* device) {
@@ -73,12 +62,13 @@ ResultOrError<ComputePipelineBase*> GetOrCreateIndirectDispatchValidationPipelin
         return store->dispatchIndirectValidationPipeline.Get();
     }
 
+    // TODO(https://crbug.com/dawn/488346117): Use immediates instead of uniform.
     // TODO(https://crbug.com/dawn/1108): Propagate validation feedback from this
     // shader in various failure modes.
     // Type 'bool' cannot be used in address space 'uniform' as it is non-host-shareable.
     Ref<ShaderModuleBase> shaderModule;
     DAWN_TRY_ASSIGN(shaderModule, utils::CreateShaderModule(device, DAWN_MULTILINE(
-        struct Params {
+        struct UniformParams {
             maxComputeWorkgroupsPerDimension: u32,
             clientOffsetInU32: u32,
             enableValidation: u32,
@@ -95,23 +85,23 @@ ResultOrError<ComputePipelineBase*> GetOrCreateIndirectDispatchValidationPipelin
             data: array<u32>
         }
 
-        var<immediate> params: Params;
-        @group(0) @binding(0) var<storage, read_write> clientParams: IndirectParams;
-        @group(0) @binding(1) var<storage, read_write> validatedParams: ValidatedParams;
+        @group(0) @binding(0) var<uniform> uniformParams: UniformParams;
+        @group(0) @binding(1) var<storage, read_write> clientParams: IndirectParams;
+        @group(0) @binding(2) var<storage, read_write> validatedParams: ValidatedParams;
 
         @compute @workgroup_size(1, 1, 1)
         fn main() {
-            var workgroups = vec3u(clientParams.data[params.clientOffsetInU32 + 0],
-                                   clientParams.data[params.clientOffsetInU32 + 1],
-                                   clientParams.data[params.clientOffsetInU32 + 2]);
-            if (params.enableValidation > 0u) {
+            var workgroups = vec3u(clientParams.data[uniformParams.clientOffsetInU32 + 0],
+                                   clientParams.data[uniformParams.clientOffsetInU32 + 1],
+                                   clientParams.data[uniformParams.clientOffsetInU32 + 2]);
+            if (uniformParams.enableValidation > 0u) {
                 var invalid = false;
-                if (max(workgroups.x, max(workgroups.y, workgroups.z)) > params.maxComputeWorkgroupsPerDimension) {
+                if (max(workgroups.x, max(workgroups.y, workgroups.z)) > uniformParams.maxComputeWorkgroupsPerDimension) {
                     invalid = true;
-                } else if (params.linearIndexing > 0u) {
-                    invalid |= workgroups.x > (params.overflowValue / workgroups.y);
+                } else if (uniformParams.linearIndexing > 0u) {
+                    invalid |= workgroups.x > (uniformParams.overflowValue / workgroups.y);
                     let xy = workgroups.x * workgroups.y;
-                    invalid |= xy > (params.overflowValue / workgroups.z);
+                    invalid |= xy > (uniformParams.overflowValue / workgroups.z);
                 }
 
                 if (invalid) {
@@ -121,7 +111,7 @@ ResultOrError<ComputePipelineBase*> GetOrCreateIndirectDispatchValidationPipelin
             validatedParams.data[0] = workgroups.x;
             validatedParams.data[1] = workgroups.y;
             validatedParams.data[2] = workgroups.z;
-            if (params.duplicateNumWorkgroups > 0u) {
+            if (uniformParams.duplicateNumWorkgroups > 0u) {
                 validatedParams.data[3] = workgroups.x;
                 validatedParams.data[4] = workgroups.y;
                 validatedParams.data[5] = workgroups.z;
@@ -134,14 +124,14 @@ ResultOrError<ComputePipelineBase*> GetOrCreateIndirectDispatchValidationPipelin
                     utils::MakeBindGroupLayout(
                         device,
                         {
-                            {0, wgpu::ShaderStage::Compute, kInternalStorageBufferBinding},
-                            {1, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},
+                            {0, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Uniform},
+                            {1, wgpu::ShaderStage::Compute, kInternalStorageBufferBinding},
+                            {2, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},
                         },
                         /* allowInternalBinding */ true));
 
     Ref<PipelineLayoutBase> pipelineLayout;
-    DAWN_TRY_ASSIGN(pipelineLayout, utils::MakeBasicPipelineLayout(device, bindGroupLayout,
-                                                                   sizeof(IndirectDispatchParams)));
+    DAWN_TRY_ASSIGN(pipelineLayout, utils::MakeBasicPipelineLayout(device, bindGroupLayout));
 
     ComputePipelineDescriptor computePipelineDescriptor = {};
     computePipelineDescriptor.layout = pipelineLayout.Get();
@@ -196,6 +186,7 @@ Ref<ComputePassEncoder> ComputePassEncoder::MakeError(DeviceBase* device,
 
 void ComputePassEncoder::DestroyImpl(DestroyReason reason) {
     mCommandBufferState.End();
+    mUsageTracker = {};
 
     // Ensure that the pass has exited. This is done for passes only since validation requires
     // they exit before destruction while bundles do not.
@@ -236,7 +227,7 @@ void ComputePassEncoder::APIDispatchWorkgroups(uint32_t workgroupCountX,
                                                uint32_t workgroupCountZ) {
     mEncodingContext->TryEncode(
         this,
-        [&](CommandAllocator* allocator) -> MaybeError {
+        [&](CommandAllocator* allocator) -> MaybeValError {
             if (IsValidationEnabled()) {
                 if (workgroupCountX == 0 || workgroupCountY == 0 || workgroupCountZ == 0) {
                     GetDevice()->EmitWarningOnce(absl::StrFormat(
@@ -365,16 +356,33 @@ ComputePassEncoder::TransformIndirectDispatchBuffer(Ref<BufferBase> indirectBuff
     const uint64_t clientIndirectBindingSize =
         kDispatchIndirectSize + clientOffsetFromAlignedBoundary;
 
-    // Set the immediate params.
-    IndirectDispatchParams params = {
-        .maxComputeWorkgroupsPerDimension = device->GetLimits().v1.maxComputeWorkgroupsPerDimension,
-        .clientOffsetInU32 =
-            static_cast<uint32_t>(clientOffsetFromAlignedBoundary / sizeof(uint32_t)),
-        .enableValidation = static_cast<uint32_t>(IsValidationEnabled()),
-        .duplicateNumWorkgroups = static_cast<uint32_t>(shouldDuplicateNumWorkgroups),
-        .linearIndexing = static_cast<uint32_t>(usesLinearIndexing),
-        .overflowValue = overflowValue,
+    // Neither 'enableValidation' nor 'duplicateNumWorkgroups' can be declared as 'bool' as
+    // currently in WGSL type 'bool' cannot be used in address space 'uniform' as 'it is
+    // non-host-shareable'.
+    struct UniformParams {
+        uint32_t maxComputeWorkgroupsPerDimension;
+        uint32_t clientOffsetInU32;
+        uint32_t enableValidation;
+        uint32_t duplicateNumWorkgroups;
+        uint32_t linearIndexing;
+        uint32_t overflowValue;
     };
+
+    // Create a uniform buffer to hold parameters for the shader.
+    Ref<BufferBase> uniformBuffer;
+    {
+        UniformParams params = {};
+        params.maxComputeWorkgroupsPerDimension =
+            device->GetLimits().v1.maxComputeWorkgroupsPerDimension;
+        params.clientOffsetInU32 = clientOffsetFromAlignedBoundary / sizeof(uint32_t);
+        params.enableValidation = static_cast<uint32_t>(IsValidationEnabled());
+        params.duplicateNumWorkgroups = static_cast<uint32_t>(shouldDuplicateNumWorkgroups);
+        params.linearIndexing = static_cast<uint32_t>(usesLinearIndexing);
+        params.overflowValue = overflowValue;
+
+        DAWN_TRY_ASSIGN(uniformBuffer,
+                        utils::CreateBufferFromData(device, wgpu::BufferUsage::Uniform, {params}));
+    }
 
     // Reserve space in the scratch buffer to hold the validated indirect params.
     ScratchBuffer& scratchBuffer = store->scratchIndirectStorage;
@@ -388,15 +396,15 @@ ComputePassEncoder::TransformIndirectDispatchBuffer(Ref<BufferBase> indirectBuff
     DAWN_TRY_ASSIGN(validationBindGroup,
                     utils::MakeBindGroup(device, layout,
                                          {
-                                             {0, indirectBuffer, clientIndirectBindingOffset,
+                                             {0, uniformBuffer},
+                                             {1, indirectBuffer, clientIndirectBindingOffset,
                                               clientIndirectBindingSize},
-                                             {1, validatedIndirectBuffer, 0, scratchBufferSize},
+                                             {2, validatedIndirectBuffer, 0, scratchBufferSize},
                                          },
                                          UsageValidationMode::Internal));
 
     // Issue commands to validate the indirect buffer.
     APISetPipeline(validationPipeline.Get());
-    APISetImmediates(0, ByteSpanFromRef(params));
     APISetBindGroup(0, validationBindGroup.Get());
     APIDispatchWorkgroups(1);
 
@@ -411,7 +419,7 @@ void ComputePassEncoder::APIDispatchWorkgroupsIndirect(BufferBase* indirectBuffe
                                                        uint64_t indirectOffset) {
     mEncodingContext->TryEncode(
         this,
-        [&](CommandAllocator* allocator) -> MaybeError {
+        [&](CommandAllocator* allocator) -> MaybeValError {
             if (IsValidationEnabled()) {
                 DAWN_TRY(GetDevice()->ValidateObject(indirectBuffer));
                 DAWN_TRY(ValidateCanUseAs(indirectBuffer, wgpu::BufferUsage::Indirect));
@@ -507,7 +515,7 @@ void ComputePassEncoder::APISetPipeline(ComputePipelineBase* pipeline) {
 void ComputePassEncoder::APISetResourceTable(ResourceTableBase* table) {
     mEncodingContext->TryEncode(
         this,
-        [&](CommandAllocator* allocator) -> MaybeError {
+        [&](CommandAllocator* allocator) -> MaybeValError {
             if (GetDevice()->IsValidationEnabled()) {
                 DAWN_INVALID_IF(
                     !GetDevice()->HasFeature(Feature::ChromiumExperimentalSamplingResourceTable),

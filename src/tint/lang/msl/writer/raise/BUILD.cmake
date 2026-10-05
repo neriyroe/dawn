@@ -41,6 +41,8 @@ if(TINT_BUILD_MSL_WRITER)
 # Condition: TINT_BUILD_MSL_WRITER
 ################################################################################
 tint_add_target(tint_lang_msl_writer_raise lib
+  lang/msl/writer/raise/alias_to_let.cc
+  lang/msl/writer/raise/alias_to_let.h
   lang/msl/writer/raise/argument_buffers.cc
   lang/msl/writer/raise/argument_buffers.h
   lang/msl/writer/raise/binary_polyfill.cc
@@ -49,6 +51,8 @@ tint_add_target(tint_lang_msl_writer_raise lib
   lang/msl/writer/raise/builtin_polyfill.h
   lang/msl/writer/raise/convert_print_to_log.cc
   lang/msl/writer/raise/convert_print_to_log.h
+  lang/msl/writer/raise/cooperative_tensors.cc
+  lang/msl/writer/raise/cooperative_tensors.h
   lang/msl/writer/raise/decompose_buffer.cc
   lang/msl/writer/raise/decompose_buffer.h
   lang/msl/writer/raise/fix_type_layout.cc
@@ -59,10 +63,10 @@ tint_add_target(tint_lang_msl_writer_raise lib
   lang/msl/writer/raise/module_constant.h
   lang/msl/writer/raise/module_scope_vars.cc
   lang/msl/writer/raise/module_scope_vars.h
-  lang/msl/writer/raise/polyfill_bool_vector_dynamic_stores.cc
-  lang/msl/writer/raise/polyfill_bool_vector_dynamic_stores.h
   lang/msl/writer/raise/raise.cc
   lang/msl/writer/raise/raise.h
+  lang/msl/writer/raise/resource_table_helper.cc
+  lang/msl/writer/raise/resource_table_helper.h
   lang/msl/writer/raise/shader_io.cc
   lang/msl/writer/raise/shader_io.h
   lang/msl/writer/raise/simd_ballot.cc
@@ -81,6 +85,7 @@ tint_target_add_dependencies(tint_lang_msl_writer_raise lib
   tint_lang_core_ir
   tint_lang_core_ir_analysis
   tint_lang_core_ir_transform
+  tint_lang_core_ir_validator
   tint_lang_core_type
   tint_lang_msl
   tint_lang_msl_intrinsic
@@ -112,16 +117,17 @@ if(TINT_BUILD_MSL_WRITER)
 # Condition: TINT_BUILD_MSL_WRITER
 ################################################################################
 tint_add_target(tint_lang_msl_writer_raise_test test
+  lang/msl/writer/raise/alias_to_let_test.cc
   lang/msl/writer/raise/argument_buffers_test.cc
   lang/msl/writer/raise/binary_polyfill_test.cc
   lang/msl/writer/raise/builtin_polyfill_test.cc
   lang/msl/writer/raise/convert_print_to_log_test.cc
+  lang/msl/writer/raise/cooperative_tensors_test.cc
   lang/msl/writer/raise/decompose_buffer_test.cc
   lang/msl/writer/raise/fix_type_layout_test.cc
   lang/msl/writer/raise/fix_u32_div_mod_test.cc
   lang/msl/writer/raise/module_constant_test.cc
   lang/msl/writer/raise/module_scope_vars_test.cc
-  lang/msl/writer/raise/polyfill_bool_vector_dynamic_stores_test.cc
   lang/msl/writer/raise/shader_io_test.cc
   lang/msl/writer/raise/simd_ballot_test.cc
   lang/msl/writer/raise/switch_return_test.cc
@@ -136,6 +142,7 @@ tint_target_add_dependencies(tint_lang_msl_writer_raise_test test
   tint_lang_core_ir
   tint_lang_core_ir_transform
   tint_lang_core_ir_transform_test
+  tint_lang_core_ir_validator
   tint_lang_core_type
   tint_lang_msl
   tint_lang_msl_intrinsic

@@ -449,10 +449,9 @@ MaybeError Queue::WriteTextureImpl(const TexelCopyTextureInfo& destination,
 
     Texture* texture = ToBackend(destination.texture);
     DAWN_TRY(texture->SynchronizeTextureBeforeUse(&commandContext));
-    return texture->Write(
-        &commandContext, subresources, destination.origin, writeSizePixel,
-        DAWN_UNSAFE_TODO(reinterpret_cast<const uint8_t*>(data.data()) + dataLayout.offset),
-        dataLayout.bytesPerRow, dataLayout.rowsPerImage);
+    return texture->Write(&commandContext, subresources, destination.origin, writeSizePixel,
+                          data.subspan(static_cast<size_t>(dataLayout.offset)),
+                          dataLayout.bytesPerRow, dataLayout.rowsPerImage);
 }
 
 bool Queue::HasPendingCommands() const {
@@ -507,7 +506,7 @@ ResultOrError<ExecutionSerial> MonitoredFenceQueue::CheckCompletedSerialsImpl() 
         DAWN_TRY(CheckHRESULT(d3d11Device->GetDeviceRemovedReason(),
                               "ID3D11Device::GetDeviceRemovedReason"));
         // Otherwise, return a generic device lost error.
-        return DAWN_DEVICE_LOST_ERROR("Device lost");
+        return DAWN_BACKEND_DEVICE_LOST_ERROR("Device lost");
     }
 
     DAWN_TRY(RecycleSystemEventReceivers(completedSerial));
@@ -572,9 +571,9 @@ ResultOrError<ExecutionSerial> SystemEventQueue::CheckCompletedSerialsImpl() {
             DWORD result = WaitForMultipleObjects(static_cast<DWORD>(handles.size()),
                                                   handles.data(), /*bWaitAll=*/false,
                                                   /*dwMilliseconds=*/0);
-            DAWN_INTERNAL_ERROR_IF(result == WAIT_FAILED, "WaitForMultipleObjects() failed");
+            DAWN_UNRECOVERABLE_ERROR_IF(result == WAIT_FAILED, "WaitForMultipleObjects() failed");
 
-            DAWN_INTERNAL_ERROR_IF(
+            DAWN_UNRECOVERABLE_ERROR_IF(
                 result >= WAIT_ABANDONED_0 && result < WAIT_ABANDONED_0 + handles.size(),
                 "WaitForMultipleObjects() get abandoned event");
 
@@ -625,7 +624,7 @@ ResultOrError<ExecutionSerial> SystemEventQueue::WaitForQueueSerialImpl(Executio
     }
 
     if (serial > GetLastSubmittedCommandSerial()) {
-        return DAWN_FORMAT_INTERNAL_ERROR(
+        return DAWN_FORMAT_UNRECOVERABLE_ERROR(
             "Wait a serial (%llu) which is greater than last submitted command serial (%llu).",
             uint64_t{serial}, uint64_t(GetLastSubmittedCommandSerial()));
     }
@@ -644,7 +643,7 @@ ResultOrError<ExecutionSerial> SystemEventQueue::WaitForQueueSerialImpl(Executio
         // TODO(crbug.com/335553337): call WaitForSingleObject() without holding the mutex.
         DWORD result =
             WaitForSingleObject(it->receiver.GetPrimitive().Get(), ToMilliseconds(timeout));
-        DAWN_INTERNAL_ERROR_IF(result == WAIT_FAILED, "WaitForSingleObject() failed");
+        DAWN_UNRECOVERABLE_ERROR_IF(result == WAIT_FAILED, "WaitForSingleObject() failed");
 
         if (result != WAIT_OBJECT_0) {
             return kWaitSerialTimeout;
@@ -766,7 +765,7 @@ ResultOrError<ExecutionSerial> DelayFlushQueue::WaitForQueueSerialImpl(Execution
     }
 
     if (waitSerial > GetLastSubmittedCommandSerial()) {
-        return DAWN_FORMAT_INTERNAL_ERROR(
+        return DAWN_FORMAT_UNRECOVERABLE_ERROR(
             "Wait a serial (%llu) which is greater than last submitted command serial (%llu).",
             uint64_t{waitSerial}, uint64_t(GetLastSubmittedCommandSerial()));
     }
@@ -840,7 +839,7 @@ MaybeError DelayFlushQueue::BlockWaitForLastSubmittedSerial(
     commandContext->Flush1(D3D11_CONTEXT_TYPE_ALL, receiver.GetPrimitive().Get());
 
     DWORD result = WaitForSingleObject(receiver.GetPrimitive().Get(), INFINITE);
-    DAWN_INTERNAL_ERROR_IF(result != WAIT_OBJECT_0, "WaitForSingleObject() failed");
+    DAWN_UNRECOVERABLE_ERROR_IF(result != WAIT_OBJECT_0, "WaitForSingleObject() failed");
 
     SystemEventReceiver returnedReceivers[] = {std::move(receiver)};
     return ReturnSystemEventReceivers(returnedReceivers);

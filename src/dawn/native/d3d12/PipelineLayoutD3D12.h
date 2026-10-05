@@ -72,7 +72,7 @@ class PipelineLayout final : public PipelineLayoutBase {
     struct BindGroupDynamicStorageBufferInfo {
         // First index into the immediate block's length/offset arrays for this bind group's dynamic
         // storage buffers. This is where the bind group's lengths or offsets start.
-        uint32_t firstImmediateIndex;
+        uint32_t firstImmediateIndex = 0;
 
         struct BindingAndImmediateIndex {
             BindingNumber binding;
@@ -100,13 +100,13 @@ class PipelineLayout final : public PipelineLayoutBase {
     ResultOrError<Ref<PipelineLayoutHandle>> CreatePipelineLayoutHandle(
         const ImmediateMask& pipelineImmediateMask);
 
-    PerBindGroup<uint32_t> mCbvUavSrvRootParameterIndices;
-    PerBindGroup<uint32_t> mSamplerRootParameterIndices;
+    PerBindGroup<uint32_t> mCbvUavSrvRootParameterIndices{};
+    PerBindGroup<uint32_t> mSamplerRootParameterIndices{};
     PerBindGroup<ityp::vector<BindingIndex, uint32_t>> mDynamicUniformRootParameterIndices;
     DynamicStorageBufferInfo mDynamicStorageBufferInfo;
     uint32_t mDynamicStorageBufferCount = 0;
-    uint32_t mResourceTableCbvUavSrvRootParameterIndex;
-    uint32_t mResourceTableSamplerRootParameterIndex;
+    uint32_t mResourceTableCbvUavSrvRootParameterIndex = 0;
+    uint32_t mResourceTableSamplerRootParameterIndex = 0;
 
     // Base root parameters shared by every PipelineLayoutHandle, built once in
     // BuildBaseRootParameters(). rootParameters points into ranges, so both are kept const and

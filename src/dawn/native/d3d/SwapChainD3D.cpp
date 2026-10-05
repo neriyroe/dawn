@@ -324,15 +324,16 @@ MaybeError SwapChain::InitializeSwapChainFromScratch() {
 }
 
 MaybeError SwapChain::ConfigureColorSpace() {
-    // Reused buffers still need the output encoding updated after SDR/HDR transitions.
-    const auto colorSpace = GetToneMappingMode() == wgpu::ToneMappingMode::Extended
+    // DXGI float swapchains use linear scRGB in both standard and extended output modes.
+    const auto colorSpace = GetFormat() == wgpu::TextureFormat::RGBA16Float
                                 ? DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709
                                 : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
     UINT support = 0;
     DAWN_TRY(CheckHRESULT(mDXGISwapChain->CheckColorSpaceSupport(colorSpace, &support),
                           "IDXGISwapChain3::CheckColorSpaceSupport"));
-    DAWN_INVALID_IF((support & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT) == 0,
-                    "The DXGI swapchain does not support the requested output color space.");
+    DAWN_UNRECOVERABLE_ERROR_IF(
+        (support & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT) == 0,
+        "The DXGI swapchain does not support the requested output color space.");
     return CheckHRESULT(mDXGISwapChain->SetColorSpace1(colorSpace),
                         "IDXGISwapChain3::SetColorSpace1");
 }

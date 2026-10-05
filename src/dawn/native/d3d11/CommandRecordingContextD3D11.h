@@ -29,6 +29,7 @@
 #define SRC_DAWN_NATIVE_D3D11_COMMANDRECORDINGCONTEXT_D3D11_H_
 
 #include <algorithm>
+#include <array>
 #include <optional>
 #include <utility>
 
@@ -45,6 +46,7 @@
 #include "src/dawn/native/d3d/d3d_platform.h"
 #include "src/dawn/native/d3d11/ImmediatesLayoutD3D11.h"
 #include "src/utils/non_copyable.h"
+#include "src/utils/span.h"
 
 namespace dawn::native::d3d11 {
 
@@ -68,14 +70,9 @@ class CommandRecordingContextGuard : public ::dawn::detail::Guard<Ctx, Traits> {
     CommandRecordingContextGuard() = default;
     CommandRecordingContextGuard(CommandRecordingContextGuard&& rhs) = default;
     CommandRecordingContextGuard& operator=(CommandRecordingContextGuard&& other) = default;
-    CommandRecordingContextGuard(Ctx* ctx,
-                                 typename Traits::MutexType& mutex,
-                                 Defer* defer = nullptr)
-        : Base(ctx, mutex, defer) {}
-    CommandRecordingContextGuard(Ctx* ctx,
-                                 typename Traits::template LockType<Ctx>&& lock,
-                                 Defer* defer = nullptr)
-        : Base(ctx, std::move(lock), defer) {}
+    CommandRecordingContextGuard(Ctx* ctx, typename Traits::MutexType& mutex) : Base(ctx, mutex) {}
+    CommandRecordingContextGuard(Ctx* ctx, typename Traits::template LockType<Ctx>&& lock)
+        : Base(ctx, std::move(lock)) {}
 
     CommandRecordingContextGuard(const CommandRecordingContextGuard& other) = delete;
     CommandRecordingContextGuard& operator=(const CommandRecordingContextGuard& other) = delete;
@@ -166,7 +163,7 @@ class ScopedCommandRecordingContext : NonCopyable {
                                UINT SrcSubresource,
                                const D3D11_BOX* pSrcBox) const;
     void ClearRenderTargetView(ID3D11RenderTargetView* pRenderTargetView,
-                               const FLOAT ColorRGBA[4]) const;
+                               Span<const float, 4> colorRGBA) const;
     void ClearDepthStencilView(ID3D11DepthStencilView* pDepthStencilView,
                                UINT ClearFlags,
                                FLOAT Depth,
@@ -185,7 +182,7 @@ class ScopedCommandRecordingContext : NonCopyable {
     void Flush1(D3D11_CONTEXT_TYPE ContextType, HANDLE hEvent) const;
 
     // Write immediate data to the uniform buffer.
-    void WriteUniformBufferRange(uint32_t offset, const void* data, size_t size) const;
+    void WriteUniformBufferRange(uint32_t offset, Span<const std::byte> data) const;
     MaybeError FlushUniformBuffer() const;
 
     MaybeError AcquireKeyedMutex(Ref<d3d::KeyedMutex> keyedMutex) const;

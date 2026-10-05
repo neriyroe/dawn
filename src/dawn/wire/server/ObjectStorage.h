@@ -56,7 +56,7 @@ struct ObjectDataBase {
     T handle = nullptr;
     ObjectGeneration generation = 0;
 
-    AllocationState state;
+    AllocationState state{};
 };
 
 // Stores what the backend knows about the type.
@@ -74,6 +74,7 @@ struct ObjectData<WGPUBuffer> : public ObjectDataBase<WGPUBuffer> {
     WGPUBufferUsage usage = WGPUBufferUsage_None;
     // Indicate if memoryHandle needs to be destroyed on unmap
     bool mappedAtCreation = false;
+    bool backedWithSharedMemory = false;
 };
 
 struct DeviceInfo {
@@ -92,8 +93,8 @@ struct ObjectData<WGPUDevice> : public ObjectDataBase<WGPUDevice> {
 // are guaranteed to have been reserved, but not guaranteed to be backed by a valid backend handle.
 template <typename T>
 struct Reserved {
-    ObjectId id;
-    raw_ptr<ObjectData<T>> data;
+    ObjectId id = 0;
+    raw_ptr<ObjectData<T>> data = nullptr;
 
     const ObjectData<T>* operator->() const {
         DAWN_ASSERT(data != nullptr);
@@ -114,8 +115,8 @@ struct Reserved {
 // guaranteed to be backed by a valid backend handle.
 template <typename T>
 struct Known {
-    ObjectId id;
-    raw_ptr<ObjectData<T>> data;
+    ObjectId id = 0;
+    raw_ptr<ObjectData<T>> data = nullptr;
 
     const ObjectData<T>* operator->() const {
         DAWN_ASSERT(data != nullptr);
@@ -321,10 +322,17 @@ class KnownObjects<WGPUDevice> : public KnownObjectsBase<WGPUDevice> {
         KnownObjectsBase<WGPUDevice>::FreeImpl(id);
     }
 
+    // Clear mKnownSet so that device handles acquired here and subsequently released
+    // do not leave dangling raw_ptr entries in mKnownSet.
+    std::vector<WGPUDevice> AcquireAllHandles() {
+        mKnownSet.clear();
+        return KnownObjectsBase<WGPUDevice>::AcquireAllHandles();
+    }
+
     bool IsKnown(WGPUDevice device) const { return mKnownSet.contains(device); }
 
   private:
-    absl::flat_hash_set<WGPUDevice> mKnownSet;
+    absl::flat_hash_set<raw_ptr<WGPUDeviceImpl>> mKnownSet;
 };
 
 }  // namespace dawn::wire::server

@@ -31,7 +31,7 @@
 
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/spirv/ir/builtin_call.h"
 #include "src/tint/lang/spirv/ir/copy_logical.h"
 #include "src/tint/lang/spirv/type/explicit_layout_array.h"
@@ -337,11 +337,11 @@ struct State {
         for (uint32_t i = 0; i < dst_struct->Members().Length(); i++) {
             auto* src_member = src_struct->Members()[i];
             auto* dst_member = dst_struct->Members()[i];
-            auto* extracted = b.Access(src_member->Type(), input, u32(i))->Result();
+            auto* extracted = b.Access(src_member->Type(), input, u32(i));
             auto* converted = ConvertIfNeeded(dst_member->Type(), extracted);
             construct_args.Push(converted);
         }
-        return b.Construct(dst_struct, std::move(construct_args))->Result();
+        return b.Construct(dst_struct, std::move(construct_args));
     }
 
     /// Recursively convert an array type to/from the explicitly laid out version.
@@ -357,7 +357,7 @@ struct State {
         // Convert each element one at a time, writing into the local variable.
         auto* result = b.Var(ty.ptr<function>(dst_array));
         b.LoopRange(0_u, u32(count->value), 1_u, [&](core::ir::Value* idx) {
-            auto* extracted = b.Access(src_array->ElemType(), input, idx)->Result();
+            auto* extracted = b.Access(src_array->ElemType(), input, idx);
             auto* converted = ConvertIfNeeded(dst_array->ElemType(), extracted);
             auto* dst_ptr = b.Access(ty.ptr(function, dst_array->ElemType()), result, idx);
             b.Store(dst_ptr, converted);

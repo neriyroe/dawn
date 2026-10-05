@@ -32,7 +32,7 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/transform/shader_io.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/utils/containers/vector.h"
 
 using namespace tint::core::fluent_types;     // NOLINT
@@ -214,7 +214,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         }
         auto input_index = input_indices[idx];
         auto* from = input_vars[input_index]->Result();
-        auto* value = builder.Load(from)->Result();
+        core::ir::Value* value = builder.Load(from)->Result();
 
         auto& builtin = inputs[idx].attributes.builtin;
         if (builtin.has_value()) {
@@ -224,14 +224,14 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
                 case core::BuiltinValue::kPrimitiveIndex:
                 case core::BuiltinValue::kSampleIndex: {
                     // GLSL uses i32 for these, so convert to u32.
-                    value = builder.Convert(ty.u32(), value)->Result();
+                    value = builder.Convert(ty.u32(), value);
                     break;
                 }
                 case core::BuiltinValue::kSampleMask: {
                     // gl_SampleMaskIn is an array of i32. Retrieve the first element and
                     // convert it to u32.
                     auto* elem = builder.Access(ty.i32(), value, 0_u);
-                    value = builder.Convert(ty.u32(), elem)->Result();
+                    value = builder.Convert(ty.u32(), elem);
                     break;
                 }
                 default:
@@ -248,7 +248,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
             Vector<uint32_t, 4> swizzles = {2, 1, 0, 3};
             swizzles.Resize(original_type->Elements(nullptr, 1).count);
 
-            value = builder.Swizzle(original_type, value, swizzles)->Result();
+            value = builder.Swizzle(original_type, value, swizzles);
         }
 
         return value;
@@ -262,12 +262,12 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         }
 
         // Store the output to the global variable declared earlier.
-        auto* to = output_vars[idx]->Result();
+        core::ir::Value* to = output_vars[idx]->Result();
 
         if (outputs[idx].attributes.builtin == core::BuiltinValue::kSampleMask) {
             auto* ptr = ty.ptr(core::AddressSpace::kOut, ty.i32(), core::Access::kWrite);
-            to = builder.Access(ptr, to, 0_u)->Result();
-            value = builder.Convert(ty.i32(), value)->Result();
+            to = builder.Access(ptr, to, 0_u);
+            value = builder.Convert(ty.i32(), value);
         } else if (outputs[idx].attributes.builtin == core::BuiltinValue::kPosition) {
             auto* x = builder.Swizzle(ty.f32(), value, {0});
 
@@ -280,7 +280,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
             auto* w = builder.Swizzle(ty.f32(), value, {3});
             auto* mul = builder.Multiply(2_f, z);
             auto* new_z = builder.Subtract(mul, w);
-            value = builder.Construct(ty.vec4f(), x, new_y, new_z, w)->Result();
+            value = builder.Construct(ty.vec4f(), x, new_y, new_z, w);
         }
 
         builder.Store(to, value);
@@ -301,7 +301,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
             config.immediate_data_layout.GetValue(builder, core::InternalImmediate::kFragDepthMin);
         auto* max =
             config.immediate_data_layout.GetValue(builder, core::InternalImmediate::kFragDepthMax);
-        return builder.Clamp(frag_depth, min, max)->Result();
+        return builder.Clamp(frag_depth, min, max);
     }
 
     /// @copydoc ShaderIO::BackendState::NeedsVertexPointSize

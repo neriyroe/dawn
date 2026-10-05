@@ -161,6 +161,8 @@ MaybeError CopyImageSubData(const OpenGLFunctions& gl,
                                                         dstHandle, dstLevel, dst.z + layer));
             }
         }
+        DAWN_TRY(CheckFramebufferComplete(gl, GL_READ_FRAMEBUFFER));
+        DAWN_TRY(CheckFramebufferComplete(gl, GL_DRAW_FRAMEBUFFER));
         DAWN_GL_TRY(
             gl, BlitFramebuffer(src.x, src.y, src.x + size.width, src.y + size.height, dst.x, dst.y,
                                 dst.x + size.width, dst.y + size.height, blitMask, GL_NEAREST));
@@ -225,8 +227,8 @@ MaybeError CheckFramebufferComplete(const OpenGLFunctions& gl, GLenum target) {
     if (status == GL_FRAMEBUFFER_COMPLETE) [[likely]] {
         return {};
     }
-    return DAWN_FORMAT_INTERNAL_ERROR("glCheckFramebufferStatus returned %s (0x%04X).",
-                                      GLFramebufferStatusAsString(status), status);
+    return DAWN_FORMAT_UNRECOVERABLE_ERROR("glCheckFramebufferStatus returned %s (0x%04X).",
+                                           GLFramebufferStatusAsString(status), status);
 }
 
 void ClearErrors(const OpenGLFunctions& gl,
@@ -286,9 +288,9 @@ MaybeError CheckError(const OpenGLFunctions& gl,
         case GL_OUT_OF_MEMORY:
             return DAWN_OUT_OF_MEMORY_ERROR(message);
         case GL_CONTEXT_LOST:
-            return DAWN_DEVICE_LOST_ERROR(message);
+            return DAWN_BACKEND_DEVICE_LOST_ERROR(message);
         default:
-            return DAWN_INTERNAL_ERROR(message);
+            return DAWN_UNRECOVERABLE_ERROR(message);
     }
 }
 

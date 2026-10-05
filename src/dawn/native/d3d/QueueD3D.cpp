@@ -52,7 +52,7 @@ ResultOrError<SystemEventReceiver> Queue::GetSystemEventReceiver() {
         HANDLE fenceEvent =
             ::CreateEvent(nullptr, /*bManualReset=*/true, /*bInitialState=*/false, nullptr);
         if (fenceEvent == nullptr) {
-            return DAWN_INTERNAL_ERROR("CreateEvent failed");
+            return DAWN_UNRECOVERABLE_ERROR("CreateEvent failed");
         }
         receiver = SystemEventReceiver(SystemHandle::Acquire(fenceEvent));
     }
@@ -63,7 +63,7 @@ ResultOrError<SystemEventReceiver> Queue::GetSystemEventReceiver() {
 MaybeError Queue::ReturnSystemEventReceivers(std::span<SystemEventReceiver> receivers) {
     for (const auto& receiver : receivers) {
         if (!ResetEvent(receiver.GetPrimitive().Get())) {
-            return DAWN_INTERNAL_ERROR("ResetEvent failed");
+            return DAWN_UNRECOVERABLE_ERROR("ResetEvent failed");
         }
     }
     mAvailableEventReceivers.Use([&](auto availableEventReceivers) {
@@ -90,10 +90,9 @@ ResultOrError<ExecutionSerial> Queue::WaitForQueueSerialImpl(ExecutionSerial wai
     }
 
     bool ready = false;
-    std::array<std::pair<const dawn::native::SystemEventReceiver&, bool*>, 1> events{
-        {{*receiver, &ready}}};
+    std::pair<const dawn::native::SystemEventReceiver&, bool*> events{*receiver, &ready};
     DAWN_ASSERT(waitSerial <= GetLastSubmittedCommandSerial());
-    bool didComplete = WaitAnySystemEvent(events.begin(), events.end(), timeout);
+    bool didComplete = WaitAnySystemEvent(SpanFromRef(events), timeout);
     // Return the SystemEventReceiver to the pool of receivers so it can be re-waited in the
     // future.
     // The caller should call UpdateCompletedSerial() which will clear passed system events.

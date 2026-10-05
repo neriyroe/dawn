@@ -46,8 +46,8 @@ namespace {
 
 class SharedMemoryWin : public SharedMemory {
   public:
-    SharedMemoryWin(SystemHandle handle, std::span<std::byte> data)
-        : SharedMemory(std::move(handle), data) {}
+    SharedMemoryWin(SystemHandle handle, std::span<std::byte> data, uint64_t allocatedSize)
+        : SharedMemory(std::move(handle), data, allocatedSize) {}
 
     ~SharedMemoryWin() override {
         std::span<std::byte> data = GetMappedSpan();
@@ -70,15 +70,17 @@ class InlineSharedMemoryManagerImpl_Win : public InlineSharedMemoryManager {
         }
         SystemHandle handle = SystemHandle::Acquire(rawHandle);
 
-        void* pointer = MapViewOfFile(rawHandle, FILE_MAP_ALL_ACCESS, 0, 0, size);
+        // Map the whole shared memory into the process's address space which is required by
+        // `OpenExistingHeapFromAddress`.
+        void* pointer =
+            MapViewOfFile(rawHandle, FILE_MAP_ALL_ACCESS, 0, 0, checked_cast<size_t>(alignedSize));
         if (pointer == nullptr) {
             return nullptr;
         }
 
-        // SAFETY: the pointer returned by a successful MapViewOfFile points to at least `size`
-        // valid bytes.
+        // SAFETY: the pointer returned by MapViewOfFile points to at least `size` valid bytes.
         auto data = DAWN_UNSAFE_BUFFERS(Span<std::byte>{static_cast<std::byte*>(pointer), size});
-        return AcquireRef(new SharedMemoryWin(std::move(handle), data));
+        return AcquireRef(new SharedMemoryWin(std::move(handle), data, alignedSize));
     }
 };
 

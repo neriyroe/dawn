@@ -32,7 +32,7 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/clone_context.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/builtin_structs.h"
 #include "src/tint/lang/core/type/matrix.h"
 #include "src/tint/lang/core/type/vector.h"
@@ -224,7 +224,7 @@ struct State {
                 core::type::CreateAtomicCompareExchangeResult(ty, ir.symbols, val->Type());
 
             auto* bi = b.Call(strct, core::BuiltinFn::kAtomicCompareExchangeWeak, var, comp, val);
-            b.AccessWithResult(call->DetachResult(), bi, 0_u);
+            b.AccessReplaceResult(call->DetachResult(), bi, 0_u);
         });
         call->Destroy();
     }
@@ -235,7 +235,7 @@ struct State {
         b.InsertBefore(call, [&] {
             auto* var = args[0];
             auto* one = One(call->Result()->Type());
-            b.CallWithResult(call->DetachResult(), fn, var, one);
+            b.CallReplaceResult(call->DetachResult(), fn, var, one);
         });
         call->Destroy();
     }
@@ -245,7 +245,7 @@ struct State {
 
         b.InsertBefore(call, [&] {
             auto* var = args[0];
-            b.CallWithResult(call->DetachResult(), fn, var);
+            b.CallReplaceResult(call->DetachResult(), fn, var);
         });
         call->Destroy();
     }
@@ -256,7 +256,7 @@ struct State {
         b.InsertBefore(call, [&] {
             auto* var = args[0];
             auto* val = args[3];
-            b.CallWithResult(call->DetachResult(), fn, var, val);
+            b.CallReplaceResult(call->DetachResult(), fn, var, val);
         });
         call->Destroy();
     }
@@ -365,7 +365,7 @@ struct State {
                 auto* member = dst_str->Members()[i];
                 auto* member_ptr_ty =
                     ty.ptr(ptr_ty->AddressSpace(), member->Type(), ptr_ty->Access());
-                auto* member_ptr = b.Access(member_ptr_ty, base_ptr, u32(i))->Result();
+                auto* member_ptr = b.Access(member_ptr_ty, base_ptr, u32(i));
 
                 auto* member_ld = b.Load(member_ptr);
                 member_values.Push(member_ld->Result());
@@ -381,7 +381,7 @@ struct State {
                 }
             }
 
-            b.ConstructWithResult(ld->DetachResult(), std::move(member_values));
+            b.ConstructReplaceResult(ld->DetachResult(), std::move(member_values));
         });
         ld->Destroy();
     }
@@ -399,10 +399,10 @@ struct State {
                 auto* member = dst_str->Members()[i];
                 auto* member_ptr_ty =
                     ty.ptr(ptr_ty->AddressSpace(), member->Type(), ptr_ty->Access());
-                auto* member_ptr = b.Access(member_ptr_ty, base_ptr, u32(i))->Result();
+                auto* member_ptr = b.Access(member_ptr_ty, base_ptr, u32(i));
 
                 auto* src_member_ty = src_str->Members()[i]->Type();
-                auto* member_val = b.Access(src_member_ty, src_val, u32(i))->Result();
+                auto* member_val = b.Access(src_member_ty, src_val, u32(i));
 
                 b.Store(member_ptr, member_val);
 
@@ -432,7 +432,7 @@ struct State {
             for (uint32_t i = 0; i < *count; ++i) {
                 auto* elem_ptr_ty =
                     ty.ptr(ptr_ty->AddressSpace(), dst_arr->ElemType(), ptr_ty->Access());
-                auto* elem_ptr = b.Access(elem_ptr_ty, base_ptr, u32(i))->Result();
+                auto* elem_ptr = b.Access(elem_ptr_ty, base_ptr, u32(i));
 
                 auto* elem_ld = b.Load(elem_ptr);
                 // If the element type does not match between the source and
@@ -449,7 +449,7 @@ struct State {
                 elem_values.Push(elem_ld->Result());
             }
 
-            b.ConstructWithResult(ld->DetachResult(), std::move(elem_values));
+            b.ConstructReplaceResult(ld->DetachResult(), std::move(elem_values));
         });
         ld->Destroy();
     }
@@ -468,9 +468,9 @@ struct State {
             for (uint32_t i = 0; i < *count; ++i) {
                 auto* elem_ptr_ty =
                     ty.ptr(ptr_ty->AddressSpace(), dst_arr->ElemType(), ptr_ty->Access());
-                auto* elem_ptr = b.Access(elem_ptr_ty, base_ptr, u32(i))->Result();
+                auto* elem_ptr = b.Access(elem_ptr_ty, base_ptr, u32(i));
 
-                auto* elem_val = b.Access(src_arr->ElemType(), src_val, u32(i))->Result();
+                auto* elem_val = b.Access(src_arr->ElemType(), src_val, u32(i));
 
                 b.Store(elem_ptr, elem_val);
 
@@ -502,8 +502,8 @@ struct State {
                         TINT_IR_ASSERT(ir, el_ty->Is<core::type::Atomic>());
 
                         b.InsertBefore(ld, [&] {
-                            b.CallWithResult(ld->DetachResult(), core::BuiltinFn::kAtomicLoad,
-                                             ld->From());
+                            b.CallReplaceResult(ld->DetachResult(), core::BuiltinFn::kAtomicLoad,
+                                                ld->From());
                         });
                         ld->Destroy();
                     }

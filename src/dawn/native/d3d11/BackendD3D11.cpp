@@ -42,9 +42,9 @@
 namespace dawn::native::d3d11 {
 namespace {
 
-MaybeError ValidateRequestOptions(const UnpackedPtr<RequestAdapterOptions>& options,
-                                  ComPtr<IDXGIAdapter>* dxgiAdapter,
-                                  ComPtr<ID3D11Device>* d3d11Device) {
+MaybeValError ValidateRequestOptions(const UnpackedPtr<RequestAdapterOptions>& options,
+                                     ComPtr<IDXGIAdapter>* dxgiAdapter,
+                                     ComPtr<ID3D11Device>* d3d11Device) {
     auto* d3d11DeviceOption = options.Get<RequestAdapterOptionsD3D11Device>();
     if (!d3d11DeviceOption) {
         return {};
@@ -71,8 +71,8 @@ MaybeError ValidateRequestOptions(const UnpackedPtr<RequestAdapterOptions>& opti
 
     if (auto* luidOptions = options.Get<d3d::RequestAdapterOptionsLUID>()) {
         DAWN_INVALID_IF(
-            DAWN_UNSAFE_TODO(
-                memcmp(&adapterDesc.AdapterLuid, &luidOptions->adapterLUID, sizeof(LUID))) != 0,
+            adapterDesc.AdapterLuid.LowPart != luidOptions->adapterLUID.LowPart ||
+                adapterDesc.AdapterLuid.HighPart != luidOptions->adapterLUID.HighPart,
             "RequestAdapterOptionsLUID and RequestAdapterOptionsD3D11Device don't match.");
     }
 

@@ -360,25 +360,25 @@ CommandBufferStateTracker& CommandBufferStateTracker::operator=(const CommandBuf
 CommandBufferStateTracker& CommandBufferStateTracker::operator=(CommandBufferStateTracker&&) =
     default;
 
-MaybeError CommandBufferStateTracker::ValidateCanDispatch() {
+MaybeValError CommandBufferStateTracker::ValidateCanDispatch() {
     return ValidateOperation(kDispatchAspects);
 }
 
-MaybeError CommandBufferStateTracker::ValidateCanDraw() {
+MaybeValError CommandBufferStateTracker::ValidateCanDraw() {
     DAWN_TRY(ValidateOperation(kDrawAspects));
     DAWN_INVALID_IF(GetRenderPipeline()->IsMeshPipeline(),
                     "%s is a mesh pipeline; draw with DrawMeshTasks.", GetRenderPipeline());
     return {};
 }
 
-MaybeError CommandBufferStateTracker::ValidateCanDrawIndexed() {
+MaybeValError CommandBufferStateTracker::ValidateCanDrawIndexed() {
     DAWN_TRY(ValidateOperation(kDrawIndexedAspects));
     DAWN_INVALID_IF(GetRenderPipeline()->IsMeshPipeline(),
                     "%s is a mesh pipeline; draw with DrawMeshTasks.", GetRenderPipeline());
     return {};
 }
 
-MaybeError CommandBufferStateTracker::ValidateCanDrawMeshTasks() {
+MaybeValError CommandBufferStateTracker::ValidateCanDrawMeshTasks() {
     DAWN_TRY(ValidateOperation(kDrawMeshTasksAspects));
     DAWN_INVALID_IF(!GetRenderPipeline()->IsMeshPipeline(),
                     "%s has no mesh stage; DrawMeshTasks needs a mesh pipeline.",
@@ -386,7 +386,7 @@ MaybeError CommandBufferStateTracker::ValidateCanDrawMeshTasks() {
     return {};
 }
 
-MaybeError CommandBufferStateTracker::ValidateNoDifferentTextureViewsOnSameTexture() {
+MaybeValError CommandBufferStateTracker::ValidateNoDifferentTextureViewsOnSameTexture() {
     // TODO(dawn:1855): Look into optimizations as flat_hash_map does many allocations
     absl::flat_hash_map<const TextureBase*, VectorOfTextureViews> textureToViews;
 
@@ -421,8 +421,9 @@ MaybeError CommandBufferStateTracker::ValidateNoDifferentTextureViewsOnSameTextu
     return {};
 }
 
-MaybeError CommandBufferStateTracker::ValidateBufferInRangeForVertexBuffer(uint32_t vertexCount,
-                                                                           uint32_t firstVertex) {
+MaybeValError CommandBufferStateTracker::ValidateBufferInRangeForVertexBuffer(
+    uint32_t vertexCount,
+    uint32_t firstVertex) {
     uint64_t strideCount = static_cast<uint64_t>(firstVertex) + vertexCount;
 
     if (strideCount == 0) {
@@ -466,7 +467,7 @@ MaybeError CommandBufferStateTracker::ValidateBufferInRangeForVertexBuffer(uint3
     return {};
 }
 
-MaybeError CommandBufferStateTracker::ValidateBufferInRangeForInstanceBuffer(
+MaybeValError CommandBufferStateTracker::ValidateBufferInRangeForInstanceBuffer(
     uint32_t instanceCount,
     uint32_t firstInstance) {
     uint64_t strideCount = static_cast<uint64_t>(firstInstance) + instanceCount;
@@ -513,8 +514,8 @@ MaybeError CommandBufferStateTracker::ValidateBufferInRangeForInstanceBuffer(
     return {};
 }
 
-MaybeError CommandBufferStateTracker::ValidateIndexBufferInRange(uint32_t indexCount,
-                                                                 uint32_t firstIndex) {
+MaybeValError CommandBufferStateTracker::ValidateIndexBufferInRange(uint32_t indexCount,
+                                                                    uint32_t firstIndex) {
     // Validate the range of index buffer
     // firstIndex and indexCount are in uint32_t, while IndexFormatSize is 2 (for
     // wgpu::IndexFormat::Uint16) or 4 (for wgpu::IndexFormat::Uint32), so by doing checks in
@@ -528,7 +529,7 @@ MaybeError CommandBufferStateTracker::ValidateIndexBufferInRange(uint32_t indexC
     return {};
 }
 
-MaybeError CommandBufferStateTracker::ValidateOperation(ValidationAspects requiredAspects) {
+MaybeValError CommandBufferStateTracker::ValidateOperation(ValidationAspects requiredAspects) {
     // Fast return-true path if everything is good
     ValidationAspects missingAspects = requiredAspects & ~mAspects;
     if (missingAspects.none()) {
@@ -614,7 +615,7 @@ void CommandBufferStateTracker::RecomputeLazyAspects(ValidationAspects aspects) 
     }
 }
 
-MaybeError CommandBufferStateTracker::CheckMissingAspects(ValidationAspects aspects) {
+MaybeValError CommandBufferStateTracker::CheckMissingAspects(ValidationAspects aspects) {
     if (!aspects.any()) {
         return {};
     }

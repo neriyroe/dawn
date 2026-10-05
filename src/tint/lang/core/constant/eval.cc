@@ -48,7 +48,9 @@
 #include "src/tint/lang/core/type/i32.h"
 #include "src/tint/lang/core/type/matrix.h"
 #include "src/tint/lang/core/type/struct.h"
+#include "src/tint/lang/core/type/u16.h"
 #include "src/tint/lang/core/type/u32.h"
+#include "src/tint/lang/core/type/u64.h"
 #include "src/tint/lang/core/type/vector.h"
 #include "src/tint/utils/containers/map.h"
 #include "src/tint/utils/containers/transform.h"
@@ -1141,6 +1143,11 @@ auto Eval::Det4Func(const Source& source, const core::type::Type* elem_ty) {
 }
 
 Eval::Result Eval::ArrayOrStructCtor(const core::type::Type* ty, VectorRef<const Value*> args) {
+    // Cannot evaluate a non-constructible type.
+    if (!ty->IsConstructible()) {
+        return nullptr;
+    }
+
     if (args.IsEmpty()) {
         return mgr.Zero(ty);
     }
@@ -1148,6 +1155,21 @@ Eval::Result Eval::ArrayOrStructCtor(const core::type::Type* ty, VectorRef<const
     if (args.Length() == 1 && args[0]->Type() == ty) {
         // Identity constructor.
         return args[0];
+    }
+
+    // Check if the arg count and types match before folding.
+    auto* invalid_type = mgr.types.invalid();
+    uint32_t invalid_count = std::numeric_limits<uint32_t>::max();
+    auto type_and_count = ty->Elements(invalid_type, invalid_count);
+    if (type_and_count.count == invalid_count || type_and_count.count != args.Length()) {
+        return nullptr;
+    }
+    uint32_t i = 0;
+    for (auto arg : args) {
+        auto* ele_ty = ty->Element(i++);
+        if (ele_ty != arg->Type()) {
+            return nullptr;
+        }
     }
 
     // Multiple arguments. Must be a value constructor.
@@ -1334,6 +1356,10 @@ Eval::Result Eval::bitcast(const core::type::Type* ty,
             [&](const core::type::F16*) -> tint::Result<SuccessType> {
                 return push_16_bits(element->ValueAs<f16>().BitsRepresentation());
             },
+            [&](const core::type::U16*) -> tint::Result<SuccessType> {
+                return push_16_bits(element->ValueAs<u16>());
+            },
+            [&](const core::type::U64*) -> tint::Result<SuccessType> { return Failure(); },
             TINT_ICE_ON_NO_MATCH);
     };
     if (src_count == 1) {
@@ -1395,6 +1421,15 @@ Eval::Result Eval::bitcast(const core::type::Type* ty,
                 els.Push(r.Get());
                 return true;
             },
+            [&](const core::type::U16*) {  //
+                auto r = CreateScalar(source, dst_el_ty, u16(v));
+                if (r != Success) {
+                    return false;
+                }
+                els.Push(r.Get());
+                return true;
+            },
+            [&](const core::type::U64*) { return false; },  //
             TINT_ICE_ON_NO_MATCH);
     };
 

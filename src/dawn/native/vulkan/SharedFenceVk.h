@@ -59,9 +59,9 @@ class SharedFence final : public SharedFenceBase {
     SharedFence(Device* device, StringView label, SystemHandle handle);
     void DestroyImpl(DestroyReason reason) override;
 
-    MaybeError ExportInfoImpl(UnpackedPtr<SharedFenceExportInfo>& info) const override;
+    MaybeValError ExportInfoImpl(UnpackedPtr<SharedFenceExportInfo>& info) const override;
 
-    wgpu::SharedFenceType mType;
+    wgpu::SharedFenceType mType{};
     SystemHandle mHandle;
 };
 

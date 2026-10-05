@@ -29,7 +29,7 @@
 
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 
 using namespace tint::core::number_suffixes;  // NOLINT
 using namespace tint::core::fluent_types;     // NOLINT
@@ -68,7 +68,7 @@ struct State {
                 auto* load = b.Load(lve->From());
                 auto* let = b.Let(load);
                 auto* access = b.Access(lve->Result()->Type(), let, lve->Index());
-                lve->Result()->ReplaceAllUsesWith(access->Result());
+                lve->Result()->ReplaceAllUsesWith(access);
             });
             lve->Destroy();
         }

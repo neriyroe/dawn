@@ -25,6 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <utility>
 #include <vector>
 
 #include "absl/types/span.h"  // TODO(343500108): Use std::span when we have C++20.
@@ -38,10 +39,10 @@ namespace dawn::wire::server {
 
 WireResult Server::DoAdapterRequestDevice(Known<WGPUAdapter> adapter,
                                           Known<WGPUInstance> instance,
-                                          WGPUFuture future,
+                                          Future future,
                                           ObjectHandle deviceHandle,
-                                          WGPUFuture deviceLostFuture,
-                                          const WGPUDeviceDescriptor* descriptor) {
+                                          Future deviceLostFuture,
+                                          const DeviceDescriptor* descriptor) {
     Reserved<WGPUDevice> device;
     WIRE_TRY(Allocate(&device, deviceHandle, AllocationState::Reserved));
 
@@ -49,14 +50,13 @@ WireResult Server::DoAdapterRequestDevice(Known<WGPUAdapter> adapter,
     userdata->instanceId = instance.id;
     userdata->future = future;
     userdata->device = device.AsHandle();
-    userdata->deviceLostFuture = deviceLostFuture;
 
     // Update the descriptor with the device lost callback associated with this request.
     auto deviceLostUserdata = MakeUserdata<DeviceLostUserdata>();
     deviceLostUserdata->instanceId = instance.id;
     deviceLostUserdata->future = deviceLostFuture;
 
-    WGPUDeviceDescriptor desc = *descriptor;
+    WGPUDeviceDescriptor desc = *ToAPI(descriptor);
     desc.deviceLostCallbackInfo =
         MakeCallbackInfo<WGPUDeviceLostCallbackInfo, &Server::OnDeviceLost>(
             deviceLostUserdata.release());
@@ -66,7 +66,7 @@ WireResult Server::DoAdapterRequestDevice(Known<WGPUAdapter> adapter,
             DeviceInfo* info = static_cast<DeviceInfo*>(userdata);
             {
                 auto serverGuard = info->server->GetGuard();
-                info->server->OnUncapturedError(info->self, type, message);
+                info->server->OnUncapturedError(info->self, FromAPI(type), FromAPI(message));
             }
             info->server->Flush();
         },
@@ -75,23 +75,23 @@ WireResult Server::DoAdapterRequestDevice(Known<WGPUAdapter> adapter,
     mProcs->adapterRequestDevice(
         adapter->handle, &desc,
         MakeCallbackInfo<WGPURequestDeviceCallbackInfo, &Server::OnRequestDeviceCallback,
-                         WGPUCallbackMode_AllowSpontaneous>(userdata.release()));
+                         wgpu::CallbackMode::AllowSpontaneous>(userdata.release()));
     return WireResult::Success;
 }
 
 void Server::OnRequestDeviceCallback(RequestDeviceUserdata* data,
-                                     WGPURequestDeviceStatus status,
+                                     wgpu::RequestDeviceStatus status,
                                      WGPUDevice device,
-                                     WGPUStringView message) {
+                                     StringView message) {
     ReturnAdapterRequestDeviceCallbackCmd cmd = {};
     cmd.instanceId = data->instanceId;
     cmd.future = data->future;
     cmd.status = status;
     cmd.message = message;
 
-    if (status != WGPURequestDeviceStatus_Success) {
+    if (status != wgpu::RequestDeviceStatus::Success) {
         DAWN_ASSERT(device == nullptr);
-        SerializeCommand(cmd);
+        SerializeCommand(std::move(cmd));
         return;
     }
 
@@ -99,24 +99,21 @@ void Server::OnRequestDeviceCallback(RequestDeviceUserdata* data,
     // features that were enabled must also be supported by the wire.
     // Note: We fail the callback here, instead of immediately upon receiving
     // the request to preserve callback ordering.
-    FreeMembers<WGPUSupportedFeatures> supportedFeatures(mProcs);
-    mProcs->deviceGetFeatures(device, &supportedFeatures);
-    // SAFETY: WebGPU API guarantees that the returned features are valid.
-    Span<const WGPUFeatureName> DAWN_UNSAFE_BUFFERS(
-        features(supportedFeatures.features, supportedFeatures.featureCount));
-    for (WGPUFeatureName feature : features) {
-        if (!IsFeatureSupported(feature)) {
+    FreeMembers<SupportedFeatures> supportedFeatures(mProcs);
+    mProcs->deviceGetFeatures(device, ToAPI(&supportedFeatures));
+    for (wgpu::FeatureName feature : supportedFeatures.features) {
+        if (!IsFeatureSupported(ToAPI(feature))) {
             // Release the device.
             mProcs->deviceRelease(device);
             device = nullptr;
 
-            cmd.status = WGPURequestDeviceStatus_Error;
-            cmd.message = ToOutputStringView("Requested feature not supported.");
-            SerializeCommand(cmd);
+            cmd.status = wgpu::RequestDeviceStatus::Error;
+            cmd.message = "Requested feature not supported.";
+            SerializeCommand(std::move(cmd));
             return;
         }
     }
-    cmd.features = features;
+    cmd.features = supportedFeatures.features;
 
     // Query and report the adapter limits, including all known extension limits.
     // TODO(crbug.com/421950205): Use dawn::utils::ComboLimits here.
@@ -130,21 +127,21 @@ void Server::OnRequestDeviceCallback(RequestDeviceUserdata* data,
     compatLimits.chain.next = &texelCopyBufferRowAlignmentLimits.chain;
 
     mProcs->deviceGetLimits(device, &limits);
-    cmd.limits = &limits;
+    cmd.limits = FromAPI(&limits);
 
     // Assign the handle and allocated status if the device is created successfully.
     Known<WGPUDevice> reservation;
     if (FillReservation(data->device, device, &reservation) == WireResult::FatalError) {
-        cmd.status = WGPURequestDeviceStatus_CallbackCancelled;
-        cmd.message = ToOutputStringView("Destroyed before request was fulfilled.");
-        SerializeCommand(cmd);
+        cmd.status = wgpu::RequestDeviceStatus::CallbackCancelled;
+        cmd.message = "Destroyed before request was fulfilled.";
+        SerializeCommand(std::move(cmd));
         return;
     }
     DAWN_ASSERT(reservation.data != nullptr);
     reservation->info->server = this;
     reservation->info->self = reservation.AsHandle();
     SetForwardingDeviceCallbacks(reservation);
-    SerializeCommand(cmd);
+    SerializeCommand(std::move(cmd));
 }
 
 }  // namespace dawn::wire::server

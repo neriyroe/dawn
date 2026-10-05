@@ -32,7 +32,7 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/traverse.h"
 #include "src/tint/lang/core/ir/unreachable.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/manager.h"
 #include "src/tint/lang/hlsl/ir/builtin_call.h"
 
@@ -147,7 +147,7 @@ struct State {
                 for (uint32_t i = 0; i < arr->ConstantCount().value(); i++) {
                     args.Push(el);
                 }
-                return b.Construct(arr, std::move(args))->Result();
+                return b.Construct(arr, std::move(args));
             },
             [&](const core::type::Struct* s) {
                 Vector<core::ir::Value*, 8> args;
@@ -158,7 +158,7 @@ struct State {
                         args.Push(b.Zero(member->Type()));
                     }
                 }
-                return b.Construct(s, std::move(args))->Result();
+                return b.Construct(s, std::move(args));
             },
             TINT_ICE_ON_NO_MATCH);
     }

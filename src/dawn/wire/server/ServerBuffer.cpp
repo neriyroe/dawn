@@ -79,8 +79,8 @@ WireResult Server::PreHandleBufferDestroy(const BufferDestroyCmd& cmd) {
 
 WireResult Server::DoBufferMapAsync(Known<WGPUBuffer> buffer,
                                     Known<WGPUInstance> instance,
-                                    WGPUFuture future,
-                                    WGPUMapMode mode,
+                                    Future future,
+                                    wgpu::MapMode mode,
                                     size_t offset,
                                     size_t size) {
     // These requests are just forwarded to the buffer, with userdata containing what the
@@ -88,7 +88,6 @@ WireResult Server::DoBufferMapAsync(Known<WGPUBuffer> buffer,
     std::unique_ptr<MapUserdata> userdata = MakeUserdata<MapUserdata>();
     userdata->buffer = buffer.AsHandle();
     userdata->instanceId = instance.id;
-    userdata->bufferObj = buffer->handle;
     userdata->future = future;
     userdata->mode = mode;
 
@@ -103,7 +102,7 @@ WireResult Server::DoBufferMapAsync(Known<WGPUBuffer> buffer,
     userdata->size = size;
 
     mProcs->bufferMapAsync(
-        buffer->handle, mode, offset, size,
+        buffer->handle, ToAPI(mode), offset, size,
         MakeCallbackInfo<WGPUBufferMapCallbackInfo, &Server::OnBufferMapAsyncCallback>(
             userdata.release()));
 
@@ -111,15 +110,55 @@ WireResult Server::DoBufferMapAsync(Known<WGPUBuffer> buffer,
 }
 
 WireResult Server::DoDeviceCreateBuffer(Known<WGPUDevice> device,
-                                        const WGPUBufferDescriptor* descriptor,
+                                        const BufferDescriptor* descriptor,
                                         ObjectHandle bufferHandle,
                                         Span<const std::byte> memoryHandleCreateInfo) {
     // Create and register the buffer object.
     Reserved<WGPUBuffer> buffer;
     WIRE_TRY(Allocate(&buffer, bufferHandle));
-    buffer->handle = mProcs->deviceCreateBuffer(device->handle, descriptor);
-    buffer->usage = descriptor->usage;
-    buffer->mappedAtCreation = (descriptor->mappedAtCreation != 0u);
+    buffer->usage = ToAPI(descriptor->usage);
+    buffer->mappedAtCreation = descriptor->mappedAtCreation;
+
+    bool isMappable =
+        descriptor->mappedAtCreation != 0u ||
+        ((descriptor->usage & (wgpu::BufferUsage::MapRead | wgpu::BufferUsage::MapWrite)) !=
+         wgpu::BufferUsage::None);
+
+    // If the buffer is not mappable, create it normally without shared memory.
+    if (!isMappable) {
+        buffer->handle = mProcs->deviceCreateBuffer(device->handle, ToAPI(descriptor));
+        return WireResult::Success;
+    }
+
+    // Return `FatalError` if we fail to deserialize the memory handle.
+    std::unique_ptr<MemoryTransferService::MemoryHandle> memoryHandle =
+        mMemoryTransferService->DeserializeMemoryHandle(memoryHandleCreateInfo);
+    if (memoryHandle == nullptr) {
+        buffer->handle = mProcs->deviceCreateBuffer(device->handle, ToAPI(descriptor));
+        return WireResult::FatalError;
+    }
+
+    // Try to wrap the shared memory into a buffer. Note that:
+    // - `TryWrapInBuffer()` may return a valid buffer, an error buffer or nullptr to align with the
+    //   behavior of `DeviceBase::APICreateBuffer()`.
+    // - When a valid buffer is returned, `beginAccess()` must have been called on it.
+    // - Index/indirect buffers are not supported to prevent the TOCTOU issue with races between
+    //   GPU-side validation and the client modifying the buffer.
+    if (!(descriptor->usage & (wgpu::BufferUsage::Indirect | wgpu::BufferUsage::Index))) {
+        buffer->handle =
+            memoryHandle->TryWrapInBuffer(mProcs.get(), device->handle, ToAPI(descriptor));
+    }
+    if (buffer->handle != nullptr) {
+        buffer->backedWithSharedMemory = true;
+        return buffer->mapState.Use([&](auto mapState) {
+            mapState->memoryHandle = std::move(memoryHandle);
+            return WireResult::Success;
+        });
+    } else {
+        // Returning `nullptr` from `TryWrapInBuffer()` indicates that we failed to wrap the shared
+        // memory into a buffer. Try to create it normally without shared memory.
+        buffer->handle = mProcs->deviceCreateBuffer(device->handle, ToAPI(descriptor));
+    }
 
     // A null buffer indicates that mapping-at-creation failed inside createBuffer. Unmark the
     // buffer as allocated so we will skip freeing it.
@@ -129,17 +168,6 @@ WireResult Server::DoDeviceCreateBuffer(Known<WGPUDevice> device,
         return WireResult::Success;
     }
 
-    bool isMappable =
-        descriptor->mappedAtCreation != 0u ||
-        (descriptor->usage & (WGPUBufferUsage_MapRead | WGPUBufferUsage_MapWrite)) != 0u;
-
-    std::unique_ptr<MemoryTransferService::MemoryHandle> memoryHandle = nullptr;
-    if (isMappable) {
-        memoryHandle = mMemoryTransferService->DeserializeMemoryHandle(memoryHandleCreateInfo);
-        if (memoryHandle == nullptr) {
-            return WireResult::FatalError;
-        }
-    }
     return buffer->mapState.Use([&](auto mapState) {
         mapState->memoryHandle = std::move(memoryHandle);
         return WireResult::Success;
@@ -152,6 +180,11 @@ WireResult Server::DoBufferUpdateMappedData(Known<WGPUBuffer> buffer,
                                             size_t size) {
     if (size == WGPU_WHOLE_MAP_SIZE) {
         return WireResult::FatalError;
+    }
+
+    // Buffers backed with shared memory are directly shared with client; no deserialization needed.
+    if (buffer->backedWithSharedMemory) {
+        return WireResult::Success;
     }
 
     return buffer->mapState.Use([&](auto mapState) {
@@ -187,8 +220,8 @@ WireResult Server::DoBufferUpdateMappedData(Known<WGPUBuffer> buffer,
 }
 
 void Server::OnBufferMapAsyncCallback(MapUserdata* data,
-                                      WGPUMapAsyncStatus status,
-                                      WGPUStringView message) {
+                                      wgpu::MapAsyncStatus status,
+                                      StringView message) {
     // Skip sending the callback if the buffer has already been destroyed.
     Known<WGPUBuffer> buffer;
     if (Get(data->buffer.id, &buffer) != WireResult::Success ||
@@ -196,7 +229,7 @@ void Server::OnBufferMapAsyncCallback(MapUserdata* data,
         return;
     }
 
-    bool isSuccess = status == WGPUMapAsyncStatus_Success;
+    bool isSuccess = status == wgpu::MapAsyncStatus::Success;
 
     ReturnBufferMapAsyncCallbackCmd cmd = {};
     cmd.instanceId = data->instanceId;
@@ -205,17 +238,24 @@ void Server::OnBufferMapAsyncCallback(MapUserdata* data,
     cmd.message = message;
 
     if (!isSuccess) {
-        SerializeCommand(cmd);
+        SerializeCommand(std::move(cmd));
         return;
     }
 
     switch (data->mode) {
-        case WGPUMapMode_Read: {
+        case wgpu::MapMode::Read: {
             DAWN_ASSERT(data->size != WGPU_WHOLE_MAP_SIZE);  // Validated in DoBufferMapAsync.
+
+            // Buffers backed with shared memory are directly shared with client; no deserialization
+            // needed.
+            if (buffer->backedWithSharedMemory) {
+                SerializeCommand(std::move(cmd));
+                break;
+            }
 
             buffer->mapState.Use([&](auto mapState) {
                 const std::byte* mappedData = static_cast<const std::byte*>(
-                    mProcs->bufferGetConstMappedRange(data->bufferObj, data->offset, data->size));
+                    mProcs->bufferGetConstMappedRange(buffer->handle, data->offset, data->size));
 
                 // SAFETY: If GetConstMappedRange with size != WGPU_WHOLE_MAP_SIZE returns non-null,
                 // it points to at least `size` valid bytes.
@@ -223,28 +263,21 @@ void Server::OnBufferMapAsyncCallback(MapUserdata* data,
 
                 size_t dataUpdateInfoLength =
                     mapState->memoryHandle->GetSerializeDataUpdateSize(data->offset, data->size);
-                // SAFETY: This Span is NEVER supposed to be read/serialized, so nullptr is fine.
-                // The member is not serialized because skip_serialize, but is a Span so that on
-                // the deserialization side we have a well-formed member.
-                // TODO(https://crbug.com/542275488): Clean these up if when we update command
-                // extension serialization to serialize into this span directly.
-                cmd.readDataUpdateInfo = DAWN_UNSAFE_BUFFERS(Span<const std::byte>(
-                    static_cast<const std::byte*>(nullptr), dataUpdateInfoLength));
-                SerializeCommand(cmd,
-                                 // Extensions to replace fields skipped by skip_serialize.
-                                 CommandExtension{dataUpdateInfoLength,
-                                                  [&](Span<volatile std::byte> serializeBuffer) {
-                                                      // The in-flight map request returned
-                                                      // successfully.
-                                                      mapState->memoryHandle->SerializeDataUpdate(
-                                                          serializeBuffer, data->offset, data->size,
-                                                          mappedRange);
-                                                  }});
+                SerializeCommand(
+                    std::move(cmd),
+                    // Extensions to replace fields skipped by skip_serialize.
+                    CommandExtension<&ReturnBufferMapAsyncCallbackCmd::readDataUpdateInfo>{
+                        dataUpdateInfoLength, [&](Span<volatile std::byte> serializeBuffer) {
+                            // The in-flight map request returned
+                            // successfully.
+                            mapState->memoryHandle->SerializeDataUpdate(
+                                serializeBuffer, data->offset, data->size, mappedRange);
+                        }});
             });
             break;
         }
-        case WGPUMapMode_Write: {
-            SerializeCommand(cmd);
+        case wgpu::MapMode::Write: {
+            SerializeCommand(std::move(cmd));
             break;
         }
         default:

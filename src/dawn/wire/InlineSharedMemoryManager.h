@@ -45,11 +45,16 @@ namespace dawn::wire {
 
 // Identifies a SharedMemory reference in an InlineSharedMemoryManager.
 using SharedMemoryID = TypedInteger<struct SharedMemoryIDT, uint64_t>;
+static constexpr SharedMemoryID kInvalidSharedMemoryID = SharedMemoryID(0u);
+
+struct SharedMemoryHandle {
+    SharedMemoryID id = kInvalidSharedMemoryID;
+};
 
 // A ref-counted shared memory allocation.
 class SharedMemory : public RefCounted {
   public:
-    SharedMemory(SystemHandle handle, Span<std::byte> data);
+    SharedMemory(SystemHandle handle, Span<std::byte> data, uint64_t allocatedSize);
     ~SharedMemory() override;
 
     Span<std::byte> GetMappedSpan() const { return mData; }
@@ -57,9 +62,13 @@ class SharedMemory : public RefCounted {
     // The underlying OS handle of the shared memory.
     const SystemHandle& GetSystemHandle() const { return mHandle; }
 
+    // The real size of the OS allocation, which may be larger than GetMappedSpan().size().
+    uint64_t GetAllocatedSize() const { return mAllocatedSize; }
+
   private:
     SystemHandle mHandle;
     Span<std::byte> mData;
+    uint64_t mAllocatedSize = 0u;
 };
 
 // `InlineSharedMemoryManager` manages all the shared memory allocations for inline memory transfer
@@ -69,7 +78,8 @@ class InlineSharedMemoryManager {
     InlineSharedMemoryManager();
     virtual ~InlineSharedMemoryManager();
 
-    // Creates a new `SharedMemory` of at least `size` bytes.
+    // Creates a new `SharedMemory` of at least `size` bytes. Implementations must guarantee that
+    // the returned memory is zero-initialized.
     virtual Ref<SharedMemory> CreateSharedMemory(size_t size);
 
     // Registers `sharedMemory` for the transfer through dawn wire and returns a unique ID assigned

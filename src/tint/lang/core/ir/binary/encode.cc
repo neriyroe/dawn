@@ -36,6 +36,7 @@
 #include "src/tint/lang/core/constant/splat.h"
 #include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/ir/access.h"
+#include "src/tint/lang/core/ir/array_count.h"
 #include "src/tint/lang/core/ir/break_if.h"
 #include "src/tint/lang/core/ir/constexpr_if.h"
 #include "src/tint/lang/core/ir/construct.h"
@@ -63,7 +64,6 @@
 #include "src/tint/lang/core/ir/store_vector_element.h"
 #include "src/tint/lang/core/ir/switch.h"
 #include "src/tint/lang/core/ir/swizzle.h"
-#include "src/tint/lang/core/ir/type/array_count.h"
 #include "src/tint/lang/core/ir/unreachable.h"
 #include "src/tint/lang/core/ir/user_call.h"
 #include "src/tint/lang/core/ir/var.h"
@@ -830,10 +830,6 @@ struct Encoder {
     void ConstantValueSplat(pb::ConstantValueSplat& splat_out,
                             const core::constant::Splat* splat_in) {
         splat_out.set_type(Type(splat_in->type));
-        if (DAWN_UNLIKELY(splat_in->count > internal_limits::kMaxArrayConstructorElements)) {
-            err_ << "array constructor has excessive number of elements (>"
-                 << internal_limits::kMaxArrayConstructorElements << ")\n";
-        }
         splat_out.set_elements(ConstantValue(splat_in->el));
         splat_out.set_count(static_cast<uint32_t>(splat_in->count));
     }
@@ -1168,6 +1164,8 @@ struct Encoder {
                 return pb::BuiltinValue::clip_distances;
             case core::BuiltinValue::kPrimitiveIndex:
                 return pb::BuiltinValue::primitive_index;
+            case core::BuiltinValue::kViewIndex:
+                return pb::BuiltinValue::view_index;
             case core::BuiltinValue::kBarycentricCoord:
                 return pb::BuiltinValue::barycentric_coord;
             case core::BuiltinValue::kUndefined:

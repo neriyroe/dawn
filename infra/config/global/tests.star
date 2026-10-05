@@ -199,6 +199,8 @@ targets.tests.gtest_test(
     ],
     args = [
         "--adapter-vendor-id=0x1414",
+        # TODO(crbug.com/565837005): Enable once GCE image enables developer mode
+        # "--assert-developer-mode",
     ],
     binary = "dawn_end2end_tests",
 )
@@ -251,14 +253,11 @@ targets.tests.isolated_script_test(
     binary = "dawn_node_cts",
 )
 
-# This is run as a gtest instead of an isolated script since on the bots
-# these are used more as a smoke test/to ensure that they continue to run
-# rather than for actual perf results.
 targets.tests.gtest_test(
     name = "dawn_perf_tests",
     mixins = [
         "result_adapter_gtest_json",
-        "true_noop_merge",
+        "dawn_perf_tests_merge",
         targets.mixin(
             linux_args = [
                 "--no-xvfb",
@@ -270,7 +269,13 @@ targets.tests.gtest_test(
         "--test-launcher-jobs=1",
         "--test-launcher-retry-limit=0",
         # Tell the tests to only run one step for faster iteration.
+        # TODO(crbug.com/563012573): A single step keeps CQ runtime low, but it
+        # bypasses calibration, so both the warmup run and each of the
+        # kNumTrials trials execute only one step. Once results are trending in
+        # perfgate, use the per-trial variance to decide whether the step count
+        # needs to be raised (or calibration re-enabled) for a stable signal.
         "--override-steps=1",
+        "--perf-results-file=${ISOLATED_OUTDIR}/dawn_perf_results.json",
     ],
     binary = "dawn_perf_tests",
 )
@@ -334,8 +339,23 @@ targets.tests.isolated_script_test(
         "true_noop_merge",
     ],
     args = [
-        "-check",
+        "check",
         "-ir",
+    ],
+    binary = "fuzzer_corpus_tests",
+)
+
+targets.tests.isolated_script_test(
+    name = "tint_ir_mesa_fuzzer_corpus_check_tests",
+    mixins = [
+        "result_adapter_single",
+        "tint_fuzzer_corpus_common_args",
+        "true_noop_merge",
+    ],
+    args = [
+        "check",
+        "-ir",
+        "-mesa",
     ],
     binary = "fuzzer_corpus_tests",
 )
@@ -349,7 +369,24 @@ targets.tests.isolated_script_test(
         "tint_ir_merge",
     ],
     args = [
+        "generate",
         "-ir",
+    ],
+    binary = "fuzzer_corpus_tests",
+)
+
+targets.tests.isolated_script_test(
+    name = "tint_ir_mesa_fuzzer_corpus_generate_tests",
+    mixins = [
+        "result_adapter_single",
+        "tint_fuzzer_corpus_common_args",
+        "tint_fuzzer_corpus_generate_args",
+        "tint_ir_mesa_merge",
+    ],
+    args = [
+        "generate",
+        "-ir",
+        "-mesa",
     ],
     binary = "fuzzer_corpus_tests",
 )
@@ -378,7 +415,28 @@ targets.tests.isolated_script_test(
         ),
     ],
     args = [
-        "-check",
+        "check",
+    ],
+    binary = "fuzzer_corpus_tests",
+)
+
+targets.tests.isolated_script_test(
+    name = "tint_wgsl_mesa_fuzzer_corpus_check_tests",
+    mixins = [
+        "result_adapter_single",
+        "tint_fuzzer_corpus_common_args",
+        "true_noop_merge",
+        targets.mixin(
+            swarming = targets.swarming(
+                # These tests normally take ~15 minutes, but can flakily hit the
+                # default 20 minute I/O timeout and cannot currently be sharded.
+                io_timeout_sec = 1800,
+            ),
+        ),
+    ],
+    args = [
+        "check",
+        "-mesa",
     ],
     binary = "fuzzer_corpus_tests",
 )
@@ -390,6 +448,24 @@ targets.tests.isolated_script_test(
         "tint_fuzzer_corpus_common_args",
         "tint_fuzzer_corpus_generate_args",
         "tint_wgsl_merge",
+    ],
+    args = [
+        "generate",
+    ],
+    binary = "fuzzer_corpus_tests",
+)
+
+targets.tests.isolated_script_test(
+    name = "tint_wgsl_mesa_fuzzer_corpus_generate_tests",
+    mixins = [
+        "result_adapter_single",
+        "tint_fuzzer_corpus_common_args",
+        "tint_fuzzer_corpus_generate_args",
+        "tint_wgsl_mesa_merge",
+    ],
+    args = [
+        "generate",
+        "-mesa",
     ],
     binary = "fuzzer_corpus_tests",
 )

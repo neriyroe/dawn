@@ -41,20 +41,20 @@ using IR_AccessTest = IRTestHelper;
 using IR_AccessDeathTest = IR_AccessTest;
 
 TEST_F(IR_AccessTest, SetsUsage) {
-    auto* type = ty.ptr<function, i32>();
+    auto* type = ty.ptr(function, ty.vec2u());
     auto* var = b.Var(type);
     auto* idx = b.Constant(u32(1));
-    auto* a = b.Access(ty.i32(), var, idx);
+    auto* a = b.Access(ty.i32(), var, idx)->AsInstruction<Access>();
 
     EXPECT_THAT(var->Result()->UsagesUnsorted(), testing::UnorderedElementsAre(Usage{a, 0u}));
     EXPECT_THAT(idx->UsagesUnsorted(), testing::UnorderedElementsAre(Usage{a, 1u}));
 }
 
 TEST_F(IR_AccessTest, Result) {
-    auto* type = ty.ptr<function, i32>();
+    auto* type = ty.ptr(function, ty.vec2u());
     auto* var = b.Var(type);
     auto* idx = b.Constant(u32(1));
-    auto* a = b.Access(ty.i32(), var, idx);
+    auto* a = b.Access(ty.i32(), var, idx)->AsInstruction<Access>();
 
     EXPECT_EQ(a->Results().Length(), 1u);
 
@@ -67,19 +67,19 @@ TEST_F(IR_AccessDeathTest, Fail_NullType) {
         {
             Module mod;
             Builder b{mod};
-            auto* ty = (mod.Types().ptr<function, i32>());
-            auto* var = b.Var(ty);
+            auto* type = (mod.Types().ptr(function, ty.vec2u()));
+            auto* var = b.Var(type);
             b.Access(nullptr, var, u32(1));
         },
         "internal compiler error");
 }
 
 TEST_F(IR_AccessTest, Clone) {
-    auto* type = ty.ptr<function, i32>();
+    auto* type = ty.ptr(function, ty.array(ty.vec4u(), 2));
     auto* var = b.Var(type);
     auto* idx1 = b.Constant(u32(1));
     auto* idx2 = b.Constant(u32(2));
-    auto* a = b.Access(type, var, idx1, idx2);
+    auto* a = b.Access(type, var, idx1, idx2)->AsInstruction<Access>();
 
     auto* new_a = clone_ctx.Clone(a);
 
@@ -102,9 +102,9 @@ TEST_F(IR_AccessTest, Clone) {
 }
 
 TEST_F(IR_AccessTest, CloneNoIndices) {
-    auto* type = ty.ptr<function, i32>();
+    auto* type = ty.ptr(function, ty.i32());
     auto* var = b.Var(type);
-    auto* a = b.Access(type, var);
+    auto* a = b.Access(type, var)->AsInstruction<Access>();
 
     auto* new_a = clone_ctx.Clone(a);
 

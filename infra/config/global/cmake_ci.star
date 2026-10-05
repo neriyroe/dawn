@@ -31,6 +31,7 @@ load("@chromium-luci//builder_config.star", "builder_config")
 load("@chromium-luci//ci.star", "ci")
 load("@chromium-luci//consoles.star", "consoles")
 load("@chromium-luci//gardener_rotations.star", "gardener_rotations")
+load("@chromium-luci//gpu.star", "gpu")
 load("//cmake_shared.star", "cmake_builder_defaults")
 load("//constants.star", "siso")
 
@@ -38,8 +39,7 @@ ci.defaults.set(
     executable = "recipe:dawn/cmake",
     builder_group = "ci",
     bucket = "ci",
-    pool = "luci.chromium.gpu.ci",
-    builderless = True,
+    pool = gpu.ci.POOL,
     triggered_by = ["primary-poller"],
     build_numbers = True,
     contact_team_email = "chrome-gpu-infra@google.com",
@@ -54,7 +54,7 @@ ci.defaults.set(
 
 def dawn_ci_linux_cmake_builder(**kwargs):
     kwargs = cmake_builder_defaults.apply_linux_cmake_builder_defaults(kwargs)
-    ci.builder(**kwargs)
+    gpu.ci.linux_builder(**kwargs)
 
 def dawn_ci_mac_cmake_builder(**kwargs):
     """Adds a Dawn/Mac/CMake CI builder.
@@ -63,7 +63,7 @@ def dawn_ci_mac_cmake_builder(**kwargs):
         **kwargs: Builder arguments to forward on to ci.builder()
     """
     kwargs = cmake_builder_defaults.apply_mac_cmake_builder_defaults(kwargs)
-    ci.builder(**kwargs)
+    gpu.ci.mac_builder(**kwargs)
 
 def dawn_ci_win_cmake_builder(**kwargs):
     """Adds a Dawn/Win/CMake CI builder.
@@ -72,7 +72,7 @@ def dawn_ci_win_cmake_builder(**kwargs):
         **kwargs: Builder arguments to forward on to ci.builder()
     """
     kwargs = cmake_builder_defaults.apply_win_cmake_builder_defaults(kwargs)
-    ci.builder(**kwargs)
+    gpu.ci.windows_builder(**kwargs)
 
 dawn_ci_linux_cmake_builder(
     name = "dawn-linux-x64-sws-cmake-dbg",
@@ -171,14 +171,14 @@ dawn_ci_linux_cmake_builder(
 )
 
 dawn_ci_mac_cmake_builder(
-    name = "dawn-mac-x64-sws-cmake-dbg",
-    description_html = "Compiles and tests debug Dawn test binaries for Mac/x64 using CMake and Clang",
+    name = "dawn-mac-arm64-sw-cmake-dbg",
+    description_html = "Compiles and tests debug Dawn test binaries for Mac/arm64 using CMake and Clang",
     schedule = "triggered",
     properties = {
         "asan": False,
         "clang": True,
         "debug": True,
-        "target_cpu": "x64",
+        "target_cpu": "arm64",
         "ubsan": False,
     },
     # Not actually used by the recipe, but needed for chromium-luci mirroring
@@ -191,26 +191,26 @@ dawn_ci_mac_cmake_builder(
         chromium_config = builder_config.chromium_config(
             config = "dawn_base",
             build_config = builder_config.build_config.DEBUG,
-            target_arch = builder_config.target_arch.INTEL,
+            target_arch = builder_config.target_arch.ARM,
             target_bits = 64,
             target_platform = builder_config.target_platform.MAC,
         ),
     ),
     console_view_entry = consoles.console_view_entry(
         category = "mac|build|clang|cmake|dbg",
-        short_name = "x64",
+        short_name = "a64",
     ),
 )
 
 dawn_ci_mac_cmake_builder(
-    name = "dawn-mac-x64-sws-cmake-rel",
-    description_html = "Compiles and tests release Dawn test binaries for Mac/x64 using CMake and Clang",
+    name = "dawn-mac-arm64-sw-cmake-rel",
+    description_html = "Compiles and tests release Dawn test binaries for Mac/arm64 using CMake and Clang",
     schedule = "triggered",
     properties = {
         "asan": False,
         "clang": True,
         "debug": False,
-        "target_cpu": "x64",
+        "target_cpu": "arm64",
         "ubsan": False,
     },
     # Not actually used by the recipe, but needed for chromium-luci mirroring
@@ -223,14 +223,14 @@ dawn_ci_mac_cmake_builder(
         chromium_config = builder_config.chromium_config(
             config = "dawn_base",
             build_config = builder_config.build_config.RELEASE,
-            target_arch = builder_config.target_arch.INTEL,
+            target_arch = builder_config.target_arch.ARM,
             target_bits = 64,
             target_platform = builder_config.target_platform.MAC,
         ),
     ),
     console_view_entry = consoles.console_view_entry(
         category = "mac|build|clang|cmake|rel",
-        short_name = "x64",
+        short_name = "a64",
     ),
 )
 

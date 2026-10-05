@@ -35,7 +35,7 @@
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/traverse.h"
 #include "src/tint/lang/core/ir/user_call.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/ir/var.h"
 #include "src/tint/lang/core/type/external_texture.h"
 #include "src/tint/utils/containers/reverse.h"
@@ -64,7 +64,7 @@ struct RootModuleScopeVar {
 /// These roots are passed by pointer parameter.
 struct RootPtrParameter {
     /// The parameter pointer type
-    const type::Pointer* type = nullptr;
+    const core::type::Pointer* type = nullptr;
 
     /// @return a hash value for this object
     tint::HashCode HashCode() const { return Hash(type); }
@@ -79,7 +79,7 @@ using AccessRoot = std::variant<RootModuleScopeVar, RootPtrParameter>;
 /// MemberAccess is an access operator to a struct member.
 struct MemberAccess {
     /// The member being accessed
-    const type::StructMember* member;
+    const core::type::StructMember* member;
 
     /// @return a hash member for this object
     tint::HashCode HashCode() const { return Hash(member); }
@@ -403,13 +403,13 @@ struct State {
                             args.Push(chain.view_length);
                         }
                         auto* values = b.Construct(array, std::move(args));
-                        new_args.Push(values->Result());
+                        new_args.Push(values);
                     }
                     // If the chain access contains indices, then pass these as an array of u32.
                     if (size_t array_len = chain.indices.Length(); array_len > 0) {
                         auto* array = ty.array(ty.u32(), static_cast<uint32_t>(array_len));
                         auto* indices = b.Construct(array, std::move(chain.indices));
-                        new_args.Push(indices->Result());
+                        new_args.Push(indices);
                     }
                     // Record the parameter shape for the variant's signature.
                     signature.Add(i, chain.shape);
@@ -491,7 +491,7 @@ struct State {
 
                             // For each access operation...
                             for (auto idx : access->Indices()) {
-                                if (auto* str = obj_ty->As<type::Struct>()) {
+                                if (auto* str = obj_ty->As<core::type::Struct>()) {
                                     // Struct type accesses must be constant, representing the index
                                     // of the member being accessed.
                                     TINT_IR_ASSERT(ir, idx->Is<Constant>());
@@ -504,8 +504,8 @@ struct State {
 
                                 // Array or matrix access.
                                 // Convert index to u32 if it isn't already.
-                                if (!idx->Type()->Is<type::U32>()) {
-                                    idx = b.Convert(ty.u32(), idx)->Result();
+                                if (!idx->Type()->Is<core::type::U32>()) {
+                                    idx = b.Convert(ty.u32(), idx);
                                 }
 
                                 ops.Push(IndexAccess{});
@@ -566,8 +566,8 @@ struct State {
                                 chain.shape.root = RootModuleScopeVar{var};
                             } else {
                                 // Root pointer is a function-scope 'var'
-                                chain.shape.root =
-                                    RootPtrParameter{var->Result()->Type()->As<type::Pointer>()};
+                                chain.shape.root = RootPtrParameter{
+                                    var->Result()->Type()->As<core::type::Pointer>()};
                             }
                             chain.root_ptr = var->Result();
                             return nullptr;
@@ -577,7 +577,7 @@ struct State {
                 },
                 [&](FunctionParam* param) {
                     // Root pointer is a parameter of the caller
-                    chain.shape.root = RootPtrParameter{param->Type()->As<type::Pointer>()};
+                    chain.shape.root = RootPtrParameter{param->Type()->As<core::type::Pointer>()};
                     chain.root_ptr = param;
                     return nullptr;
                 },  //
@@ -672,7 +672,7 @@ struct State {
                     // Handle types are passed by value, turn them into a pointer type for the
                     // access chain call.
                     auto* access_type = old_param->Type();
-                    if (!access_type->Is<type::Pointer>()) {
+                    if (!access_type->Is<core::type::Pointer>()) {
                         TINT_IR_ASSERT(ir, access_type->IsHandle());
                         access_type = ty.ptr<handle>(access_type);
                     }
@@ -683,20 +683,21 @@ struct State {
                     auto chain = Transform(shape->ops, [&](const AccessOp& op) -> Value* {
                         if (auto* v = std::get_if<BufferViewAccess>(&op)) {
                             has_view = true;
-                            Value* offset = b.Access(ty.u32(), args_param, 0_u)->Result();
+                            Value* offset = b.Access(ty.u32(), args_param, 0_u);
                             Value* size = nullptr;
                             Value* length = nullptr;
                             if (v->fn == BuiltinFn::kBufferArrayView) {
-                                size = b.Access(ty.u32(), args_param, 1_u)->Result();
+                                size = b.Access(ty.u32(), args_param, 1_u);
                             }
                             if (v->has_length) {
                                 length = b.Access(ty.u32(), args_param,
-                                                  (v->fn == BuiltinFn::kBufferView ? 1_u : 2_u))
-                                             ->Result();
+                                                  (v->fn == BuiltinFn::kBufferView ? 1_u : 2_u));
                             }
-                            auto* call = b.CallExplicit(
-                                v->type, v->fn, Vector<TemplateParameter, 1>{v->type->UnwrapPtr()},
-                                replacement);
+                            auto* call =
+                                b.CallExplicit(v->type, v->fn,
+                                               Vector<TemplateParameter, 1>{v->type->UnwrapPtr()},
+                                               replacement)
+                                    ->AsInstruction<Call>();
                             call->AppendArg(offset);
                             if (size) {
                                 call->AppendArg(size);
@@ -714,22 +715,21 @@ struct State {
                             return b.Constant(u32(m->member->Index()));
                         }
                         auto* access = b.Access(ty.u32(), indices_param, u32(index_index++));
-                        return access->Result();
+                        return access;
                     });
 
                     if (has_view) {
                         if (chain.Length() > 1) {
                             replacement = b.Access(access_type, root_ptr,
-                                                   ToVector<8>(chain.AsSpan().subspan(1)))
-                                              ->Result();
+                                                   ToVector<8>(chain.AsSpan().subspan(1)));
                         }
                     } else {
-                        replacement = b.Access(access_type, root_ptr, std::move(chain))->Result();
+                        replacement = b.Access(access_type, root_ptr, std::move(chain));
                     }
                 }
 
                 // Replaced handles need the final load after the access chain.
-                if (!old_param->Type()->Is<type::Pointer>()) {
+                if (!old_param->Type()->Is<core::type::Pointer>()) {
                     replacement = b.Load(replacement)->Result();
                 }
 
@@ -760,7 +760,7 @@ struct State {
         }
     }
 
-    bool TransformHandle(const type::Type* param) const {
+    bool TransformHandle(const core::type::Type* param) const {
         if (!param->IsHandle()) {
             return false;
         }
@@ -768,7 +768,7 @@ struct State {
             return true;
         }
         return options.transform_handle == HandleTransformLevel::kExternal &&
-               param->Is<type::ExternalTexture>();
+               param->Is<core::type::ExternalTexture>();
     }
 
     /// @return true if @p param is a parameter that requires transforming, based on the
@@ -777,7 +777,7 @@ struct State {
     bool NeedsTransforming(FunctionParam* param) const {
         auto* param_type = param->Type();
 
-        if (auto* ptr = param_type->As<type::Pointer>()) {
+        if (auto* ptr = param_type->As<core::type::Pointer>()) {
             // DVA needs to be updated if handles start to be passed by pointer.
             TINT_IR_ASSERT(ir, ptr->AddressSpace() != core::AddressSpace::kHandle);
             switch (ptr->AddressSpace()) {

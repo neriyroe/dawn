@@ -33,7 +33,7 @@
 #include "src/tint/lang/core/fluent_types.h"  // IWYU pragma: export
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/binding_array.h"
 
 namespace tint::glsl::writer::raise {
@@ -141,8 +141,7 @@ struct State {
         // chain to get to the variable is a mix of loads and accesses (but don't have guarantees on
         // their order). There is at most one load and one access so the recursion is bounded.
         return Switch(
-            val->As<core::ir::InstructionResult>()->Instruction(),
-            [&](core::ir::Var* var) -> TextureVariablePath { return {var}; },
+            val->AsInstruction(), [&](core::ir::Var* var) -> TextureVariablePath { return {var}; },
             [&](core::ir::Load* load) -> TextureVariablePath {
                 return PathForTexture(load->From());
             },
@@ -195,7 +194,7 @@ struct State {
             b.Access(ty.ptr<uniform>(ty.vec4u()), texture_uniform_data_, u32(0), index_in_array);
         auto* vec4_value = b.Load(vec4_ptr);
         auto* u32_value = b.Access(ty.u32(), vec4_value, index_in_vector);
-        return u32_value->Result();
+        return u32_value;
     }
 
     Result<SuccessType> TextureFromUniform(core::ir::BuiltinCall* call) {

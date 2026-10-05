@@ -74,6 +74,8 @@ tint_add_target(tint_lang_core_ir_transform lib
   lang/core/ir/transform/multiplanar_external_texture.cc
   lang/core/ir/transform/multiplanar_external_texture.h
   lang/core/ir/transform/multiplanar_options.h
+  lang/core/ir/transform/polyfill_bool_vector_dynamic_stores.cc
+  lang/core/ir/transform/polyfill_bool_vector_dynamic_stores.h
   lang/core/ir/transform/prepare_immediate_data.cc
   lang/core/ir/transform/prepare_immediate_data.h
   lang/core/ir/transform/preserve_padding.cc
@@ -102,8 +104,6 @@ tint_add_target(tint_lang_core_ir_transform lib
   lang/core/ir/transform/signed_integer_polyfill.h
   lang/core/ir/transform/single_entry_point.cc
   lang/core/ir/transform/single_entry_point.h
-  lang/core/ir/transform/std140.cc
-  lang/core/ir/transform/std140.h
   lang/core/ir/transform/substitute_overrides.cc
   lang/core/ir/transform/substitute_overrides.h
   lang/core/ir/transform/value_to_let.cc
@@ -123,7 +123,7 @@ tint_target_add_dependencies(tint_lang_core_ir_transform lib
   tint_lang_core_intrinsic
   tint_lang_core_ir
   tint_lang_core_ir_analysis
-  tint_lang_core_ir_type
+  tint_lang_core_ir_validator
   tint_lang_core_type
   tint_utils
   tint_utils_containers
@@ -166,6 +166,7 @@ tint_add_target(tint_lang_core_ir_transform_test test
   lang/core/ir/transform/helper_test.h
   lang/core/ir/transform/lower_swizzle_view_test.cc
   lang/core/ir/transform/multiplanar_external_texture_test.cc
+  lang/core/ir/transform/polyfill_bool_vector_dynamic_stores_test.cc
   lang/core/ir/transform/prepare_immediate_data_test.cc
   lang/core/ir/transform/preserve_padding_test.cc
   lang/core/ir/transform/prevent_infinite_loops_test.cc
@@ -178,7 +179,6 @@ tint_add_target(tint_lang_core_ir_transform_test test
   lang/core/ir/transform/robustness_test.cc
   lang/core/ir/transform/signed_integer_polyfill_test.cc
   lang/core/ir/transform/single_entry_point_test.cc
-  lang/core/ir/transform/std140_test.cc
   lang/core/ir/transform/substitute_overrides_test.cc
   lang/core/ir/transform/value_to_let_test.cc
   lang/core/ir/transform/vectorize_scalar_matrix_constructors_test.cc
@@ -193,7 +193,7 @@ tint_target_add_dependencies(tint_lang_core_ir_transform_test test
   tint_lang_core_intrinsic
   tint_lang_core_ir
   tint_lang_core_ir_transform
-  tint_lang_core_ir_type
+  tint_lang_core_ir_validator
   tint_lang_core_type
   tint_utils
   tint_utils_containers
@@ -237,7 +237,6 @@ tint_add_target(tint_lang_core_ir_transform_fuzz fuzz
   lang/core/ir/transform/rename_conflicts_fuzz.cc
   lang/core/ir/transform/robustness_fuzz.cc
   lang/core/ir/transform/single_entry_point_fuzz.cc
-  lang/core/ir/transform/std140_fuzz.cc
   lang/core/ir/transform/substitute_overrides_fuzz.cc
   lang/core/ir/transform/value_to_let_fuzz.cc
   lang/core/ir/transform/vectorize_scalar_matrix_constructors_fuzz.cc
@@ -251,9 +250,9 @@ tint_target_add_dependencies(tint_lang_core_ir_transform_fuzz fuzz
   tint_lang_core_constant
   tint_lang_core_ir
   tint_lang_core_ir_transform
+  tint_lang_core_ir_validator
   tint_lang_core_type
   tint_utils
-  tint_utils_bytes
   tint_utils_containers
   tint_utils_diagnostic
   tint_utils_ice

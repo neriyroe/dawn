@@ -27,8 +27,11 @@
 
 #include "src/tint/lang/glsl/writer/printer/printer.h"
 
+#include <algorithm>
+#include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "src/tint/lang/core/constant/splat.h"
 #include "src/tint/lang/core/enums.h"
@@ -61,7 +64,7 @@
 #include "src/tint/lang/core/ir/terminate_invocation.h"
 #include "src/tint/lang/core/ir/unreachable.h"
 #include "src/tint/lang/core/ir/user_call.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/ir/var.h"
 #include "src/tint/lang/core/type/array.h"
 #include "src/tint/lang/core/type/binding_array.h"
@@ -228,7 +231,7 @@ class Printer : public tint::TextGenerator {
         struct_to_padding_struct_ids_;
 
     /// Block to emit for a continuing
-    std::function<void()> emit_continuing_;
+    std::vector<std::unique_ptr<std::function<void()>>> emit_continuing_;
 
     /// @returns `true` if @p ident should be renamed
     bool ShouldRename(std::string_view ident) {
@@ -469,10 +472,10 @@ class Printer : public tint::TextGenerator {
         }
     }
 
-    void EmitVectorAccess(StringStream& out, const core::ir::Value* index) {
+    void EmitVectorAccess(StringStream& out, const core::ir::Value* index, uint32_t max) {
         if (auto* cnst = index->As<core::ir::Constant>()) {
             out << ".";
-            IdxToComponent(out, cnst->Value()->ValueAs<uint32_t>());
+            IdxToComponent(out, std::min(cnst->Value()->ValueAs<uint32_t>(), max));
         } else {
             out << "[";
             EmitValue(out, index);
@@ -484,7 +487,8 @@ class Printer : public tint::TextGenerator {
         auto out = Line();
 
         EmitValue(out, s->To());
-        EmitVectorAccess(out, s->Index());
+        EmitVectorAccess(out, s->Index(),
+                         s->To()->Type()->UnwrapPtr()->As<core::type::Vector>()->Width() - 1);
         out << " = ";
         EmitValue(out, s->Value());
         out << ";";
@@ -492,7 +496,8 @@ class Printer : public tint::TextGenerator {
 
     void EmitLoadVectorElement(StringStream& out, const core::ir::LoadVectorElement* l) {
         EmitValue(out, l->From());
-        EmitVectorAccess(out, l->Index());
+        EmitVectorAccess(out, l->Index(),
+                         l->From()->Type()->UnwrapPtr()->As<core::type::Vector>()->Width() - 1);
     }
 
     void EmitSwizzle(StringStream& out, const core::ir::Swizzle* swizzle) {
@@ -506,8 +511,9 @@ class Printer : public tint::TextGenerator {
     void EmitDiscard() { Line() << "discard;"; }
 
     void EmitContinue(const core::ir::Continue* c) {
-        if (emit_continuing_) {
-            emit_continuing_();
+        if (!emit_continuing_.empty()) {
+            auto fn = emit_continuing_.back().get();
+            (*fn)();
         }
         if (c->Block() != c->Loop()->Body()) {
             Line() << "continue;";
@@ -527,18 +533,17 @@ class Printer : public tint::TextGenerator {
         //   }
         // }
 
-        auto emit_continuing = [&] {
-            Line() << "{";
-            {
-                const ScopedIndent si(current_buffer_);
-                EmitBlock(l->Continuing());
-            }
-            Line() << "}";
-        };
-        TINT_SCOPED_ASSIGNMENT(emit_continuing_, emit_continuing);
-
         Line() << "{";
         {
+            emit_continuing_.push_back(std::make_unique<std::function<void()>>([&] {
+                Line() << "{";
+                {
+                    const ScopedIndent si(current_buffer_);
+                    EmitBlock(l->Continuing());
+                }
+                Line() << "}";
+            }));
+
             ScopedIndent init(current_buffer_);
             EmitBlock(l->Initializer());
 
@@ -548,6 +553,8 @@ class Printer : public tint::TextGenerator {
                 EmitBlock(l->Body());
             }
             Line() << "}";
+
+            emit_continuing_.pop_back();
         }
         Line() << "}";
     }
@@ -632,8 +639,8 @@ class Printer : public tint::TextGenerator {
                     out << "." << NameOf(member);
                     current_type = member->Type();
                 },
-                [&](const core::type::Vector*) {  //
-                    EmitVectorAccess(out, index);
+                [&](const core::type::Vector* vec) {  //
+                    EmitVectorAccess(out, index, vec->Width() - 1);
                 },
                 [&](Default) {
                     out << "[";
@@ -1232,12 +1239,11 @@ class Printer : public tint::TextGenerator {
                 EmitExtension(kOESSampleVariables);
             }
 
-            if (attrs.builtin == tint::core::BuiltinValue::kFragDepth) {
+            if (options_.has_gl_ext_conservative_depth &&
+                attrs.builtin == tint::core::BuiltinValue::kFragDepth) {
                 if (attrs.depth_mode == core::BuiltinDepthMode::kGreater ||
                     attrs.depth_mode == core::BuiltinDepthMode::kLess) {
-                    if (options_.version.IsES()) {
-                        EmitExtension(kEXTConservativeDepth);
-                    }
+                    EmitExtension(kEXTConservativeDepth);
                     std::string depth_layout_qualifier =
                         (attrs.depth_mode == core::BuiltinDepthMode::kGreater) ? "depth_greater"
                                                                                : "depth_less";

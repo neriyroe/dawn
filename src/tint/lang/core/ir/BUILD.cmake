@@ -37,7 +37,7 @@
 include(lang/core/ir/analysis/BUILD.cmake)
 include(lang/core/ir/binary/BUILD.cmake)
 include(lang/core/ir/transform/BUILD.cmake)
-include(lang/core/ir/type/BUILD.cmake)
+include(lang/core/ir/validator/BUILD.cmake)
 
 ################################################################################
 # Target:    tint_lang_core_ir
@@ -46,6 +46,8 @@ include(lang/core/ir/type/BUILD.cmake)
 tint_add_target(tint_lang_core_ir lib
   lang/core/ir/access.cc
   lang/core/ir/access.h
+  lang/core/ir/array_count.cc
+  lang/core/ir/array_count.h
   lang/core/ir/binary.cc
   lang/core/ir/binary.h
   lang/core/ir/block.cc
@@ -98,16 +100,12 @@ tint_add_target(tint_lang_core_ir lib
   lang/core/ir/function.h
   lang/core/ir/function_param.cc
   lang/core/ir/function_param.h
-  lang/core/ir/functional_validator.cc
-  lang/core/ir/functional_validator.h
   lang/core/ir/if.cc
   lang/core/ir/if.h
   lang/core/ir/instruction.cc
   lang/core/ir/instruction.h
   lang/core/ir/instruction_result.cc
   lang/core/ir/instruction_result.h
-  lang/core/ir/io_attribute_validator.cc
-  lang/core/ir/io_attribute_validator.h
   lang/core/ir/let.cc
   lang/core/ir/let.h
   lang/core/ir/load.cc
@@ -141,8 +139,6 @@ tint_add_target(tint_lang_core_ir lib
   lang/core/ir/store.h
   lang/core/ir/store_vector_element.cc
   lang/core/ir/store_vector_element.h
-  lang/core/ir/structural_validator.cc
-  lang/core/ir/structural_validator.h
   lang/core/ir/switch.cc
   lang/core/ir/switch.h
   lang/core/ir/swizzle.cc
@@ -160,8 +156,6 @@ tint_add_target(tint_lang_core_ir lib
   lang/core/ir/unused.h
   lang/core/ir/user_call.cc
   lang/core/ir/user_call.h
-  lang/core/ir/validator.cc
-  lang/core/ir/validator.h
   lang/core/ir/value.cc
   lang/core/ir/value.h
   lang/core/ir/var.cc
@@ -173,7 +167,6 @@ tint_target_add_dependencies(tint_lang_core_ir lib
   tint_lang_core
   tint_lang_core_constant
   tint_lang_core_intrinsic
-  tint_lang_core_ir_type
   tint_lang_core_type
   tint_utils
   tint_utils_containers
@@ -242,15 +235,6 @@ tint_add_target(tint_lang_core_ir_test test
   lang/core/ir/traverse_test.cc
   lang/core/ir/unreachable_test.cc
   lang/core/ir/user_call_test.cc
-  lang/core/ir/validator_access_test.cc
-  lang/core/ir/validator_builtin_test.cc
-  lang/core/ir/validator_call_test.cc
-  lang/core/ir/validator_flow_control_test.cc
-  lang/core/ir/validator_function_test.cc
-  lang/core/ir/validator_test.cc
-  lang/core/ir/validator_test.h
-  lang/core/ir/validator_type_test.cc
-  lang/core/ir/validator_value_test.cc
   lang/core/ir/value_test.cc
   lang/core/ir/var_test.cc
 )
@@ -261,7 +245,6 @@ tint_target_add_dependencies(tint_lang_core_ir_test test
   tint_lang_core_constant
   tint_lang_core_intrinsic
   tint_lang_core_ir
-  tint_lang_core_ir_type
   tint_lang_core_type
   tint_utils
   tint_utils_containers

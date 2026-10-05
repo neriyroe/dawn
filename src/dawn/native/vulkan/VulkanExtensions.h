@@ -110,6 +110,7 @@ enum class DeviceExt : uint32_t {
     ImageDrmFormatModifier,
     Swapchain,
     HdrMetadata,
+    SwapchainMutableFormat,
     QueueFamilyForeign,
     Robustness2,
     DisplayTiming,

@@ -676,32 +676,33 @@ void Buffer::DestroyImpl(DestroyReason reason) {
 
     if (mHostMappedDisposeCallback) {
         struct DisposeTask : TrackTaskCallback {
-            DisposeTask(std::unique_ptr<Heap> heap, wgpu::Callback callback, void* userdata)
+            DisposeTask(std::unique_ptr<Heap> heap, wgpu::Callback callback, raw_ptr<void> userdata)
                 : TrackTaskCallback(nullptr),
                   heap(std::move(heap)),
                   callback(callback),
-                  userdata(userdata) {}
+                  userdata(std::move(userdata)) {}
             ~DisposeTask() override = default;
 
             void FinishImpl() override {
                 heap = nullptr;
-                callback(userdata);
+                callback(userdata.ExtractAsDangling());
             }
             void HandleDeviceLossImpl() override {
                 heap = nullptr;
-                callback(userdata);
+                callback(userdata.ExtractAsDangling());
             }
             void HandleShutDownImpl() override {
                 heap = nullptr;
-                callback(userdata);
+                callback(userdata.ExtractAsDangling());
             }
 
             std::unique_ptr<Heap> heap;
             wgpu::Callback callback;
-            raw_ptr<void, DisableDanglingPtrDetection> userdata;
+            raw_ptr<void> userdata;
         };
-        std::unique_ptr<DisposeTask> request = std::make_unique<DisposeTask>(
-            std::move(mHostMappedHeap), mHostMappedDisposeCallback, mHostMappedDisposeUserdata);
+        std::unique_ptr<DisposeTask> request =
+            std::make_unique<DisposeTask>(std::move(mHostMappedHeap), mHostMappedDisposeCallback,
+                                          std::move(mHostMappedDisposeUserdata));
         mHostMappedDisposeCallback = nullptr;
         mHostMappedHeap = nullptr;
 
@@ -837,7 +838,7 @@ MaybeError Buffer::ClearBuffer(CommandRecordingContext* commandContext,
     if (GetInternalUsage() & wgpu::BufferUsage::MapWrite) {
         DAWN_TRY(MapInternal(true, static_cast<size_t>(offset), static_cast<size_t>(size),
                              "D3D12 map at clear buffer"));
-        std::ranges::fill(mMappedData, std::byte(clearValue));
+        mMappedData.FillBytes(std::byte(clearValue));
         UnmapImpl(GetState(), BufferState::Unmapped);
     } else if (clearValue == 0u) {
         DAWN_TRY(device->ClearBufferToZero(commandContext, this, offset, size));
@@ -847,7 +848,7 @@ MaybeError Buffer::ClearBuffer(CommandRecordingContext* commandContext,
         DAWN_TRY(device->GetDynamicUploader()->WithUploadReservation(
             size, kCopyBufferToBufferOffsetAlignment,
             [&](UploadReservation reservation) -> MaybeError {
-                std::ranges::fill(reservation.mappedData, std::byte(clearValue));
+                reservation.mappedData.FillBytes(std::byte(clearValue));
                 device->CopyFromStagingToBufferHelper(commandContext, reservation.buffer.Get(),
                                                       reservation.offsetInBuffer, this, offset,
                                                       size);

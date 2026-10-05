@@ -767,8 +767,7 @@ TEST_F(IRToProgramRenameConflictsTest, NoModify_BuiltinScalar_ShadowedBy_FnVar) 
 %f = func():i32 {
   $B1: {
     %f32:ptr<function, i32, read_write> = var undef
-    %3:i32 = construct
-    ret %3
+    ret 0i
   }
 }
 )";
@@ -794,8 +793,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_BuiltinScalar_ShadowedBy_FnVar) 
 %f = func():i32 {
   $B1: {
     %i32:ptr<function, i32, read_write> = var undef
-    %3:i32 = construct
-    ret %3
+    ret 0i
   }
 }
 )";
@@ -805,8 +803,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_BuiltinScalar_ShadowedBy_FnVar) 
 %f = func():i32 {
   $B1: {
     %i32_1:ptr<function, i32, read_write> = var undef
-    %3:i32 = construct
-    ret %3
+    ret 0i
   }
 }
 )";
@@ -819,8 +816,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_BuiltinScalar_ShadowedBy_FnVar) 
 TEST_F(IRToProgramRenameConflictsTest, NoModify_BuiltinScalar_ShadowedBy_NamedInst) {
     auto* fn = b.Function("f", ty.i32());
     b.Append(fn->Block(), [&] {
-        auto* i = b.Add(1_i, 2_i);
-        b.ir.SetName(i, "i32");
+        auto* i = b.Let("i32", 1_i);
 
         b.Return(fn, i);
     });
@@ -828,7 +824,7 @@ TEST_F(IRToProgramRenameConflictsTest, NoModify_BuiltinScalar_ShadowedBy_NamedIn
     auto* src = R"(
 %f = func():i32 {
   $B1: {
-    %i32:i32 = add 1i, 2i
+    %i32:i32 = let 1i
     ret %i32
   }
 }
@@ -845,8 +841,7 @@ TEST_F(IRToProgramRenameConflictsTest, NoModify_BuiltinScalar_ShadowedBy_NamedIn
 TEST_F(IRToProgramRenameConflictsTest, Conflict_BuiltinScalar_ShadowedBy_NamedInst) {
     auto* fn = b.Function("f", ty.f32());
     b.Append(fn->Block(), [&] {
-        auto* i = b.Add(1_i, 2_i);
-        b.ir.SetName(i, "f32");
+        auto* i = b.Let("f32", 1_i);
 
         b.Return(fn, b.Convert(ty.f32(), i));
     });
@@ -854,7 +849,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_BuiltinScalar_ShadowedBy_NamedIn
     auto* src = R"(
 %f = func():f32 {
   $B1: {
-    %f32:i32 = add 1i, 2i
+    %f32:i32 = let 1i
     %3:f32 = convert %f32
     ret %3
   }
@@ -865,7 +860,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_BuiltinScalar_ShadowedBy_NamedIn
     auto* expect = R"(
 %f = func():f32 {
   $B1: {
-    %f32_1:i32 = add 1i, 2i
+    %f32_1:i32 = let 1i
     %3:f32 = convert %f32_1
     ret %3
   }
@@ -975,7 +970,8 @@ TEST_F(IRToProgramRenameConflictsTest, NoModify_BuiltinFn_ShadowedBy_RootBlockVa
 
     auto* fn = b.Function("f", ty.i32());
     b.Append(fn->Block(), [&] {  //
-        auto* res = b.Max(1_i, 2_i)->Result();
+        auto* l = b.Let("l", 1_i);
+        auto* res = b.Max(l, 2_i);
         b.Return(fn, res);
     });
 
@@ -986,8 +982,9 @@ $B1: {  # root
 
 %f = func():i32 {
   $B2: {
-    %3:i32 = max 1i, 2i
-    ret %3
+    %l:i32 = let 1i
+    %4:i32 = max %l, 2i
+    ret %4
   }
 }
 )";
@@ -1008,7 +1005,8 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_BuiltinFn_ShadowedBy_RootBlockVa
 
     auto* fn = b.Function("f", ty.i32());
     b.Append(fn->Block(), [&] {  //
-        auto* res = b.Max(1_i, 2_i)->Result();
+        auto* l = b.Let("l", 1_i);
+        auto* res = b.Max(l, 2_i);
         b.Return(fn, res);
     });
 
@@ -1019,8 +1017,9 @@ $B1: {  # root
 
 %f = func():i32 {
   $B2: {
-    %3:i32 = max 1i, 2i
-    ret %3
+    %l:i32 = let 1i
+    %4:i32 = max %l, 2i
+    ret %4
   }
 }
 )";
@@ -1033,8 +1032,9 @@ $B1: {  # root
 
 %f = func():i32 {
   $B2: {
-    %3:i32 = max 1i, 2i
-    ret %3
+    %l:i32 = let 1i
+    %4:i32 = max %l, 2i
+    ret %4
   }
 }
 )";

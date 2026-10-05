@@ -32,7 +32,7 @@
 #include "src/tint/lang/core/fluent_types.h"  // IWYU pragma: export
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/glsl/builtin_fn.h"
 #include "src/tint/lang/glsl/ir/builtin_call.h"
 
@@ -147,8 +147,8 @@ struct State {
     }
 
     void ReplaceBitcast(core::ir::CoreBuiltinCall* bitcast) {
-        b.InsertBefore(bitcast,
-                       [&] { b.ConvertWithResult(bitcast->DetachResult(), bitcast->Args()[0]); });
+        b.InsertBefore(
+            bitcast, [&] { b.ConvertReplaceResult(bitcast->DetachResult(), bitcast->Args()[0]); });
         bitcast->Destroy();
     }
 
@@ -196,7 +196,7 @@ struct State {
                         auto* right =
                             b.Call<glsl::ir::BuiltinCall>(ty.u32(), glsl::BuiltinFn::kPackFloat2X16,
                                                           b.Swizzle(ty.vec2h(), input, {2, 3}));
-                        packed = b.Construct(ty.vec2u(), left, right)->Result();
+                        packed = b.Construct(ty.vec2u(), left, right);
                     } else {
                         TINT_IR_UNREACHABLE(ir);
                     }
@@ -277,7 +277,7 @@ struct State {
                             ty.vec2h(), glsl::BuiltinFn::kUnpackFloat2X16,
                             b.Swizzle(ty.u32(), conv, {1}));
 
-                        val = b.Construct(dst_f16_type, left, right)->Result();
+                        val = b.Construct(dst_f16_type, left, right);
                     } else {
                         val = b.Call<glsl::ir::BuiltinCall>(ty.vec2h(),
                                                             glsl::BuiltinFn::kUnpackFloat2X16, conv)

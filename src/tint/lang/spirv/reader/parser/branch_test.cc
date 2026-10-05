@@ -140,8 +140,7 @@ TEST_F(SpirvParserTest, BranchConditional_Empty) {
               R"(
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
-    %2:bool = or true, true
-    if %2 [t: $B2, f: $B3] {  # if_1
+    if true [t: $B2, f: $B3] {  # if_1
       $B2: {  # true
         exit_if  # if_1
       }
@@ -272,10 +271,9 @@ TEST_F(SpirvParserTest, BranchConditional_TrueMatchesFalse) {
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
     %2:i32 = let 1i
-    %3:bool = or true, true
-    if %3 [t: $B2, f: $B3] {  # if_1
+    if true [t: $B2, f: $B3] {  # if_1
       $B2: {  # true
-        %4:i32 = let 2i
+        %3:i32 = let 2i
         ret
       }
       $B3: {  # false
@@ -612,16 +610,15 @@ TEST_F(SpirvParserTest, BranchConditional_HoistingMultiExit_FromMiddle) {
   $B1: {
     %2:i32 = loop [b: $B2, c: $B3] {  # loop_1
       $B2: {  # body
-        %3:bool = or true, true
-        if %3 [t: $B4, f: $B5] {  # if_1
+        if true [t: $B4, f: $B5] {  # if_1
           $B4: {  # true
-            %4:i32 = spirv.add<i32> 1i, 2i
+            %3:i32 = spirv.add<i32> 1i, 2i
             if true [t: $B6, f: $B7] {  # if_2
               $B6: {  # true
-                exit_loop %4  # loop_1
+                exit_loop %3  # loop_1
               }
               $B7: {  # false
-                exit_loop %4  # loop_1
+                exit_loop %3  # loop_1
               }
             }
             unreachable
@@ -636,7 +633,7 @@ TEST_F(SpirvParserTest, BranchConditional_HoistingMultiExit_FromMiddle) {
         next_iteration  # -> $B2
       }
     }
-    %5:i32 = let %2
+    %4:i32 = let %2
     ret
   }
 }
@@ -807,11 +804,10 @@ TEST_F(SpirvParserTest, BranchConditional_DuplicateTrue_UsedValue) {
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
     %2:i32 = let 1i
-    %3:bool = or true, true
-    if %3 [t: $B2, f: $B3] {  # if_1
+    if true [t: $B2, f: $B3] {  # if_1
       $B2: {  # true
-        %4:i32 = let 2i
-        %5:i32 = let %4
+        %3:i32 = let 2i
+        %4:i32 = let %3
         ret
       }
       $B3: {  # false
@@ -1716,8 +1712,7 @@ TEST_F(SpirvParserTest, Loop_Infinite_BranchConditional) {
   $B1: {
     loop [b: $B2, c: $B3] {  # loop_1
       $B2: {  # body
-        %2:bool = or true, true
-        if %2 [t: $B4, f: $B5] {  # if_1
+        if true [t: $B4, f: $B5] {  # if_1
           $B4: {  # true
             continue  # -> $B3
           }
@@ -2940,8 +2935,7 @@ TEST_F(SpirvParserTest, Loop_Continue_HasBreakUnless) {
         unreachable
       }
       $B3: {  # continuing
-        %2:bool = not false
-        break_if %2  # -> [t: exit_loop loop_1, f: $B2]
+        break_if true  # -> [t: exit_loop loop_1, f: $B2]
       }
     }
     ret
@@ -3261,8 +3255,7 @@ TEST_F(SpirvParserTest, Loop_Loop_InnerContinueBreaks) {
                 unreachable
               }
               $B7: {  # continuing
-                %2:bool = not true
-                break_if %2  # -> [t: exit_loop loop_2, f: $B6]
+                break_if false  # -> [t: exit_loop loop_2, f: $B6]
               }
             }
             continue  # -> $B3
@@ -3683,8 +3676,7 @@ TEST_F(SpirvParserTest, Loop_SingleBlock_BothBackedge) {
     loop [b: $B2, c: $B3] {  # loop_1
       $B2: {  # body
         %3:i32 = spirv.add<i32> 2i, 2i
-        %4:bool = or true, true
-        if %4 [t: $B4, f: $B5] {  # if_1
+        if true [t: $B4, f: $B5] {  # if_1
           $B4: {  # true
             continue  # -> $B3
           }
@@ -3698,7 +3690,7 @@ TEST_F(SpirvParserTest, Loop_SingleBlock_BothBackedge) {
         next_iteration  # -> $B2
       }
     }
-    %5:i32 = spirv.add<i32> 3i, 3i
+    %4:i32 = spirv.add<i32> 3i, 3i
     ret
   }
 }
@@ -3975,8 +3967,7 @@ TEST_F(SpirvParserTest, Loop_Never) {
     loop [b: $B2, c: $B3] {  # loop_1
       $B2: {  # body
         %2:i32 = spirv.add<i32> 1i, 1i
-        %3:bool = or true, true
-        if %3 [t: $B4, f: $B5] {  # if_1
+        if true [t: $B4, f: $B5] {  # if_1
           $B4: {  # true
             exit_loop  # loop_1
           }
@@ -3990,7 +3981,7 @@ TEST_F(SpirvParserTest, Loop_Never) {
         next_iteration  # -> $B2
       }
     }
-    %4:i32 = spirv.add<i32> 3i, 3i
+    %3:i32 = spirv.add<i32> 3i, 3i
     ret
   }
 }
@@ -4806,8 +4797,7 @@ TEST_F(SpirvParserTest, Branch_LoopBreak_MultiBlockLoop_FromContinueConstructEnd
       }
       $B3: {  # continuing
         %2:i32 = spirv.add<i32> 1i, 1i
-        %3:bool = not true
-        break_if %3  # -> [t: exit_loop loop_1, f: $B2]
+        break_if false  # -> [t: exit_loop loop_1, f: $B2]
       }
     }
     ret
@@ -4862,8 +4852,7 @@ TEST_F(SpirvParserTest, Branch_LoopBreak_FromContinueConstructTail) {
         unreachable
       }
       $B3: {  # continuing
-        %2:bool = not true
-        break_if %2  # -> [t: exit_loop loop_1, f: $B2]
+        break_if false  # -> [t: exit_loop loop_1, f: $B2]
       }
     }
     ret
@@ -5348,11 +5337,10 @@ TEST_F(SpirvParserTest, BranchConditional_Back_MultiBlock_LoopBreak_OnFalse) {
         continue  # -> $B3
       }
       $B3: {  # continuing
-        %4:bool = not true
-        break_if %4  # -> [t: exit_loop loop_1, f: $B2]
+        break_if false  # -> [t: exit_loop loop_1, f: $B2]
       }
     }
-    %5:i32 = spirv.add<i32> 3i, 3i
+    %4:i32 = spirv.add<i32> 3i, 3i
     ret
   }
 }
@@ -5408,8 +5396,7 @@ TEST_F(SpirvParserTest, BranchConditional_SwitchBreak_SwitchBreak_NotLastInCase)
         if true [t: $B4, f: $B5] {  # if_1
           $B4: {  # true
             %4:i32 = spirv.add<i32> 3i, 3i
-            %5:bool = or false, true
-            if %5 [t: $B6, f: $B7] {  # if_2
+            if true [t: $B6, f: $B7] {  # if_2
               $B6: {  # true
                 exit_switch  # switch_1
               }
@@ -5423,11 +5410,11 @@ TEST_F(SpirvParserTest, BranchConditional_SwitchBreak_SwitchBreak_NotLastInCase)
             exit_if  # if_1
           }
         }
-        %6:i32 = spirv.add<i32> 1i, 2i
+        %5:i32 = spirv.add<i32> 1i, 2i
         exit_switch  # switch_1
       }
     }
-    %7:i32 = spirv.add<i32> 1i, 3i
+    %6:i32 = spirv.add<i32> 1i, 3i
     ret
   }
 }
@@ -5749,8 +5736,7 @@ TEST_F(SpirvParserTest, BranchConditional_LoopBreak_SingleBlock_LoopBreak) {
     loop [b: $B2, c: $B3] {  # loop_1
       $B2: {  # body
         %3:i32 = spirv.add<i32> 2i, 2i
-        %4:bool = or true, true
-        if %4 [t: $B4, f: $B5] {  # if_1
+        if true [t: $B4, f: $B5] {  # if_1
           $B4: {  # true
             exit_loop  # loop_1
           }
@@ -5764,7 +5750,7 @@ TEST_F(SpirvParserTest, BranchConditional_LoopBreak_SingleBlock_LoopBreak) {
         next_iteration  # -> $B2
       }
     }
-    %5:i32 = spirv.add<i32> 1i, 3i
+    %4:i32 = spirv.add<i32> 1i, 3i
     ret
   }
 }
@@ -5812,8 +5798,7 @@ TEST_F(SpirvParserTest, BranchConditional_LoopBreak_MultiBlock_LoopBreak) {
       $B2: {  # body
         %3:i32 = spirv.add<i32> 2i, 2i
         %4:i32 = spirv.add<i32> 3i, 3i
-        %5:bool = or true, true
-        if %5 [t: $B4, f: $B5] {  # if_1
+        if true [t: $B4, f: $B5] {  # if_1
           $B4: {  # true
             exit_loop  # loop_1
           }
@@ -5827,7 +5812,7 @@ TEST_F(SpirvParserTest, BranchConditional_LoopBreak_MultiBlock_LoopBreak) {
         next_iteration  # -> $B2
       }
     }
-    %6:i32 = spirv.add<i32> 1i, 3i
+    %5:i32 = spirv.add<i32> 1i, 3i
     ret
   }
 }
@@ -6173,8 +6158,7 @@ TEST_F(SpirvParserTest, BranchConditional_Continue_Continue_FromHeader) {
     loop [b: $B2, c: $B3] {  # loop_1
       $B2: {  # body
         %3:i32 = spirv.add<i32> 2i, 2i
-        %4:bool = or true, true
-        if %4 [t: $B4, f: $B5] {  # if_1
+        if true [t: $B4, f: $B5] {  # if_1
           $B4: {  # true
             continue  # -> $B3
           }
@@ -6185,11 +6169,11 @@ TEST_F(SpirvParserTest, BranchConditional_Continue_Continue_FromHeader) {
         unreachable
       }
       $B3: {  # continuing
-        %5:i32 = spirv.add<i32> 3i, 3i
+        %4:i32 = spirv.add<i32> 3i, 3i
         next_iteration  # -> $B2
       }
     }
-    %6:i32 = spirv.add<i32> 1i, 2i
+    %5:i32 = spirv.add<i32> 1i, 2i
     ret
   }
 }
@@ -6237,8 +6221,7 @@ TEST_F(SpirvParserTest, BranchConditional_Continue_Continue_AfterHeader_Uncondit
       $B2: {  # body
         %3:i32 = spirv.add<i32> 2i, 2i
         %4:i32 = spirv.add<i32> 3i, 3i
-        %5:bool = or true, true
-        if %5 [t: $B4, f: $B5] {  # if_1
+        if true [t: $B4, f: $B5] {  # if_1
           $B4: {  # true
             continue  # -> $B3
           }
@@ -6249,11 +6232,11 @@ TEST_F(SpirvParserTest, BranchConditional_Continue_Continue_AfterHeader_Uncondit
         unreachable
       }
       $B3: {  # continuing
-        %6:i32 = spirv.add<i32> 1i, 2i
+        %5:i32 = spirv.add<i32> 1i, 2i
         next_iteration  # -> $B2
       }
     }
-    %7:i32 = spirv.add<i32> 1i, 3i
+    %6:i32 = spirv.add<i32> 1i, 3i
     ret
   }
 }
@@ -6313,8 +6296,7 @@ TEST_F(SpirvParserTest, BranchConditional_Continue_Continue_AfterHeader_Conditio
         if false [t: $B4, f: $B5] {  # if_1
           $B4: {  # true
             %5:i32 = spirv.add<i32> 1i, 2i
-            %6:bool = or true, true
-            if %6 [t: $B6, f: $B7] {  # if_2
+            if true [t: $B6, f: $B7] {  # if_2
               $B6: {  # true
                 continue  # -> $B3
               }
@@ -6328,15 +6310,15 @@ TEST_F(SpirvParserTest, BranchConditional_Continue_Continue_AfterHeader_Conditio
             exit_if  # if_1
           }
         }
-        %7:i32 = spirv.add<i32> 1i, 3i
+        %6:i32 = spirv.add<i32> 1i, 3i
         continue  # -> $B3
       }
       $B3: {  # continuing
-        %8:i32 = spirv.add<i32> 2i, 3i
+        %7:i32 = spirv.add<i32> 2i, 3i
         next_iteration  # -> $B2
       }
     }
-    %9:i32 = spirv.add<i32> 3i, 1i
+    %8:i32 = spirv.add<i32> 3i, 1i
     ret
   }
 }
@@ -6397,8 +6379,7 @@ TEST_F(SpirvParserTest,
         if false [t: $B4, f: $B5] {  # if_1
           $B4: {  # true
             %5:i32 = spirv.add<i32> 1i, 2i
-            %6:bool = or false, true
-            if %6 [t: $B6, f: $B7] {  # if_2
+            if true [t: $B6, f: $B7] {  # if_2
               $B6: {  # true
                 continue  # -> $B3
               }
@@ -6412,14 +6393,14 @@ TEST_F(SpirvParserTest,
             exit_if  # if_1
           }
         }
-        %7:i32 = spirv.add<i32> 1i, 3i
+        %6:i32 = spirv.add<i32> 1i, 3i
         continue  # -> $B3
       }
       $B3: {  # continuing
         next_iteration  # -> $B2
       }
     }
-    %8:i32 = spirv.add<i32> 2i, 3i
+    %7:i32 = spirv.add<i32> 2i, 3i
     ret
   }
 }
@@ -6481,8 +6462,7 @@ TEST_F(SpirvParserTest, BranchConditional_LoopContinue_FromSwitch) {
           }
           $B5: {  # case
             %5:i32 = spirv.add<i32> 1i, 2i
-            %6:bool = or false, true
-            if %6 [t: $B6, f: $B7] {  # if_1
+            if true [t: $B6, f: $B7] {  # if_1
               $B6: {  # true
                 continue  # -> $B3
               }
@@ -6493,15 +6473,15 @@ TEST_F(SpirvParserTest, BranchConditional_LoopContinue_FromSwitch) {
             exit_switch  # switch_1
           }
         }
-        %7:i32 = spirv.add<i32> 1i, 3i
+        %6:i32 = spirv.add<i32> 1i, 3i
         continue  # -> $B3
       }
       $B3: {  # continuing
-        %8:i32 = spirv.add<i32> 2i, 3i
+        %7:i32 = spirv.add<i32> 2i, 3i
         next_iteration  # -> $B2
       }
     }
-    %9:i32 = spirv.add<i32> 3i, 1i
+    %8:i32 = spirv.add<i32> 3i, 1i
     ret
   }
 }
@@ -6839,8 +6819,7 @@ TEST_F(SpirvParserTest, BranchConditional_IfBreak_IfBreak_Same) {
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
     %2:i32 = spirv.add<i32> 1i, 1i
-    %3:bool = or true, true
-    if %3 [t: $B2, f: $B3] {  # if_1
+    if true [t: $B2, f: $B3] {  # if_1
       $B2: {  # true
         exit_if  # if_1
       }
@@ -6848,7 +6827,7 @@ TEST_F(SpirvParserTest, BranchConditional_IfBreak_IfBreak_Same) {
         unreachable
       }
     }
-    %4:i32 = spirv.add<i32> 3i, 3i
+    %3:i32 = spirv.add<i32> 3i, 3i
     ret
   }
 }
@@ -6882,10 +6861,9 @@ TEST_F(SpirvParserTest, BranchConditional_Forward_Forward_Same) {
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
     %2:i32 = spirv.add<i32> 1i, 1i
-    %3:bool = or true, true
-    if %3 [t: $B2, f: $B3] {  # if_1
+    if true [t: $B2, f: $B3] {  # if_1
       $B2: {  # true
-        %4:i32 = spirv.add<i32> 2i, 2i
+        %3:i32 = spirv.add<i32> 2i, 2i
         ret
       }
       $B3: {  # false
@@ -7768,7 +7746,7 @@ TEST_F(SpirvParserTest, ReplicatePointerAccess_ImageTexelPointer_Unsupported) {
 )");
     EXPECT_NE(result, Success);
     EXPECT_THAT(result.Failure().reason,
-                testing::HasSubstr("unhandled SPIR-V instruction: OpImageTexelPointer"));
+                testing::HasSubstr("unhandled SPIR-V storage class: Image"));
 }
 
 TEST_F(SpirvParserTest, ReplicatePointerAccess_MultipleBlocks) {

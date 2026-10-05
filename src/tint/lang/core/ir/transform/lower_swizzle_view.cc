@@ -34,7 +34,7 @@
 #include "src/tint/lang/core/ir/load.h"
 #include "src/tint/lang/core/ir/store.h"
 #include "src/tint/lang/core/ir/swizzle.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/pointer.h"
 #include "src/tint/lang/core/type/swizzle_view.h"
 #include "src/tint/lang/core/type/vector.h"
@@ -120,7 +120,7 @@ struct State {
     /// Lowers a load from a swizzle view.
     /// @param load the load instruction to lower
     void LowerLoad(core::ir::Load* load) {
-        auto* inst = load->From()->As<core::ir::InstructionResult>()->Instruction();
+        auto* inst = load->From()->AsInstruction();
         auto* swizzle = inst->As<core::ir::Swizzle>();
 
         // If loading through an accessor on a swizzle view (i.e. v.zyx[0]), extract the accessor
@@ -128,16 +128,13 @@ struct State {
         core::ir::Value* accessor_idx = nullptr;
         if (auto* access = inst->As<core::ir::Access>()) {
             accessor_idx = access->Indices()[0];
-            swizzle = access->Object()
-                          ->As<core::ir::InstructionResult>()
-                          ->Instruction()
-                          ->As<core::ir::Swizzle>();
+            swizzle = access->Object()->AsInstruction()->As<core::ir::Swizzle>();
         }
 
         auto collapsed = Collapse(swizzle);
 
         b.InsertBefore(load, [&] {
-            core::ir::InstructionResult* new_result = nullptr;
+            core::ir::Value* new_result = nullptr;
             if (accessor_idx || collapsed.indices.Length() == 1) {
                 // Lowers to a single vector element load.
                 auto* idx = accessor_idx ? GetTargetIndex(accessor_idx, collapsed.indices)
@@ -146,8 +143,7 @@ struct State {
             } else {
                 // Extract the target elements from the loaded vector.
                 auto* loaded_vec = b.Load(collapsed.vector);
-                new_result =
-                    b.Swizzle(load->Result()->Type(), loaded_vec, collapsed.indices)->Result();
+                new_result = b.Swizzle(load->Result()->Type(), loaded_vec, collapsed.indices);
             }
             load->Result()->ReplaceAllUsesWith(new_result);
         });
@@ -194,7 +190,7 @@ struct State {
                 for (size_t i = 0; i < collapsed.indices.Length(); i++) {
                     auto* access = b.Access(vec_ty->Type(), rhs, b.Constant(u32(i)));
                     uint32_t target_index = collapsed.indices[i];
-                    new_vec_args[target_index] = access->Result();
+                    new_vec_args[target_index] = access;
                 }
 
                 // For indices which were not referenced in the swizzle, fill in the old vals from
@@ -202,7 +198,7 @@ struct State {
                 for (uint32_t i = 0; i < vec_ty->Width(); i++) {
                     if (new_vec_args[i] == nullptr) {
                         auto* access = b.Access(vec_ty->Type(), old_vec, b.Constant(u32(i)));
-                        new_vec_args[i] = access->Result();
+                        new_vec_args[i] = access;
                     }
                 }
 
@@ -247,26 +243,19 @@ struct State {
         return result;
     }
 
-    /// Maps an accessor index dynamically or statically to the target swizzle vector element index.
-    /// @param accessor_idx the accessor index (can be static constant or dynamic)
+    /// Maps an accessor index to the target swizzle vector element index.
+    /// @param accessor_idx the accessor index
     /// @param indices the collapsed swizzle indices
     /// @returns the mapped index value
     core::ir::Value* GetTargetIndex(core::ir::Value* accessor_idx,
                                     const tint::Vector<uint32_t, 4>& indices) {
-        // Index is constant.
-        if (auto* const_idx = accessor_idx->As<core::ir::Constant>()) {
-            uint32_t extra_idx = const_idx->Value()->ValueAs<uint32_t>();
-            return b.Constant(u32(indices[extra_idx]));
-        }
-
-        // Index is dynamic, and must be mapped into a composite array at runtime.
         tint::Vector<const core::constant::Value*, 4> const_indices;
         for (uint32_t idx : indices) {
             const_indices.Push(b.ConstantValue(u32(idx)));
         }
         auto* arr_ty = ty.array(ty.u32(), static_cast<uint32_t>(indices.Length()));
         auto* arr_val = b.Composite(arr_ty, std::move(const_indices));
-        return b.Access(ty.u32(), arr_val, accessor_idx)->Result();
+        return b.Access(ty.u32(), arr_val, accessor_idx);
     }
 };
 

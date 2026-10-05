@@ -34,6 +34,7 @@
 
 #include "dawn/platform/DawnPlatform.h"
 #include "src/dawn/common/Constants.h"
+#include "src/dawn/common/Defer.h"
 #include "src/dawn/common/Math.h"
 #include "src/dawn/native/ChainUtils.h"
 #include "src/dawn/native/CommandBuffer.h"
@@ -248,9 +249,8 @@ class UploadBuffer final : public Buffer {
                              uint8_t clearValue,
                              uint64_t offset,
                              uint64_t size) override {
-        std::ranges::fill(
-            mUploadData.subspan(checked_cast<size_t>(offset), checked_cast<size_t>(size)),
-            std::byte{clearValue});
+        mUploadData.subspan(checked_cast<size_t>(offset), checked_cast<size_t>(size))
+            .FillBytes(std::byte{clearValue});
         return {};
     }
 
@@ -279,8 +279,7 @@ class UploadBuffer final : public Buffer {
                              uint64_t offset,
                              Span<const std::byte> data,
                              bool isInitialWrite) override {
-        // TODO(https://crbug.com/524406299): Use Span::CopyFrom.
-        std::ranges::copy(data, mUploadData.subspan(checked_cast<size_t>(offset)).begin());
+        mUploadData.subspan(checked_cast<size_t>(offset), data.size()).CopyFrom(data);
         return {};
     }
 
@@ -430,8 +429,8 @@ MaybeError Buffer::MapAtCreationImpl() {
     mMapAtCreationData =
         // SAFETY: Frontend is responsible for initializing MapAtCreation memory.
         DAWN_UNSAFE_BUFFERS(
-            HeapArray<uint8_t>::Uninit(checked_cast<size_t>(GetAllocatedSize()), std::nothrow));
-    mMappedData = SpanAsWritableBytes(mMapAtCreationData.subspan(0));
+            HeapArray<std::byte>::Uninit(checked_cast<size_t>(GetAllocatedSize()), std::nothrow));
+    mMappedData = mMapAtCreationData.subspan(0);
     return {};
 }
 
@@ -456,8 +455,8 @@ MaybeError Buffer::UnmapIfNeeded(const ScopedCommandRecordingContext* commandCon
         mMappedData = {};
         ScopedMap scopedMap;
         DAWN_TRY_ASSIGN(scopedMap, ScopedMap::Create(commandContext, this, wgpu::MapMode::Write));
-        DAWN_ASSERT(scopedMap.GetMappedData());
-        std::ranges::copy(mMapAtCreationData, scopedMap.GetMappedData());
+        DAWN_ASSERT(!scopedMap.GetMappedData().empty());
+        scopedMap.GetMappedData().CopyFrom(mMapAtCreationData.subspan(0));
         mMapAtCreationData = {};
         return {};
     }
@@ -562,7 +561,7 @@ MaybeError Buffer::FinalizeMapImpl(BufferState newState) {
     }
 
     // This can only happen if the prior Map call has failed.
-    DAWN_INTERNAL_ERROR_IF(mMappedData.empty(), "Buffer failed to be mapped.");
+    DAWN_UNRECOVERABLE_ERROR_IF(mMappedData.empty(), "Buffer failed to be mapped.");
 
     // Ensure data is initialized before completing the MapAsync event and giving it to the user.
     DAWN_TRY(EnsureDataInitialized(nullptr));
@@ -840,8 +839,8 @@ void Buffer::ScopedMap::Reset() {
     mNeedsUnmap = false;
 }
 
-uint8_t* Buffer::ScopedMap::GetMappedData() const {
-    return mBuffer ? reinterpret_cast<uint8_t*>(mBuffer->mMappedData.data()) : nullptr;
+Span<std::byte> Buffer::ScopedMap::GetMappedData() const {
+    return mBuffer ? Span<std::byte>(mBuffer->mMappedData) : Span<std::byte>{};
 }
 
 // GPUUsableBuffer::Storage
@@ -851,6 +850,7 @@ class GPUUsableBuffer::Storage : public RefCounted, NonCopyable {
         D3D11_BUFFER_DESC desc;
         mD3d11Buffer->GetDesc(&desc);
         mD3d11Usage = desc.Usage;
+        mSize = size_t{desc.ByteWidth};
 
         mMappableCopyableFlags = wgpu::BufferUsage::CopySrc;
 
@@ -886,6 +886,24 @@ class GPUUsableBuffer::Storage : public RefCounted, NonCopyable {
     bool IsDynamic() const { return mD3d11Usage == D3D11_USAGE_DYNAMIC; }
     bool SupportsCopyDst() const { return mMappableCopyableFlags & wgpu::BufferUsage::CopyDst; }
     bool IsGPUWritable() const { return mD3d11Usage == D3D11_USAGE_DEFAULT; }
+    size_t GetSize() const { return mSize; }
+
+    ResultOrError<Span<std::byte>> Map(const ScopedCommandRecordingContext* commandContext,
+                                       D3D11_MAP d3dMapTypeUsed) {
+        D3D11_MAPPED_SUBRESOURCE mappedSubresource;
+        DAWN_TRY(
+            CheckHRESULT(commandContext->Map(GetD3D11Buffer(), /*Subresource=*/0, d3dMapTypeUsed,
+                                             /*MapFlags=*/0, &mappedSubresource),
+                         "ID3D11DeviceContext::Map"));
+        Span<std::byte> data =
+            // SAFETY: The mapped pointer is the size of the whole buffer
+            DAWN_UNSAFE_BUFFERS({static_cast<std::byte*>(mappedSubresource.pData), GetSize()});
+        return data;
+    }
+
+    void Unmap(const ScopedCommandRecordingContext* commandContext) {
+        commandContext->Unmap(GetD3D11Buffer(), /*Subresource=*/0);
+    }
 
   private:
     ComPtr<ID3D11Buffer> mD3d11Buffer;
@@ -893,6 +911,7 @@ class GPUUsableBuffer::Storage : public RefCounted, NonCopyable {
     D3D11_USAGE mD3d11Usage;
     bool mIsConstantBuffer = false;
     wgpu::BufferUsage mMappableCopyableFlags;
+    size_t mSize = 0;
 };
 
 // GPUUsableBuffer
@@ -1173,37 +1192,19 @@ MaybeError GPUUsableBuffer::SyncStorage(const ScopedCommandRecordingContext* com
     Storage* stagingStorage;
     DAWN_TRY_ASSIGN(stagingStorage, GetOrCreateStorage(StorageType::Staging));
     DAWN_TRY(SyncStorage(commandContext, stagingStorage));
-    D3D11_MAPPED_SUBRESOURCE mappedSrcResource;
-    DAWN_TRY(CheckHRESULT(commandContext->Map(stagingStorage->GetD3D11Buffer(),
-                                              /*Subresource=*/0, D3D11_MAP_READ,
-                                              /*MapFlags=*/0, &mappedSrcResource),
-                          "ID3D11DeviceContext::Map src"));
 
-    auto MapAndCopy = [](const ScopedCommandRecordingContext* commandContext, ID3D11Buffer* dst,
-                         const void* srcData, size_t size) -> MaybeError {
-        D3D11_MAPPED_SUBRESOURCE mappedDstResource;
-        DAWN_TRY(CheckHRESULT(commandContext->Map(dst,
-                                                  /*Subresource=*/0, D3D11_MAP_WRITE_DISCARD,
-                                                  /*MapFlags=*/0, &mappedDstResource),
-                              "ID3D11DeviceContext::Map dst"));
-        DAWN_UNSAFE_TODO(memcpy(mappedDstResource.pData, srcData, size));
-        commandContext->Unmap(dst,
-                              /*Subresource=*/0);
-        return {};
-    };
+    Span<std::byte> srcData;
+    DAWN_TRY_ASSIGN(srcData, stagingStorage->Map(commandContext, D3D11_MAP_READ));
+    // Make sure to unmap even if mapping dstStorage fails below
+    Defer unmapSrcData;
+    unmapSrcData.Append([&] { stagingStorage->Unmap(commandContext); });
 
-    auto result = MapAndCopy(commandContext, dstStorage->GetD3D11Buffer(), mappedSrcResource.pData,
-                             checked_cast<size_t>(GetAllocatedSize()));
-
-    commandContext->Unmap(stagingStorage->GetD3D11Buffer(),
-                          /*Subresource=*/0);
-
-    if (result.IsError()) {
-        return result;
-    }
+    Span<std::byte> dstData;
+    DAWN_TRY_ASSIGN(dstData, dstStorage->Map(commandContext, D3D11_MAP_WRITE_DISCARD));
+    dstData.CopyFrom(srcData);
+    dstStorage->Unmap(commandContext);
 
     dstStorage->SetRevision(mLastUpdatedStorage->GetRevision());
-
     return {};
 }
 
@@ -1266,15 +1267,7 @@ MaybeError GPUUsableBuffer::MapInternal(const ScopedCommandRecordingContext* com
     // Sync previously modified content before mapping.
     DAWN_TRY(SyncStorage(commandContext, mMappableStorage));
 
-    D3D11_MAPPED_SUBRESOURCE mappedResource;
-    DAWN_TRY(CheckHRESULT(commandContext->Map(mMappableStorage->GetD3D11Buffer(),
-                                              /*Subresource=*/0, mD3DMapTypeUsed,
-                                              /*MapFlags=*/0, &mappedResource),
-                          "ID3D11DeviceContext::Map"));
-    // SAFETY: The pointer returned is for the actual memory of the resource and contains at least
-    // GetAllocatedSize() bytes.
-    mMappedData = DAWN_UNSAFE_BUFFERS(
-        {static_cast<std::byte*>(mappedResource.pData), checked_cast<size_t>(GetAllocatedSize())});
+    DAWN_TRY_ASSIGN(mMappedData, mMappableStorage->Map(commandContext, mD3DMapTypeUsed));
 
     return {};
 }
@@ -1282,8 +1275,7 @@ MaybeError GPUUsableBuffer::MapInternal(const ScopedCommandRecordingContext* com
 void GPUUsableBuffer::UnmapInternal(const ScopedCommandRecordingContext* commandContext) {
     DAWN_ASSERT(!mMappedData.empty());
     DAWN_ASSERT(mMappableStorage);
-    commandContext->Unmap(mMappableStorage->GetD3D11Buffer(),
-                          /*Subresource=*/0);
+    mMappableStorage->Unmap(commandContext);
     mMappedData = {};
     // Only increment revision if the buffer was mapped for writing.
     if (mD3DMapTypeUsed != D3D11_MAP_READ) {
@@ -1512,7 +1504,7 @@ MaybeError GPUUsableBuffer::UpdateD3D11ConstantBuffer(
         if (data.size() != alignedSize) {
             // SAFETY: The copy() should initialize all memory that actually gets read.
             alignedBuffer = DAWN_UNSAFE_BUFFERS(HeapArray<std::byte>::Uninit(alignedSize));
-            std::ranges::copy(data, alignedBuffer.begin() + sign_cast(leftExtraBytes));
+            alignedBuffer.subspan(leftExtraBytes, data.size()).CopyFrom(data);
             data = alignedBuffer.subspan(0);
         }
 
@@ -1575,9 +1567,8 @@ MaybeError GPUUsableBuffer::WriteInternal(const ScopedCommandRecordingContext* c
         ScopedMap scopedMap;
         DAWN_TRY_ASSIGN(scopedMap, ScopedMap::Create(commandContext, this, wgpu::MapMode::Write));
 
-        DAWN_ASSERT(scopedMap.GetMappedData());
-        // TODO(https://crbug.com/524406299): Use Span::CopyFrom.
-        DAWN_UNSAFE_TODO(memcpy(scopedMap.GetMappedData() + offset, data.data(), data.size()));
+        DAWN_ASSERT(!scopedMap.GetMappedData().empty());
+        scopedMap.GetMappedData().subspan(checked_cast<size_t>(offset), data.size()).CopyFrom(data);
 
         return {};
     }

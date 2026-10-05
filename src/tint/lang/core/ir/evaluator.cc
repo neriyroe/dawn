@@ -28,12 +28,15 @@
 #include "src/tint/lang/core/ir/evaluator.h"
 
 #include "src/tint/lang/core/binary_op.h"
+#include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/constant.h"
 #include "src/tint/lang/core/ir/constexpr_if.h"
+#include "src/tint/lang/core/ir/disassembler.h"
 #include "src/tint/lang/core/ir/function_param.h"
 #include "src/tint/lang/core/ir/override.h"
 #include "src/tint/lang/core/number.h"
 #include "src/tint/lang/core/type/matrix.h"
+#include "src/tint/utils/internal_limits.h"
 #include "src/tint/utils/rtti/switch.h"
 
 namespace tint::core::ir {
@@ -50,8 +53,10 @@ diag::Result<core::ir::Constant*> Eval(core::ir::Builder& b, core::ir::Value* va
 
 }  // namespace eval
 
-Evaluator::Evaluator(ir::Builder& builder)
-    : b_(builder), const_eval_(b_.ir.constant_values, diagnostics_) {}
+Evaluator::Evaluator(ir::Builder& builder, bool eval_override)
+    : b_(builder),
+      const_eval_(b_.ir.constant_values, diagnostics_),
+      eval_override_(eval_override) {}
 
 Evaluator::~Evaluator() = default;
 
@@ -82,6 +87,8 @@ Evaluator::EvalResult Evaluator::EvalValue(core::ir::Value* val) {
         val,  //
         [&](core::ir::Constant* c) { return c->Value(); },
         [&](core::ir::FunctionParam*) { return nullptr; },
+        [&](core::ir::BlockParam*) { return nullptr; },  //
+        [&](core::ir::Unused*) { return nullptr; },
         [&](core::ir::InstructionResult* r) {
             return tint::Switch(
                 r->Instruction(),  //
@@ -103,10 +110,21 @@ Evaluator::EvalResult Evaluator::EvalValue(core::ir::Value* val) {
 }
 
 Evaluator::EvalResult Evaluator::EvalAccess(core::ir::Access* a) {
-    TINT_CHECK_RESULT_UNWRAP(obj, EvalValue(a->Object()));
+    return EvalAccess(a->Object(), a->Indices(), SourceOf(a));
+}
 
-    auto* access_obj_type = a->Object()->Type()->UnwrapPtrOrRef();
-    for (auto* idx : a->Indices()) {
+Evaluator::EvalResult Evaluator::EvalAccess(core::ir::Value* object,
+                                            VectorRef<core::ir::Value*> indices,
+                                            const Source& source) {
+    // Some transforms create invalid instructions.
+    if (!object || !object->Type()) {
+        return nullptr;
+    }
+
+    TINT_CHECK_RESULT_UNWRAP(obj, EvalValue(object));
+
+    auto* access_obj_type = object->Type()->UnwrapPtrOrRef();
+    for (auto* idx : indices) {
         TINT_CHECK_RESULT_UNWRAP(val, EvalValue(idx));
 
         // Check if the value could be evaluated
@@ -115,8 +133,7 @@ Evaluator::EvalResult Evaluator::EvalAccess(core::ir::Access* a) {
         if (val) {
             TINT_ASSERT(val->Is<core::constant::Value>());
 
-            TINT_CHECK_RESULT_UNWRAP(res,
-                                     const_eval_.Index(obj, access_obj_type, val, SourceOf(a)));
+            TINT_CHECK_RESULT_UNWRAP(res, const_eval_.Index(obj, access_obj_type, val, source));
             index_const = val->ValueAs<u32>();
             obj = res;
         } else {
@@ -133,16 +150,25 @@ Evaluator::EvalResult Evaluator::EvalAccess(core::ir::Access* a) {
 }
 
 Evaluator::EvalResult Evaluator::EvalConstruct(core::ir::Construct* c) {
+    return EvalConstruct(c->Result()->Type(), c->Args(), SourceOf(c));
+}
+
+Evaluator::EvalResult Evaluator::EvalConstruct(const core::type::Type* result_ty,
+                                               VectorRef<core::ir::Value*> args,
+                                               const Source& source) {
     auto table = core::intrinsic::Table<core::intrinsic::Dialect>(b_.ir.Types(), b_.ir.symbols);
 
-    auto result_ty = c->Result()->Type();
+    // Some transforms create invalid instructions.
+    if (!result_ty) {
+        return nullptr;
+    }
 
     Vector<const core::type::Type*, 4> arg_types;
-    arg_types.Reserve(c->Args().size());
+    arg_types.Reserve(args.Length());
     Vector<const core::constant::Value*, 4> arg_values;
-    arg_values.Reserve(c->Args().size());
+    arg_values.Reserve(args.Length());
 
-    for (auto* arg : c->Args()) {
+    for (auto* arg : args) {
         arg_types.Push(arg->Type());
 
         TINT_CHECK_RESULT_UNWRAP(val, EvalValue(arg));
@@ -153,20 +179,25 @@ Evaluator::EvalResult Evaluator::EvalConstruct(core::ir::Construct* c) {
         arg_values.Push(val);
     }
 
+    auto eval_stage =
+        eval_override_ ? core::EvaluationStage::kOverride : core::EvaluationStage::kConstant;
     auto mat_vec = [&](const core::type::Type* type,
                        core::intrinsic::CtorConv intrinsic) -> constant::Eval::Result {
-        auto op = table.Lookup(intrinsic, Vector<TemplateParameter, 1>{type}, arg_types,
-                               core::EvaluationStage::kOverride);
+        auto op =
+            table.Lookup(intrinsic, Vector<TemplateParameter, 1>{type}, arg_types, eval_stage);
         if (op != Success) {
-            AddError(SourceOf(c)) << "unable to find intrinsic for construct: " << op.Failure();
+            AddError(source) << "unable to find intrinsic for construct: " << op.Failure();
+            return Failure();
+        }
+        if (!op->info->flags.Contains(intrinsic::OverloadFlag::kIsConstructor)) {
             return Failure();
         }
         if (!op->const_eval_fn) {
-            AddError(SourceOf(c)) << "unhandled type constructor";
+            AddError(source) << "unhandled type constructor";
             return Failure();
         }
-        TINT_CHECK_RESULT_UNWRAP(
-            r, (const_eval_.*op->const_eval_fn)(result_ty, arg_values, SourceOf(c)));
+        TINT_CHECK_RESULT_UNWRAP(r,
+                                 (const_eval_.*op->const_eval_fn)(result_ty, arg_values, source));
         return r;
     };
 
@@ -188,18 +219,21 @@ Evaluator::EvalResult Evaluator::EvalConstruct(core::ir::Construct* c) {
         },
         [&](Default) {
             if (!result_ty->Is<core::type::Scalar>()) {
-                AddError(SourceOf(c)) << "unhandled type constructor";
+                AddError(source) << "unhandled type constructor";
                 return core::constant::Eval::Result(nullptr);
             }
             if (arg_values.IsEmpty()) {
-                return const_eval_.Zero(result_ty, arg_values, SourceOf(c));
+                return const_eval_.Zero(result_ty, arg_values, source);
             }
             // For scalars, this must be an identity constructor.
             if (arg_values[0]->Type() != result_ty) {
-                AddError(SourceOf(c)) << "invalid type constructor";
+                AddError(source) << "invalid type constructor";
                 return core::constant::Eval::Result(nullptr);
             }
-            return const_eval_.Identity(result_ty, arg_values, SourceOf(c));
+            if (arg_values.Length() != 1) {
+                return core::constant::Eval::Result(nullptr);
+            }
+            return const_eval_.Identity(result_ty, arg_values, source);
         });
 
     if (r != Success) {
@@ -209,16 +243,26 @@ Evaluator::EvalResult Evaluator::EvalConstruct(core::ir::Construct* c) {
 }
 
 Evaluator::EvalResult Evaluator::EvalConvert(core::ir::Convert* c) {
-    TINT_CHECK_RESULT_UNWRAP(val, EvalValue(c->Args()[0]));
+    return EvalConvert(c->Result()->Type(), c->Args()[0], SourceOf(c));
+}
+
+Evaluator::EvalResult Evaluator::EvalConvert(const core::type::Type* result_ty,
+                                             core::ir::Value* arg,
+                                             const Source& source) {
+    TINT_CHECK_RESULT_UNWRAP(val, EvalValue(arg));
     // Check if the value could be evaluated
     if (!val) {
         return nullptr;
     }
-    TINT_CHECK_RESULT_UNWRAP(r, const_eval_.Convert(c->Result()->Type(), val, SourceOf(c)));
+    TINT_CHECK_RESULT_UNWRAP(r, const_eval_.Convert(result_ty, val, source));
     return r;
 }
 
 Evaluator::EvalResult Evaluator::EvalOverride(core::ir::Override* o) {
+    if (!eval_override_) {
+        return nullptr;
+    }
+
     TINT_CHECK_RESULT_UNWRAP(val, EvalValue(o->Initializer()));
     // Check if the value could be evaluated
     if (!val) {
@@ -249,33 +293,46 @@ Evaluator::EvalResult Evaluator::EvalConstExprIf(core::ir::ConstExprIf* c) {
 }
 
 Evaluator::EvalResult Evaluator::EvalSwizzle(core::ir::Swizzle* s) {
-    TINT_CHECK_RESULT_UNWRAP(val, EvalValue(s->Object()));
+    return EvalSwizzle(s->Result()->Type(), s->Object(), s->Indices());
+}
+
+Evaluator::EvalResult Evaluator::EvalSwizzle(const core::type::Type* result_ty,
+                                             core::ir::Value* object,
+                                             VectorRef<uint32_t> indices) {
+    TINT_CHECK_RESULT_UNWRAP(val, EvalValue(object));
     // Check if the value could be evaluated
     if (!val) {
         return nullptr;
     }
 
-    TINT_CHECK_RESULT_UNWRAP(r, const_eval_.Swizzle(s->Result()->Type(), val, s->Indices()));
+    TINT_CHECK_RESULT_UNWRAP(r, const_eval_.Swizzle(result_ty, val, indices));
     return r;
 }
 
 Evaluator::EvalResult Evaluator::EvalUnary(core::ir::CoreUnary* u) {
-    intrinsic::Context context{u->TableData(), b_.ir.Types(), b_.ir.symbols};
+    return EvalCoreUnary(u->Op(), u->Result()->Type(), u->Val(), SourceOf(u));
+}
 
-    auto overload = core::intrinsic::LookupUnary(context, u->Op(), u->Val()->Type(),
-                                                 core::EvaluationStage::kOverride);
+Evaluator::EvalResult Evaluator::EvalCoreUnary(UnaryOp op,
+                                               const core::type::Type* result_ty,
+                                               core::ir::Value* input,
+                                               const Source& source) {
+    intrinsic::Context context{core::intrinsic::Dialect::kData, b_.ir.Types(), b_.ir.symbols};
+
+    auto overload =
+        core::intrinsic::LookupUnary(context, op, result_ty, core::EvaluationStage::kOverride);
     if (overload != Success) {
-        AddError(SourceOf(u)) << overload.Failure().Plain();
+        AddError(source) << overload.Failure().Plain();
         return Failure();
     }
 
     auto const_eval_fn = overload->const_eval_fn;
     if (!const_eval_fn) {
-        AddError(SourceOf(u)) << "invalid unary expression";
+        AddError(source) << "invalid unary expression";
         return Failure();
     }
 
-    auto val = EvalValue(u->Val());
+    auto val = EvalValue(input);
     if (val != Success) {
         return Failure();
     }
@@ -284,7 +341,7 @@ Evaluator::EvalResult Evaluator::EvalUnary(core::ir::CoreUnary* u) {
         return nullptr;
     }
 
-    auto r = (const_eval_.*const_eval_fn)(u->Result()->Type(), Vector{val.Get()}, SourceOf(u));
+    auto r = (const_eval_.*const_eval_fn)(result_ty, Vector{val.Get()}, source);
     if (r != Success) {
         return Failure();
     }
@@ -292,52 +349,69 @@ Evaluator::EvalResult Evaluator::EvalUnary(core::ir::CoreUnary* u) {
 }
 
 Evaluator::EvalResult Evaluator::EvalBinary(core::ir::CoreBinary* cb) {
-    intrinsic::Context context{cb->TableData(), b_.ir.Types(), b_.ir.symbols};
+    return EvalCoreBinary(cb->Op(), cb->Result()->Type(), cb->LHS(), cb->RHS(), SourceOf(cb));
+}
+
+Evaluator::EvalResult Evaluator::EvalCoreBinary(core::BinaryOp op,
+                                                const core::type::Type* result_ty,
+                                                core::ir::Value* lhs,
+                                                core::ir::Value* rhs,
+                                                const Source& source) {
+    intrinsic::Context context{core::intrinsic::Dialect::kData, b_.ir.Types(), b_.ir.symbols};
 
     auto overload =
-        core::intrinsic::LookupBinary(context, cb->Op(), cb->LHS()->Type(), cb->RHS()->Type(),
+        core::intrinsic::LookupBinary(context, op, lhs->Type(), rhs->Type(),
                                       core::EvaluationStage::kOverride, /* is_compound */ false);
     if (overload != Success) {
-        AddError(SourceOf(cb)) << overload.Failure().Plain();
+        AddError(source) << overload.Failure().Plain();
         return Failure();
     }
 
     auto const_eval_fn = overload->const_eval_fn;
     if (!const_eval_fn) {
-        AddError(SourceOf(cb)) << "invalid binary expression";
+        AddError(source) << "invalid binary expression";
         return Failure();
     }
 
-    TINT_CHECK_RESULT_UNWRAP(lhs, EvalValue(cb->LHS()));
+    TINT_CHECK_RESULT_UNWRAP(eval_lhs, EvalValue(lhs));
     // Check LHS could be evaluated
-    if (!lhs) {
+    if (!eval_lhs) {
         return nullptr;
     }
 
     // These short circuiting operators should not be present in the IR at any time. These need
     // special handling and are transformed into ConstExprIfs on program construction.
-    TINT_ASSERT(cb->Op() != tint::core::BinaryOp::kLogicalAnd &&
-                cb->Op() != tint::core::BinaryOp::kLogicalOr);
+    TINT_ASSERT(op != tint::core::BinaryOp::kLogicalAnd && op != tint::core::BinaryOp::kLogicalOr);
 
-    TINT_CHECK_RESULT_UNWRAP(rhs, EvalValue(cb->RHS()));
+    TINT_CHECK_RESULT_UNWRAP(eval_rhs, EvalValue(rhs));
     // Check RHS could be evaluated
-    if (!rhs) {
+    if (!eval_rhs) {
         return nullptr;
     }
 
     TINT_CHECK_RESULT_UNWRAP(
-        r, (const_eval_.*const_eval_fn)(cb->Result()->Type(), Vector{lhs, rhs}, SourceOf(cb)));
+        r, (const_eval_.*const_eval_fn)(result_ty, Vector{eval_lhs, eval_rhs}, source));
     return r;
 }
 
 Evaluator::EvalResult Evaluator::EvalCoreBuiltinCall(core::ir::CoreBuiltinCall* c) {
-    intrinsic::Context context{c->TableData(), b_.ir.Types(), b_.ir.symbols};
+    return EvalCoreBuiltinCall(c->Func(), c->Result()->Type(), c->Args(),
+                               c->ExplicitTemplateParams(), SourceOf(c));
+}
+
+Evaluator::EvalResult Evaluator::EvalCoreBuiltinCall(
+    core::BuiltinFn fn,
+    const core::type::Type* result_ty,
+    VectorRef<core::ir::Value*> args,
+    VectorRef<core::ir::TemplateParameter> explicit_params,
+    const Source& source) {
+    intrinsic::Context context{core::intrinsic::Dialect::kData, b_.ir.Types(), b_.ir.symbols};
 
     Vector<const core::type::Type*, 0> arg_types;
-    arg_types.Reserve(c->Args().size());
-    Vector<const core::constant::Value*, 0> args;
-    args.Reserve(c->Args().size());
-    for (auto* arg : c->Args()) {
+    arg_types.Reserve(args.Length());
+    Vector<const core::constant::Value*, 0> arg_values;
+    arg_values.Reserve(arg_values.Length());
+    for (auto* arg : args) {
         arg_types.Push(arg->Type());
 
         TINT_CHECK_RESULT_UNWRAP(val, EvalValue(arg));
@@ -345,14 +419,15 @@ Evaluator::EvalResult Evaluator::EvalCoreBuiltinCall(core::ir::CoreBuiltinCall* 
         if (!val) {
             return nullptr;
         }
-        args.Push(val);
+        arg_values.Push(val);
     }
 
-    auto overload = core::intrinsic::LookupFn(context, c->FriendlyName().c_str(), c->FuncId(),
-                                              c->ExplicitTemplateParams(), arg_types,
-                                              core::EvaluationStage::kOverride);
+    auto eval_stage =
+        eval_override_ ? core::EvaluationStage::kOverride : core::EvaluationStage::kConstant;
+    auto overload = core::intrinsic::LookupFn(context, core::str(fn), static_cast<size_t>(fn),
+                                              explicit_params, arg_types, eval_stage);
     if (overload != Success) {
-        AddError(SourceOf(c)) << overload.Failure();
+        AddError(source) << overload.Failure();
         return Failure();
     }
 
@@ -364,7 +439,7 @@ Evaluator::EvalResult Evaluator::EvalCoreBuiltinCall(core::ir::CoreBuiltinCall* 
         return nullptr;
     }
 
-    auto r = (const_eval_.*const_eval_fn)(c->Result()->Type(), args, SourceOf(c));
+    auto r = (const_eval_.*const_eval_fn)(result_ty, arg_values, source);
     if (r != Success) {
         return Failure();
     }

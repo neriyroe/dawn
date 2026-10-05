@@ -100,11 +100,11 @@ float3x3 transposeMat3_mf33_(inout float3x3 inMatrix) {
   float3 i1 = (0.0f).xxx;
   float3 i2 = (0.0f).xxx;
   float3x3 outMatrix = float3x3((0.0f).xxx, (0.0f).xxx, (0.0f).xxx);
-  float3 x_60 = inMatrix[0u];
+  float3 x_60 = inMatrix[int(0)];
   i0 = x_60;
-  float3 x_64 = inMatrix[1u];
+  float3 x_64 = inMatrix[int(1)];
   i1 = x_64;
-  float3 x_68 = inMatrix[2u];
+  float3 x_68 = inMatrix[int(2)];
   i2 = x_68;
   float x_73 = i0.x;
   float x_75 = i1.x;
@@ -350,7 +350,7 @@ void main_1() {
         uint tint_carry = uint((tint_low_inc == 4294967295u));
         tint_loop_idx.y = (tint_loop_idx.y - tint_carry);
         int x_441 = i;
-        i = asint((asuint(x_441) + asuint(int(1))));
+        i = asint((asuint(x_441) + 1u));
       }
     }
   }

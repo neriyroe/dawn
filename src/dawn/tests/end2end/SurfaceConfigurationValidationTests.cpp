@@ -191,8 +191,6 @@ TEST_P(SurfaceConfigurationValidationTests, AnyCombinationOfCapabilities) {
     // builders but not locally. This is a similar limitation to SurfaceTests.SwitchPresentMode.
     DAWN_SUPPRESS_TEST_IF(IsWindows() && IsVulkan() && IsNvidia());
 
-    // TODO(crbug.com/463551855): Flaky on Snapdragon X Elite SoCs.
-    DAWN_SUPPRESS_TEST_IF(IsWindows() && IsQualcomm());
 
     wgpu::Surface surface = CreateTestSurface();
 
@@ -223,6 +221,32 @@ TEST_P(SurfaceConfigurationValidationTests, AnyCombinationOfCapabilities) {
                 device.Tick();
             }
         }
+    }
+}
+
+TEST_P(SurfaceConfigurationValidationTests, D3DFloatSurfaceColorManagement) {
+    DAWN_TEST_UNSUPPORTED_IF(!IsD3D11() && !IsD3D12());
+
+    wgpu::Surface surface = CreateTestSurface();
+    wgpu::SurfaceConfiguration config = GetPreferredConfiguration(surface);
+    config.format = wgpu::TextureFormat::RGBA16Float;
+
+    const auto configureAndPresent = [&] {
+        surface.Configure(&config);
+        wgpu::SurfaceTexture texture;
+        surface.GetCurrentTexture(&texture);
+        ASSERT_EQ(wgpu::SurfaceGetCurrentTextureStatus::SuccessOptimal, texture.status);
+        ASSERT_EQ(wgpu::Status::Success, surface.Present());
+    };
+    configureAndPresent();
+
+    wgpu::SurfaceColorManagement colorManagement;
+    colorManagement.colorSpace = wgpu::PredefinedColorSpace::SRGBLinear;
+    config.nextInChain = &colorManagement;
+    for (auto mode : {wgpu::ToneMappingMode::Standard, wgpu::ToneMappingMode::Extended,
+                      wgpu::ToneMappingMode::Standard}) {
+        colorManagement.toneMappingMode = mode;
+        configureAndPresent();
     }
 }
 

@@ -6,7 +6,7 @@ RWByteAddressBuffer prevent_dce : register(u0);
 Texture2DArray arg_0 : register(t0, space1);
 SamplerComparisonState arg_1 : register(s1, space1);
 float4 textureGatherCompare_144a9a() {
-  float4 res = arg_0.GatherCmp(arg_1, float3((1.0f).xx, float(1u)), 1.0f, (int(1)).xx);
+  float4 res = arg_0.GatherCmp(arg_1, (1.0f).xxx, 1.0f, (int(1)).xx);
   return res;
 }
 
@@ -22,7 +22,7 @@ RWByteAddressBuffer prevent_dce : register(u0);
 Texture2DArray arg_0 : register(t0, space1);
 SamplerComparisonState arg_1 : register(s1, space1);
 float4 textureGatherCompare_144a9a() {
-  float4 res = arg_0.GatherCmp(arg_1, float3((1.0f).xx, float(1u)), 1.0f, (int(1)).xx);
+  float4 res = arg_0.GatherCmp(arg_1, (1.0f).xxx, 1.0f, (int(1)).xx);
   return res;
 }
 
@@ -48,7 +48,7 @@ struct vertex_main_outputs {
 Texture2DArray arg_0 : register(t0, space1);
 SamplerComparisonState arg_1 : register(s1, space1);
 float4 textureGatherCompare_144a9a() {
-  float4 res = arg_0.GatherCmp(arg_1, float3((1.0f).xx, float(1u)), 1.0f, (int(1)).xx);
+  float4 res = arg_0.GatherCmp(arg_1, (1.0f).xxx, 1.0f, (int(1)).xx);
   return res;
 }
 

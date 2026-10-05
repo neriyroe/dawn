@@ -56,6 +56,7 @@ tint_target_add_dependencies(tint_lang_msl_writer lib
   tint_lang_core_intrinsic
   tint_lang_core_ir
   tint_lang_core_ir_transform
+  tint_lang_core_ir_validator
   tint_lang_core_type
   tint_lang_msl_writer_common
   tint_lang_msl_writer_printer
@@ -85,6 +86,7 @@ if(TINT_BUILD_MSL_WRITER)
 # Condition: TINT_BUILD_MSL_WRITER
 ################################################################################
 tint_add_target(tint_lang_msl_writer_test test
+  lang/msl/writer/alias_test.cc
   lang/msl/writer/binary_test.cc
   lang/msl/writer/constant_test.cc
   lang/msl/writer/discard_test.cc
@@ -94,6 +96,7 @@ tint_add_target(tint_lang_msl_writer_test test
   lang/msl/writer/let_test.cc
   lang/msl/writer/loop_test.cc
   lang/msl/writer/return_test.cc
+  lang/msl/writer/tensor_test.cc
   lang/msl/writer/type_test.cc
   lang/msl/writer/var_test.cc
   lang/msl/writer/writer_test.cc
@@ -105,6 +108,7 @@ tint_target_add_dependencies(tint_lang_msl_writer_test test
   tint_lang_core_constant
   tint_lang_core_intrinsic
   tint_lang_core_ir
+  tint_lang_core_ir_validator
   tint_lang_core_type
   tint_lang_msl_validate
   tint_lang_msl_writer
@@ -146,12 +150,12 @@ tint_target_add_dependencies(tint_lang_msl_writer_fuzz fuzz
   tint_lang_core
   tint_lang_core_constant
   tint_lang_core_ir
+  tint_lang_core_ir_validator
   tint_lang_core_type
   tint_lang_msl_writer
   tint_lang_msl_writer_common
   tint_lang_msl_writer_printer
   tint_utils
-  tint_utils_bytes
   tint_utils_containers
   tint_utils_diagnostic
   tint_utils_ice

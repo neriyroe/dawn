@@ -31,7 +31,7 @@
 #include <utility>
 
 #include "src/tint/lang/core/ir/builder.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/ir/var.h"
 #include "src/tint/lang/core/type/manager.h"
 #include "src/tint/lang/core/type/resource_type.h"
@@ -165,11 +165,11 @@ struct State {
         return Success;
     }
 
-    std::pair<const type::Type*, ir::Value*> GetResourceTableCallInfo(
+    std::pair<const core::type::Type*, ir::Value*> GetResourceTableCallInfo(
         core::ir::CoreBuiltinCall* call) {
         TINT_IR_ASSERT(
             ir, std::holds_alternative<const core::type::Type*>(call->ExplicitTemplateParams()[0]));
-        const type::Type* binding_ty =
+        const core::type::Type* binding_ty =
             std::get<const core::type::Type*>(call->ExplicitTemplateParams()[0]);
         ir::Value* idx = b.InsertConvertIfNeeded(ty.u32(), call->Args()[0]);
         return {binding_ty, idx};
@@ -209,7 +209,7 @@ struct State {
     }
 
     void ReplaceGetResourceCallUsage(const Usage& usage,
-                                     const type::Type* binding_type,
+                                     const core::type::Type* binding_type,
                                      ir::Value* idx) {
         auto* call = usage.instruction->As<ir::CoreBuiltinCall>();
         TINT_IR_ASSERT(ir, call);
@@ -312,7 +312,7 @@ struct State {
 
                 auto* rhs = b.Construct(conv_ty, vals);
                 auto* cmp = b.Equal(lhs, rhs);
-                eq = b.Call(ty.bool_(), core::BuiltinFn::kAny, cmp)->Result();
+                eq = b.Call(ty.bool_(), core::BuiltinFn::kAny, cmp);
             } else {
                 ResourceType resource_ty = core::type::TypeToResourceType(binding_type);
                 eq = b.Equal(type_id, u32(resource_ty));
@@ -450,14 +450,15 @@ struct State {
     }
 
     // Returns a `true` constant if the texture is filterable
-    ir::Value* ConstructTextureFilterableCheck(const type::Type* tex_ty, ir::Value* texture_kind) {
-        const auto* samp_ty = tex_ty->As<type::SampledTexture>();
+    ir::Value* ConstructTextureFilterableCheck(const core::type::Type* tex_ty,
+                                               ir::Value* texture_kind) {
+        const auto* samp_ty = tex_ty->As<core::type::SampledTexture>();
         // Only sampled texture types can be filterable
         if (!samp_ty) {
             return b.Constant(false);
         }
         // Only floating point sampled textures can be filterable
-        if (samp_ty->Type()->IsAnyOf<type::I32, type::U32>()) {
+        if (samp_ty->Type()->IsAnyOf<core::type::I32, core::type::U32>()) {
             return b.Constant(false);
         }
 
@@ -473,7 +474,7 @@ struct State {
     // Generates the code to access the item at `idx` from the resource table. Does not do any
     // validation of the types, just gets the resource. For samplers, will handle the
     // `get_sampler_index_from_metadata` flag.
-    ir::Instruction* GenGetResource(ir::Value* idx, const type::Type* binding_type) {
+    ir::Instruction* GenGetResource(ir::Value* idx, const core::type::Type* binding_type) {
         if (config->get_sampler_index_from_metadata && IsSampler(binding_type)) {
             // Get the sampler index from the metadata entry (high 16 bits)
             // TODO(crbug.com/503755700): Optimize to avoid loading twice from
@@ -588,7 +589,7 @@ struct State {
 
                 // Sampler and texture matched, just call
                 b.Append(check->True(), [&] {
-                    core::ir::Call* c = b.Call(result_ty, call->Func());
+                    core::ir::Call* c = b.Call(result_ty, call->Func())->AsInstruction<Call>();
                     for (ir::Value* arg : call->Args()) {
                         c->AppendArg(arg);
                     }

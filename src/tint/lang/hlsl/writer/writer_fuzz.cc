@@ -66,6 +66,7 @@ struct FuzzedOptions {
     SubstituteOverridesConfig substitute_overrides_config;
     bool d3d12_decompose_workgroup_access;
     bool collapse_subgroup_min_max;
+    bool polyfill_f16_ceil_floor;
 
     /// Reflect the fields of this class so that it can be used by tint::ForeachField()
     TINT_REFLECT(FuzzedOptions,
@@ -88,7 +89,8 @@ struct FuzzedOptions {
                  ignored_by_robustness_transform,
                  substitute_overrides_config,
                  d3d12_decompose_workgroup_access,
-                 collapse_subgroup_min_max);
+                 collapse_subgroup_min_max,
+                 polyfill_f16_ceil_floor);
 };
 
 Result<SuccessType> IRFuzzer(core::ir::Module& module,
@@ -136,6 +138,7 @@ Result<SuccessType> IRFuzzer(core::ir::Module& module,
     options.workarounds.d3d12_decompose_workgroup_access =
         fuzzed_options.d3d12_decompose_workgroup_access;
     options.workarounds.collapse_subgroup_min_max = fuzzed_options.collapse_subgroup_min_max;
+    options.workarounds.polyfill_f16_ceil_floor = fuzzed_options.polyfill_f16_ceil_floor;
     options.extensions.polyfill_dot_4x8_packed = fuzzed_options.polyfill_dot_4x8_packed;
     options.extensions.polyfill_pack_unpack_4x8 = fuzzed_options.polyfill_pack_unpack_4x8;
     options.compiler = fuzzed_options.compiler;
@@ -149,7 +152,7 @@ Result<SuccessType> IRFuzzer(core::ir::Module& module,
     options.bindings = GenerateBindings(module, ep_name, false, false);
     options.immediate_binding_point = BindingPoint(0, 30);
 
-    // Add array_length_from_uniform entries for all storage buffers with runtime sized arrays.
+    // Add array_length_from_immediate entries for all storage buffers with runtime sized arrays.
     std::unordered_set<tint::BindingPoint> storage_bindings;
     for (auto* inst : *module.root_block) {
         auto* var = inst->As<core::ir::Var>();
@@ -164,13 +167,13 @@ Result<SuccessType> IRFuzzer(core::ir::Module& module,
         if (!var->Result()->Type()->UnwrapPtr()->HasFixedFootprint()) {
             if (auto bp = var->BindingPoint()) {
                 if (storage_bindings.insert(bp.value()).second) {
-                    options.array_length_from_uniform.bindpoint_to_size_index.emplace(
+                    options.array_length_from_immediate.bindpoint_to_size_index.emplace(
                         bp.value(), static_cast<uint32_t>(storage_bindings.size() - 1));
                 }
             }
         }
     }
-    options.array_length_from_uniform.buffer_sizes_offset = 0x800;
+    options.array_length_from_immediate.buffer_sizes_offset = 0x800;
 
     TINT_CHECK_RESULT_UNWRAP(output, Generate(module, options));
     if (context.options.dump) {
@@ -188,9 +191,9 @@ Result<SuccessType> IRFuzzer(core::ir::Module& module,
     if (dxc.Found()) {
         auto hlsl_shader_model = validate::HlslShaderModel::kSM_6_6;
         bool require_16bit_types = true;
-        [[maybe_unused]] auto validate_res = validate::ValidateUsingDXC(
-            dxc.Path(), output.hlsl, output.entry_point_name, output.pipeline_stage,
-            require_16bit_types, hlsl_shader_model);
+        std::ignore = validate::ValidateUsingDXC(dxc.Path(), output.hlsl, output.entry_point_name,
+                                                 output.pipeline_stage, require_16bit_types,
+                                                 hlsl_shader_model);
     }
 
     return Success;

@@ -36,24 +36,38 @@ TEST_F(SpirvParserTest, Dot) {
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %main "main"
                OpExecutionMode %main LocalSize 1 1 1
+               OpName %main "main"
+               OpName %foo "foo"
+               OpName %param_1 "param_1"
+               OpName %param_2 "param_2"
        %void = OpTypeVoid
       %float = OpTypeFloat 32
     %v2float = OpTypeVector %float 2
     %ep_type = OpTypeFunction %void
-   %float_50 = OpConstant %float 50
-   %float_60 = OpConstant %float 60
-%v2float_50_60 = OpConstantComposite %v2float %float_50 %float_60
-%v2float_60_50 = OpConstantComposite %v2float %float_60 %float_50
+    %fn_type = OpTypeFunction %float %v2float %v2float
        %main = OpFunction %void None %ep_type
       %entry = OpLabel
-          %1 = OpDot %float %v2float_50_60 %v2float_60_50
                OpReturn
-               OpFunctionEnd)",
+               OpFunctionEnd
+
+        %foo = OpFunction %float None %fn_type
+    %param_1 = OpFunctionParameter %v2float
+    %param_2 = OpFunctionParameter %v2float
+  %foo_entry = OpLabel
+          %1 = OpDot %float %param_1 %param_2
+               OpReturnValue %1
+               OpFunctionEnd
+)",
               R"(
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
-    %2:f32 = dot vec2<f32>(50.0f, 60.0f), vec2<f32>(60.0f, 50.0f)
     ret
+  }
+}
+%foo = func(%param_1:vec2<f32>, %param_2:vec2<f32>):f32 {
+  $B2: {
+    %5:f32 = dot %param_1, %param_2
+    ret %5
   }
 }
 )");
@@ -1160,21 +1174,35 @@ TEST_F(SpirvParserTest, BitReverse_Uint) {
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %main "main"
                OpExecutionMode %main LocalSize 1 1 1
+               OpName %main "main"
+               OpName %foo "foo"
+               OpName %param "param"
        %void = OpTypeVoid
        %uint = OpTypeInt 32 0
-    %uint_10 = OpConstant %uint 10
     %ep_type = OpTypeFunction %void
+    %fn_type = OpTypeFunction %uint %uint
        %main = OpFunction %void None %ep_type
       %entry = OpLabel
-          %1 = OpBitReverse %uint %uint_10
                OpReturn
+               OpFunctionEnd
+
+        %foo = OpFunction %uint None %fn_type
+      %param = OpFunctionParameter %uint
+  %foo_entry = OpLabel
+          %1 = OpBitReverse %uint %param
+               OpReturnValue %1
                OpFunctionEnd
 )",
               R"(
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
-    %2:u32 = reverseBits 10u
     ret
+  }
+}
+%foo = func(%param:u32):u32 {
+  $B2: {
+    %4:u32 = reverseBits %param
+    ret %4
   }
 }
 )");
@@ -1186,21 +1214,35 @@ TEST_F(SpirvParserTest, BitReverse_Int) {
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %main "main"
                OpExecutionMode %main LocalSize 1 1 1
+               OpName %main "main"
+               OpName %foo "foo"
+               OpName %param "param"
        %void = OpTypeVoid
         %int = OpTypeInt 32 1
-     %int_10 = OpConstant %int 10
     %ep_type = OpTypeFunction %void
+    %fn_type = OpTypeFunction %int %int
        %main = OpFunction %void None %ep_type
       %entry = OpLabel
-          %1 = OpBitReverse %int %int_10
                OpReturn
+               OpFunctionEnd
+
+        %foo = OpFunction %int None %fn_type
+      %param = OpFunctionParameter %int
+  %foo_entry = OpLabel
+          %1 = OpBitReverse %int %param
+               OpReturnValue %1
                OpFunctionEnd
 )",
               R"(
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
-    %2:i32 = reverseBits 10i
     ret
+  }
+}
+%foo = func(%param:i32):i32 {
+  $B2: {
+    %4:i32 = reverseBits %param
+    ret %4
   }
 }
 )");
@@ -1212,24 +1254,36 @@ TEST_F(SpirvParserTest, BitReverse_UintVector) {
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %main "main"
                OpExecutionMode %main LocalSize 1 1 1
+               OpName %main "main"
+               OpName %foo "foo"
+               OpName %param "param"
        %void = OpTypeVoid
        %uint = OpTypeInt 32 0
      %v2uint = OpTypeVector %uint 2
-    %uint_10 = OpConstant %uint 10
-    %uint_20 = OpConstant %uint 20
- %v2uint_10_20 = OpConstantComposite %v2uint %uint_10 %uint_20
     %ep_type = OpTypeFunction %void
+    %fn_type = OpTypeFunction %v2uint %v2uint
        %main = OpFunction %void None %ep_type
       %entry = OpLabel
-          %1 = OpBitReverse %v2uint %v2uint_10_20
                OpReturn
+               OpFunctionEnd
+
+        %foo = OpFunction %v2uint None %fn_type
+      %param = OpFunctionParameter %v2uint
+  %foo_entry = OpLabel
+          %1 = OpBitReverse %v2uint %param
+               OpReturnValue %1
                OpFunctionEnd
 )",
               R"(
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
-    %2:vec2<u32> = reverseBits vec2<u32>(10u, 20u)
     ret
+  }
+}
+%foo = func(%param:vec2<u32>):vec2<u32> {
+  $B2: {
+    %4:vec2<u32> = reverseBits %param
+    ret %4
   }
 }
 )");
@@ -1241,24 +1295,36 @@ TEST_F(SpirvParserTest, BitReverse_IntVector) {
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %main "main"
                OpExecutionMode %main LocalSize 1 1 1
+               OpName %main "main"
+               OpName %foo "foo"
+               OpName %param "param"
        %void = OpTypeVoid
         %int = OpTypeInt 32 1
       %v2int = OpTypeVector %int 2
-     %int_10 = OpConstant %int 10
-     %int_20 = OpConstant %int 20
- %v2int_10_20 = OpConstantComposite %v2int %int_10 %int_20
     %ep_type = OpTypeFunction %void
+    %fn_type = OpTypeFunction %v2int %v2int
        %main = OpFunction %void None %ep_type
       %entry = OpLabel
-          %1 = OpBitReverse %v2int %v2int_10_20
                OpReturn
+               OpFunctionEnd
+
+        %foo = OpFunction %v2int None %fn_type
+      %param = OpFunctionParameter %v2int
+  %foo_entry = OpLabel
+          %1 = OpBitReverse %v2int %param
+               OpReturnValue %1
                OpFunctionEnd
 )",
               R"(
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
-    %2:vec2<i32> = reverseBits vec2<i32>(10i, 20i)
     ret
+  }
+}
+%foo = func(%param:vec2<i32>):vec2<i32> {
+  $B2: {
+    %4:vec2<i32> = reverseBits %param
+    ret %4
   }
 }
 )");
@@ -1270,24 +1336,36 @@ TEST_F(SpirvParserTest, All) {
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %main "main"
                OpExecutionMode %main LocalSize 1 1 1
+               OpName %main "main"
+               OpName %foo "foo"
+               OpName %param "param"
        %void = OpTypeVoid
        %bool = OpTypeBool
      %v2bool = OpTypeVector %bool 2
-       %true = OpConstantTrue %bool
-      %false = OpConstantFalse %bool
- %v2bool_true_false = OpConstantComposite %v2bool %true %false
     %ep_type = OpTypeFunction %void
+    %fn_type = OpTypeFunction %bool %v2bool
        %main = OpFunction %void None %ep_type
       %entry = OpLabel
-          %1 = OpAll %bool %v2bool_true_false
                OpReturn
+               OpFunctionEnd
+
+        %foo = OpFunction %bool None %fn_type
+      %param = OpFunctionParameter %v2bool
+  %foo_entry = OpLabel
+          %1 = OpAll %bool %param
+               OpReturnValue %1
                OpFunctionEnd
 )",
               R"(
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
-    %2:bool = all vec2<bool>(true, false)
     ret
+  }
+}
+%foo = func(%param:vec2<bool>):bool {
+  $B2: {
+    %4:bool = all %param
+    ret %4
   }
 }
 )");
@@ -1299,24 +1377,36 @@ TEST_F(SpirvParserTest, Any) {
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %main "main"
                OpExecutionMode %main LocalSize 1 1 1
+               OpName %main "main"
+               OpName %foo "foo"
+               OpName %param "param"
        %void = OpTypeVoid
        %bool = OpTypeBool
      %v2bool = OpTypeVector %bool 2
-       %true = OpConstantTrue %bool
-      %false = OpConstantFalse %bool
- %v2bool_true_false = OpConstantComposite %v2bool %true %false
     %ep_type = OpTypeFunction %void
+    %fn_type = OpTypeFunction %bool %v2bool
        %main = OpFunction %void None %ep_type
       %entry = OpLabel
-          %1 = OpAny %bool %v2bool_true_false
                OpReturn
+               OpFunctionEnd
+
+        %foo = OpFunction %bool None %fn_type
+      %param = OpFunctionParameter %v2bool
+  %foo_entry = OpLabel
+          %1 = OpAny %bool %param
+               OpReturnValue %1
                OpFunctionEnd
 )",
               R"(
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
-    %2:bool = any vec2<bool>(true, false)
     ret
+  }
+}
+%foo = func(%param:vec2<bool>):bool {
+  $B2: {
+    %4:bool = any %param
+    ret %4
   }
 }
 )");
@@ -1416,34 +1506,37 @@ TEST_F(SpirvParserTest, Transpose_2x2) {
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %main "main"
                OpExecutionMode %main LocalSize 1 1 1
+               OpName %main "main"
+               OpName %foo "foo"
+               OpName %param "param"
        %void = OpTypeVoid
       %float = OpTypeFloat 32
-        %one = OpConstant %float 1
-        %two = OpConstant %float 2
-      %three = OpConstant %float 3
     %v2float = OpTypeVector %float 2
-    %v3float = OpTypeVector %float 3
   %m2v2float = OpTypeMatrix %v2float 2
-  %m2v3float = OpTypeMatrix %v3float 2
-  %m3v2float = OpTypeMatrix %v2float 3
-      %v2one = OpConstantComposite %v2float %one %one
-      %v2two = OpConstantComposite %v2float %two %two
-    %v3three = OpConstantComposite %v3float %three %three %three
-%m2v2_one_two = OpConstantComposite %m2v2float %v2one %v2two
-%m3v2_two_one_two = OpConstantComposite %m3v2float %v2two %v2one %v2two
-%m2v3_threee_three = OpConstantComposite %m2v3float %v3three %v3three
-    %void_fn = OpTypeFunction %void
-       %main = OpFunction %void None %void_fn
+    %ep_type = OpTypeFunction %void
+    %fn_type = OpTypeFunction %m2v2float %m2v2float
+       %main = OpFunction %void None %ep_type
  %main_start = OpLabel
-          %1 = OpTranspose %m2v2float %m2v2_one_two
                OpReturn
+               OpFunctionEnd
+
+        %foo = OpFunction %m2v2float None %fn_type
+      %param = OpFunctionParameter %m2v2float
+  %foo_start = OpLabel
+          %1 = OpTranspose %m2v2float %param
+               OpReturnValue %1
                OpFunctionEnd
 )",
               R"(
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
-    %2:mat2x2<f32> = transpose mat2x2<f32>(vec2<f32>(1.0f), vec2<f32>(2.0f))
     ret
+  }
+}
+%foo = func(%param:mat2x2<f32>):mat2x2<f32> {
+  $B2: {
+    %4:mat2x2<f32> = transpose %param
+    ret %4
   }
 }
 )");
@@ -1455,34 +1548,39 @@ TEST_F(SpirvParserTest, Transpose_2x3) {
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %main "main"
                OpExecutionMode %main LocalSize 1 1 1
+               OpName %main "main"
+               OpName %foo "foo"
+               OpName %param "param"
        %void = OpTypeVoid
       %float = OpTypeFloat 32
-        %one = OpConstant %float 1
-        %two = OpConstant %float 2
-      %three = OpConstant %float 3
     %v2float = OpTypeVector %float 2
     %v3float = OpTypeVector %float 3
-  %m2v2float = OpTypeMatrix %v2float 2
   %m2v3float = OpTypeMatrix %v3float 2
   %m3v2float = OpTypeMatrix %v2float 3
-      %v2one = OpConstantComposite %v2float %one %one
-      %v2two = OpConstantComposite %v2float %two %two
-    %v3three = OpConstantComposite %v3float %three %three %three
-%m2v2_one_two = OpConstantComposite %m2v2float %v2one %v2two
-%m3v2_two_one_two = OpConstantComposite %m3v2float %v2two %v2one %v2two
-%m2v3_three_three = OpConstantComposite %m2v3float %v3three %v3three
-    %void_fn = OpTypeFunction %void
-       %main = OpFunction %void None %void_fn
+    %ep_type = OpTypeFunction %void
+    %fn_type = OpTypeFunction %m3v2float %m2v3float
+       %main = OpFunction %void None %ep_type
  %main_start = OpLabel
-          %1 = OpTranspose %m3v2float %m2v3_three_three
                OpReturn
+               OpFunctionEnd
+
+        %foo = OpFunction %m3v2float None %fn_type
+      %param = OpFunctionParameter %m2v3float
+  %foo_start = OpLabel
+          %1 = OpTranspose %m3v2float %param
+               OpReturnValue %1
                OpFunctionEnd
 )",
               R"(
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
-    %2:mat3x2<f32> = transpose mat2x3<f32>(vec3<f32>(3.0f))
     ret
+  }
+}
+%foo = func(%param:mat2x3<f32>):mat3x2<f32> {
+  $B2: {
+    %4:mat3x2<f32> = transpose %param
+    ret %4
   }
 }
 )");
@@ -1494,34 +1592,39 @@ TEST_F(SpirvParserTest, Transpose_3x2) {
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %main "main"
                OpExecutionMode %main LocalSize 1 1 1
+               OpName %main "main"
+               OpName %foo "foo"
+               OpName %param "param"
        %void = OpTypeVoid
       %float = OpTypeFloat 32
-        %one = OpConstant %float 1
-        %two = OpConstant %float 2
-      %three = OpConstant %float 3
     %v2float = OpTypeVector %float 2
     %v3float = OpTypeVector %float 3
-  %m2v2float = OpTypeMatrix %v2float 2
   %m2v3float = OpTypeMatrix %v3float 2
   %m3v2float = OpTypeMatrix %v2float 3
-      %v2one = OpConstantComposite %v2float %one %one
-      %v2two = OpConstantComposite %v2float %two %two
-    %v3three = OpConstantComposite %v3float %three %three %three
-%m2v2_one_two = OpConstantComposite %m2v2float %v2one %v2two
-%m3v2_two_one_two = OpConstantComposite %m3v2float %v2two %v2one %v2two
-%m2v3_threee_three = OpConstantComposite %m2v3float %v3three %v3three
-    %void_fn = OpTypeFunction %void
-       %main = OpFunction %void None %void_fn
+    %ep_type = OpTypeFunction %void
+    %fn_type = OpTypeFunction %m2v3float %m3v2float
+       %main = OpFunction %void None %ep_type
  %main_start = OpLabel
-          %1 = OpTranspose %m2v3float %m3v2_two_one_two
                OpReturn
+               OpFunctionEnd
+
+        %foo = OpFunction %m2v3float None %fn_type
+      %param = OpFunctionParameter %m3v2float
+  %foo_start = OpLabel
+          %1 = OpTranspose %m2v3float %param
+               OpReturnValue %1
                OpFunctionEnd
 )",
               R"(
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
-    %2:mat2x3<f32> = transpose mat3x2<f32>(vec2<f32>(2.0f), vec2<f32>(1.0f), vec2<f32>(2.0f))
     ret
+  }
+}
+%foo = func(%param:mat3x2<f32>):mat2x3<f32> {
+  $B2: {
+    %4:mat2x3<f32> = transpose %param
+    ret %4
   }
 }
 )");
@@ -1606,15 +1709,20 @@ TEST_F(SpirvParserTest, VectorExtractDynamic) {
 %float_4 = OpConstant %float 4.0
 %uint_2  = OpConstant %uint 2
 %vec = OpConstantComposite %v4float %float_1 %float_2 %float_3 %float_4
+%ptr = OpTypePointer Function %v4float
 %main = OpFunction %void None %ep_type
 %entry = OpLabel
-  %1 = OpVectorExtractDynamic %float %vec %uint_2
+  %v = OpVariable %ptr Function %vec
+ %ld = OpLoad %v4float %v
+  %1 = OpVectorExtractDynamic %float %ld %uint_2
        OpReturn
        OpFunctionEnd)",
               R"(
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
-    %2:f32 = access vec4<f32>(1.0f, 2.0f, 3.0f, 4.0f), 2u
+    %2:ptr<function, vec4<f32>, read_write> = var vec4<f32>(1.0f, 2.0f, 3.0f, 4.0f)
+    %3:vec4<f32> = load %2
+    %4:f32 = access %3, 2u
     ret
   }
 }
@@ -2426,8 +2534,7 @@ TEST_F(SpirvParserTest, NonUniformBallotBitCount_Reduce_FromBallot_Const) {
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
     %2:vec4<u32> = subgroupBallot true
-    %3:u32 = convert true
-    %4:u32 = subgroupAdd %3
+    %3:u32 = subgroupAdd 1u
     ret
   }
 }
@@ -2499,8 +2606,7 @@ TEST_F(SpirvParserTest, NonUniformBallotBitCount_InclusiveScan_FromBallot) {
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
     %2:vec4<u32> = subgroupBallot true
-    %3:u32 = convert true
-    %4:u32 = subgroupInclusiveAdd %3
+    %3:u32 = subgroupInclusiveAdd 1u
     ret
   }
 }
@@ -2534,8 +2640,7 @@ TEST_F(SpirvParserTest, NonUniformBallotBitCount_ExclusiveScan_FromBallot) {
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
     %2:vec4<u32> = subgroupBallot true
-    %3:u32 = convert true
-    %4:u32 = subgroupExclusiveAdd %3
+    %3:u32 = subgroupExclusiveAdd 1u
     ret
   }
 }
@@ -4993,6 +5098,212 @@ TEST_F(SpirvParserTest, NonUniformBitwiseXor_Vector) {
 }
 )",
                   SPV_ENV_VULKAN_1_1);
+}
+
+TEST_F(SpirvParserTest, NonUniformBitwise_UnsupportedGroupOperation) {
+    auto* src = R"(
+               OpCapability Shader
+               OpCapability GroupNonUniformArithmetic
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+       %uint = OpTypeInt 32 0
+     %uint_3 = OpConstant %uint 3
+     %uint_1 = OpConstant %uint 1
+       %void = OpTypeVoid
+    %func_ty = OpTypeFunction %void
+       %main = OpFunction %void None %func_ty
+      %label = OpLabel
+        %res = OpGroupNonUniformBitwiseAnd %uint %uint_3 InclusiveScan %uint_1
+               OpReturn
+               OpFunctionEnd
+)";
+    auto result = Run(src, SPV_ENV_VULKAN_1_1);
+    EXPECT_NE(result, Success);
+    EXPECT_THAT(
+        result.Failure().reason,
+        testing::HasSubstr("GroupNonUniformBitwise operations require a Reduce group operation"));
+}
+
+TEST_F(SpirvParserTest, NonUniformMinMax_Unsigned_UnsupportedGroupOperation) {
+    auto* src = R"(
+               OpCapability Shader
+               OpCapability GroupNonUniformArithmetic
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+       %uint = OpTypeInt 32 0
+     %uint_3 = OpConstant %uint 3
+     %uint_1 = OpConstant %uint 1
+       %void = OpTypeVoid
+    %func_ty = OpTypeFunction %void
+       %main = OpFunction %void None %func_ty
+      %label = OpLabel
+        %res = OpGroupNonUniformUMin %uint %uint_3 InclusiveScan %uint_1
+               OpReturn
+               OpFunctionEnd
+)";
+    auto result = Run(src, SPV_ENV_VULKAN_1_1);
+    EXPECT_NE(result, Success);
+    EXPECT_THAT(result.Failure().reason,
+                testing::HasSubstr("group operand Reduce required for `Min`/`Max` instructions"));
+}
+
+TEST_F(SpirvParserTest, NonUniform_UnsupportedClusteredCapability) {
+    auto* src = R"(
+               OpCapability Shader
+               OpCapability GroupNonUniformClustered
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+       %uint = OpTypeInt 32 0
+     %uint_3 = OpConstant %uint 3
+     %uint_1 = OpConstant %uint 1
+     %uint_4 = OpConstant %uint 4
+       %void = OpTypeVoid
+    %func_ty = OpTypeFunction %void
+       %main = OpFunction %void None %func_ty
+      %label = OpLabel
+        %res = OpGroupNonUniformIAdd %uint %uint_3 ClusteredReduce %uint_1 %uint_4
+               OpReturn
+               OpFunctionEnd
+)";
+    auto result = Run(src, SPV_ENV_VULKAN_1_1);
+    EXPECT_NE(result, Success);
+    EXPECT_THAT(
+        result.Failure().reason,
+        testing::HasSubstr("SPIR-V capability 'GroupNonUniformClustered' is not supported"));
+}
+
+TEST_F(SpirvParserTest, NonUniformBallotBitCount_NonBallotValue) {
+    auto* src = R"(
+               OpCapability Shader
+               OpCapability GroupNonUniformBallot
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+       %uint = OpTypeInt 32 0
+     %uint_3 = OpConstant %uint 3
+     %uint_1 = OpConstant %uint 1
+     %v4uint = OpTypeVector %uint 4
+%const_ballot = OpConstantComposite %v4uint %uint_1 %uint_1 %uint_1 %uint_1
+       %void = OpTypeVoid
+    %func_ty = OpTypeFunction %void
+       %main = OpFunction %void None %func_ty
+      %label = OpLabel
+        %res = OpGroupNonUniformBallotBitCount %uint %uint_3 Reduce %const_ballot
+               OpReturn
+               OpFunctionEnd
+)";
+    auto result = Run(src, SPV_ENV_VULKAN_1_1);
+    EXPECT_NE(result, Success);
+    EXPECT_THAT(result.Failure().reason,
+                testing::HasSubstr("OpGroupNonUniformBallotBitCount is only supported when Value "
+                                   "is from OpGroupNonUniformBallot"));
+}
+
+TEST_F(SpirvParserTest, NonUniformBroadcast_DynamicInvocationId) {
+    auto* src = R"(
+               OpCapability Shader
+               OpCapability GroupNonUniformBallot
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+       %uint = OpTypeInt 32 0
+     %uint_3 = OpConstant %uint 3
+     %uint_1 = OpConstant %uint 1
+       %void = OpTypeVoid
+    %func_ty = OpTypeFunction %void
+   %ptr_uint = OpTypePointer Function %uint
+       %main = OpFunction %void None %func_ty
+      %label = OpLabel
+        %var = OpVariable %ptr_uint Function
+               OpStore %var %uint_1
+       %load = OpLoad %uint %var
+        %res = OpGroupNonUniformBroadcast %uint %uint_3 %uint_1 %load
+               OpReturn
+               OpFunctionEnd
+)";
+    auto result = Run(src, SPV_ENV_VULKAN_1_1);
+    EXPECT_NE(result, Success);
+    EXPECT_THAT(result.Failure().reason,
+                testing::HasSubstr("In SPIR-V 1.4 or earlier, Id must be a constant instruction"));
+}
+
+TEST_F(SpirvParserTest, NonUniform_ScopeSpecConstant) {
+    auto* src = R"(
+               OpCapability Shader
+               OpCapability GroupNonUniformVote
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+       %uint = OpTypeInt 32 0
+       %bool = OpTypeBool
+       %true = OpConstantTrue %bool
+      %scope = OpSpecConstant %uint 3
+       %void = OpTypeVoid
+    %func_ty = OpTypeFunction %void
+       %main = OpFunction %void None %func_ty
+      %label = OpLabel
+        %res = OpGroupNonUniformAll %bool %scope %true
+               OpReturn
+               OpFunctionEnd
+)";
+    auto result = Run(src, SPV_ENV_VULKAN_1_1);
+    EXPECT_NE(result, Success);
+    EXPECT_THAT(
+        result.Failure().reason,
+        testing::HasSubstr("Scope ids must be OpConstant when Shader capability is present"));
+}
+
+TEST_F(SpirvParserTest, NonUniform_ScopeWorkgroup) {
+    auto* src = R"(
+               OpCapability Shader
+               OpCapability GroupNonUniformVote
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+       %uint = OpTypeInt 32 0
+       %bool = OpTypeBool
+       %true = OpConstantTrue %bool
+     %uint_2 = OpConstant %uint 2
+       %void = OpTypeVoid
+    %func_ty = OpTypeFunction %void
+       %main = OpFunction %void None %func_ty
+      %label = OpLabel
+        %res = OpGroupNonUniformAll %bool %uint_2 %true
+               OpReturn
+               OpFunctionEnd
+)";
+    auto result = Run(src, SPV_ENV_VULKAN_1_1);
+    EXPECT_NE(result, Success);
+    EXPECT_THAT(result.Failure().reason,
+                testing::HasSubstr("Execution scope is limited to Subgroup"));
+}
+
+TEST_F(SpirvParserTest, NonUniformMinMax_Signed_UnsupportedGroupOperation) {
+    auto* src = R"(
+               OpCapability Shader
+               OpCapability GroupNonUniformArithmetic
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+        %int = OpTypeInt 32 1
+       %uint = OpTypeInt 32 0
+     %uint_3 = OpConstant %uint 3
+      %int_1 = OpConstant %int 1
+       %void = OpTypeVoid
+    %func_ty = OpTypeFunction %void
+       %main = OpFunction %void None %func_ty
+      %label = OpLabel
+        %res = OpGroupNonUniformSMin %int %uint_3 InclusiveScan %int_1
+               OpReturn
+               OpFunctionEnd
+)";
+    auto result = Run(src, SPV_ENV_VULKAN_1_1);
+    EXPECT_NE(result, Success);
+    EXPECT_THAT(result.Failure().reason,
+                testing::HasSubstr("group operand Reduce required for `Min`/`Max` instructions"));
 }
 
 }  // namespace

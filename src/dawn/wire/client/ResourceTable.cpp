@@ -47,12 +47,12 @@ ResourceTable* ResourceTable::Create(Device* device, const ResourceTableDescript
 
     DeviceCreateResourceTableCmd cmd;
     cmd.self = ToAPI(device);
-    cmd.descriptor = ToAPI(descriptor);
+    cmd.descriptor = ToWireCmd(descriptor);
 
     Ref<ResourceTable> table = wireClient->Make<ResourceTable>(device, descriptor);
     cmd.result = table->GetWireHandle(wireClient);
 
-    wireClient->SerializeCommand(cmd);
+    wireClient->SerializeCommand(std::move(cmd));
 
     return ReturnToAPI2(std::move(table));
 }
@@ -91,7 +91,7 @@ void ResourceTable::APIDestroy() {
     // Forward the command to the server.
     ResourceTableDestroyCmd cmd;
     cmd.self = ToAPI(this);
-    GetClient()->SerializeCommand(cmd);
+    GetClient()->SerializeCommand(std::move(cmd));
 }
 
 wgpu::Status ResourceTable::APIUpdate(uint32_t slot, const BindingResource* resource) {
@@ -107,8 +107,8 @@ wgpu::Status ResourceTable::APIUpdate(uint32_t slot, const BindingResource* reso
     ResourceTableUpdateCmd cmd;
     cmd.self = ToAPI(this);
     cmd.slot = slot;
-    cmd.resource = ToAPI(resource);
-    GetClient()->SerializeCommand(cmd);
+    cmd.resource = ToWireCmd(resource);
+    GetClient()->SerializeCommand(std::move(cmd));
 
     return wgpu::Status::Success;
 }
@@ -147,7 +147,7 @@ wgpu::Status ResourceTable::APIRemove(uint32_t slot) {
     ResourceTableRemoveCmd cmd;
     cmd.self = ToAPI(this);
     cmd.slot = slot;
-    GetClient()->SerializeCommand(cmd);
+    GetClient()->SerializeCommand(std::move(cmd));
 
     return wgpu::Status::Success;
 }

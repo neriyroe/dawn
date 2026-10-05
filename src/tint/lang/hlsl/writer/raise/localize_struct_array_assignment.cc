@@ -28,7 +28,7 @@
 #include "src/tint/lang/hlsl/writer/raise/localize_struct_array_assignment.h"
 
 #include "src/tint/lang/core/ir/builder.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 
 namespace tint::hlsl::writer::raise {
 namespace {
@@ -51,11 +51,9 @@ struct State {
                             core::ir::Value*& object,
                             Vector<core::ir::Value*, 4>& indices) {
         bool is_access = false;
-        if (auto* inst_result = access->Object()->As<core::ir::InstructionResult>()) {
-            if (auto* obj_access = inst_result->Instruction()->As<core::ir::Access>()) {
-                FlattenAccessChain(obj_access, object, indices);
-                is_access = true;
-            }
+        if (auto* obj_access = access->Object()->AsInstruction<core::ir::Access>()) {
+            FlattenAccessChain(obj_access, object, indices);
+            is_access = true;
         }
         if (!is_access) {
             object = access->Object();
@@ -82,11 +80,7 @@ struct State {
             return;
         }
         // Must be storing via an access
-        auto* to = store->To()->As<core::ir::InstructionResult>();
-        if (!to) {
-            return;
-        }
-        auto* to_access = to->Instruction()->As<core::ir::Access>();
+        auto* to_access = store->To()->AsInstruction<core::ir::Access>();
         if (!to_access) {
             return;
         }

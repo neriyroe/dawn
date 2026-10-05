@@ -67,7 +67,7 @@
 #include "src/tint/lang/core/ir/terminator.h"
 #include "src/tint/lang/core/ir/unreachable.h"
 #include "src/tint/lang/core/ir/user_call.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/ir/var.h"
 #include "src/tint/lang/core/type/array.h"
 #include "src/tint/lang/core/type/atomic.h"
@@ -407,6 +407,10 @@ class Printer {
                 module_.PushExtension("SPV_KHR_fragment_shader_barycentric");
                 module_.PushCapability(SpvCapabilityFragmentBarycentricKHR);
                 return SpvBuiltInBaryCoordKHR;
+            case core::BuiltinValue::kViewIndex:
+                module_.PushExtension("SPV_KHR_multiview");
+                module_.PushCapability(SpvCapabilityMultiView);
+                return SpvBuiltInViewIndex;
             // These are lowered elsewhere
             case core::BuiltinValue::kGlobalInvocationIndex:
             case core::BuiltinValue::kWorkgroupIndex:
@@ -474,6 +478,10 @@ class Printer {
                     module_.PushType(
                         spv::Op::OpConstant,
                         {Type(ty), id, U32Operand(constant->ValueAs<f16>().BitsRepresentation())});
+                },
+                [&](const core::type::U16*) {
+                    module_.PushType(spv::Op::OpConstant,
+                                     {Type(ty), id, U32Operand(constant->ValueAs<u16>())});
                 },
                 [&](const core::type::Vector* vec) {
                     OperandList operands = {Type(ty), id};
@@ -563,18 +571,12 @@ class Printer {
                 [&](const core::type::U16*) {
                     module_.PushCapability(SpvCapabilityInt16);
                     module_.PushCapability(SpvCapabilityStorageBuffer16BitAccess);
-                    if (options_.extensions.use_uniform_buffers) {
-                        module_.PushCapability(SpvCapabilityUniformAndStorageBuffer16BitAccess);
-                    }
                     module_.PushType(spv::Op::OpTypeInt, {id, 16u, 0u});
                 },
                 [&](const core::type::F32*) { module_.PushType(spv::Op::OpTypeFloat, {id, 32u}); },
                 [&](const core::type::F16*) {
                     module_.PushCapability(SpvCapabilityFloat16);
                     module_.PushCapability(SpvCapabilityStorageBuffer16BitAccess);
-                    if (options_.extensions.use_uniform_buffers) {
-                        module_.PushCapability(SpvCapabilityUniformAndStorageBuffer16BitAccess);
-                    }
                     module_.PushType(spv::Op::OpTypeFloat, {id, 16u});
                 },
                 [&](const core::type::Vector* vec) {

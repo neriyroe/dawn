@@ -49,6 +49,9 @@ tint::core::ir::Instruction::Accesses GetSideEffects(BuiltinFn fn) {
         case BuiltinFn::kQuadShuffleXor:
         case BuiltinFn::kAtomicMaxExplicit:
         case BuiltinFn::kAtomicMinExplicit:
+        case BuiltinFn::kCopyCooperativeTensor:
+        case BuiltinFn::kRunTensorMultiply:
+        case BuiltinFn::kRunTensorMultiplyAccumulate:
             return core::ir::Instruction::Accesses{core::ir::Instruction::Access::kLoad, core::ir::Instruction::Access::kStore};
 
         case BuiltinFn::kAtomicLoadExplicit:
@@ -58,10 +61,14 @@ tint::core::ir::Instruction::Accesses GetSideEffects(BuiltinFn fn) {
         case BuiltinFn::kSample:
         case BuiltinFn::kSampleCompare:
         case BuiltinFn::kSimdgroupLoad:
+        case BuiltinFn::kResourceLoad:
+        case BuiltinFn::kLoad:
             return core::ir::Instruction::Accesses{core::ir::Instruction::Access::kLoad};
 
         case BuiltinFn::kWrite:
         case BuiltinFn::kSimdgroupStore:
+        case BuiltinFn::kFillCooperativeTensor:
+        case BuiltinFn::kStore:
             return core::ir::Instruction::Accesses{core::ir::Instruction::Access::kStore};
 
         case BuiltinFn::kDistance:
@@ -84,9 +91,12 @@ tint::core::ir::Instruction::Accesses GetSideEffects(BuiltinFn fn) {
         case BuiltinFn::kMakeDiagonalSimdgroupMatrix:
         case BuiltinFn::kMakeFilledSimdgroupMatrix:
         case BuiltinFn::kOsLog:
+        case BuiltinFn::kAliasPointerOffset:
         case BuiltinFn::kPointerOffset:
         case BuiltinFn::kVolatileZero:
         case BuiltinFn::kMadsat:
+        case BuiltinFn::kReinterpretCast:
+        case BuiltinFn::kMakeTensorInline:
             break;
     }
     return core::ir::Instruction::Accesses{};

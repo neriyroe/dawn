@@ -460,7 +460,7 @@ TEST_F(HlslWriterTest, FunctionEntryPointWithWOStorageBufferStore) {
               R"(
 RWByteAddressBuffer coord : register(u0, space1);
 void main() {
-  coord.Store(4u, asuint(2.0f));
+  coord.Store(4u, 1073741824u);
 }
 
 )");
@@ -499,7 +499,7 @@ TEST_F(HlslWriterTest, FunctionEntryPointWithStorageBufferStore) {
               R"(
 RWByteAddressBuffer coord : register(u0, space1);
 void main() {
-  coord.Store(4u, asuint(2.0f));
+  coord.Store(4u, 1073741824u);
 }
 
 )");
@@ -952,6 +952,29 @@ TEST_F(HlslWriterTest, WorkgroupStorageSizeSimple) {
 
     auto result = Generate();
     ASSERT_EQ(result, Success) << result.Failure().reason << output_.hlsl;
+    EXPECT_EQ(32u, output_.workgroup_info.storage_size);
+}
+
+TEST_F(HlslWriterTest, WorkgroupStorageSizeBeforeSplitWorkgroupAtomics) {
+    auto* str = ty.Struct(mod.symbols.New("S"), {
+                                                    {mod.symbols.New("data"), ty.u32()},
+                                                    {mod.symbols.New("counter"), ty.atomic<u32>()},
+                                                });
+    auto* var = mod.root_block->Append(b.Var("wg", ty.ptr(workgroup, str)));
+
+    auto* func = b.ComputeFunction("main", 1_u, 1_u, 1_u);
+    b.Append(func->Block(), [&] {
+        auto* atomic = b.Access(ty.ptr(workgroup, ty.atomic<u32>()), var, 1_u);
+        b.Call(ty.void_(), core::BuiltinFn::kAtomicStore, atomic, 0_u);
+        b.Return(func);
+    });
+
+    Options options;
+    options.workarounds.d3d12_decompose_workgroup_access = true;
+    auto result = Generate(options);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.hlsl;
+    ASSERT_TRUE(output_.workgroup_storage_size_before_split_workgroup_atomics.has_value());
+    EXPECT_EQ(16u, *output_.workgroup_storage_size_before_split_workgroup_atomics);
     EXPECT_EQ(32u, output_.workgroup_info.storage_size);
 }
 

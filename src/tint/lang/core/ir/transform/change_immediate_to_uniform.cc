@@ -29,7 +29,7 @@
 
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 
 namespace tint::core::ir::transform {
 namespace {
@@ -115,7 +115,7 @@ struct State {
         while (!to_replace.IsEmpty()) {
             auto* value = to_replace.Pop();
 
-            auto* ptr_type = value->Type()->As<type::Pointer>();
+            auto* ptr_type = value->Type()->As<core::type::Pointer>();
             if (ptr_type->AddressSpace() == AddressSpace::kUniform) {
                 // This value has already been replaced. This can happen for function parameters
                 // when the function is called multiple times.

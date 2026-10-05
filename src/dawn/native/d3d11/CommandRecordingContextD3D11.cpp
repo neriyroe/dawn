@@ -123,8 +123,8 @@ void ScopedCommandRecordingContext::CopySubresourceRegion(ID3D11Resource* pDstRe
 }
 
 void ScopedCommandRecordingContext::ClearRenderTargetView(ID3D11RenderTargetView* pRenderTargetView,
-                                                          const FLOAT ColorRGBA[4]) const {
-    Get()->mD3D11DeviceContext3->ClearRenderTargetView(pRenderTargetView, ColorRGBA);
+                                                          Span<const float, 4> colorRGBA) const {
+    Get()->mD3D11DeviceContext3->ClearRenderTargetView(pRenderTargetView, colorRGBA.data());
 }
 
 void ScopedCommandRecordingContext::ClearDepthStencilView(ID3D11DepthStencilView* pDepthStencilView,
@@ -178,12 +178,14 @@ void ScopedCommandRecordingContext::Flush1(D3D11_CONTEXT_TYPE ContextType, HANDL
 }
 
 void ScopedCommandRecordingContext::WriteUniformBufferRange(uint32_t offset,
-                                                            const void* data,
-                                                            size_t size) const {
+                                                            Span<const std::byte> data) const {
     DAWN_ASSERT(offset < CommandRecordingContext::kMaxImmediateSlotsD3D11);
-    DAWN_ASSERT(size <=
+    DAWN_ASSERT(data.size() <=
                 sizeof(uint32_t) * (CommandRecordingContext::kMaxImmediateSlotsD3D11 - offset));
-    DAWN_UNSAFE_TODO(std::memcpy(&Get()->mUniformBufferData[offset], data, size));
+
+    // 'offset' is in slots space
+    auto slots = Span<uint32_t>(Get()->mUniformBufferData).subspan(offset);
+    SpanAsWritableBytes(slots).subspan(0, data.size()).CopyFrom(data);
     Get()->mUniformBufferDirty = true;
 }
 

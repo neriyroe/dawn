@@ -8,7 +8,7 @@ buffer f_prevent_dce_block_ssbo {
 } v;
 uniform highp samplerCubeArrayShadow f_arg_0_arg_1;
 float textureSample_c2f4e8() {
-  float res = texture(f_arg_0_arg_1, vec4(vec3(1.0f), float(1)), 0.0f);
+  float res = texture(f_arg_0_arg_1, vec4(1.0f), 0.0f);
   return res;
 }
 void main() {

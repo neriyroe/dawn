@@ -32,7 +32,7 @@
 #include "src/tint/lang/core/ir/exit.h"
 #include "src/tint/lang/core/ir/loop.h"
 #include "src/tint/lang/core/ir/switch.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/manager.h"
 #include "src/tint/lang/hlsl/builtin_fn.h"
 #include "src/tint/lang/hlsl/ir/builtin_call.h"
@@ -143,9 +143,10 @@ struct State {
         // Insert coord decl used to index ROVs at the entry point start
         core::ir::Instruction* coord = nullptr;
         b.InsertBefore(entry_point->Block()->Front(), [&] {
-            coord = b.Access(ty.vec4f(), entry_point_param, u32(position_member->Index()));
-            coord = b.Swizzle(ty.vec2f(), coord, {0, 1});
-            coord = b.Convert<vec2<u32>>(coord);  // Input type to .Load
+            coord = b.Access(ty.vec4f(), entry_point_param, u32(position_member->Index()))
+                        ->AsInstruction();
+            coord = b.Swizzle(ty.vec2f(), coord, {0, 1})->AsInstruction();
+            coord = b.Convert<vec2<u32>>(coord)->AsInstruction();  // Input type to .Load
         });
 
         // Insert copy from ROVs to the struct right after the coord decl
@@ -154,10 +155,11 @@ struct State {
                 auto& rov = rovs[mem->Index()];
                 auto* mem_ty = mem->Type();
                 TINT_IR_ASSERT(ir, mem_ty->Is<core::type::Scalar>());
-                core::ir::Instruction* from = b.Load(rov.var);
+                core::ir::Value* from = b.Load(rov.var)->Result();
                 // Load returns a vec4, so we need to swizzle the first element
                 from = b.MemberCall<hlsl::ir::MemberBuiltinCall>(
-                    ty.vec4(rov.subtype), tint::hlsl::BuiltinFn::kLoad, from, coord);
+                            ty.vec4(rov.subtype), tint::hlsl::BuiltinFn::kLoad, from, coord)
+                           ->Result();
                 from = b.Swizzle(rov.subtype, from, {0});
                 if (mem_ty != rov.subtype) {
                     // ROV and struct member types don't match
@@ -174,9 +176,9 @@ struct State {
                 auto& rov = rovs[mem->Index()];
                 auto* mem_ty = mem->Type();
                 TINT_IR_ASSERT(ir, mem_ty->Is<core::type::Scalar>());
-                core::ir::Instruction* from =
+                core::ir::Value* from =
                     b.Access(ty.ptr<private_>(mem_ty), pixel_local_var, u32(mem->Index()));
-                from = b.Load(from);
+                from = b.Load(from)->Result();
                 if (mem_ty != rov.subtype) {
                     // ROV and struct member types don't match
                     from = b.Convert(rov.subtype, from);

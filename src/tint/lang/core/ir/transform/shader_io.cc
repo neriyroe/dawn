@@ -237,7 +237,7 @@ struct State {
                 for (uint32_t i = 0; i < str->Members().Length(); i++) {
                     construct_args.Push(backend->GetInput(builder, input_idx++));
                 }
-                args.Push(builder.Construct(param->Type(), construct_args)->Result());
+                args.Push(builder.Construct(param->Type(), construct_args));
             } else {
                 args.Push(backend->GetInput(builder, input_idx++));
             }
@@ -252,8 +252,7 @@ struct State {
     void SetOutputs(Builder& builder, Value* inner_result) {
         if (auto* str = inner_result->Type()->As<core::type::Struct>()) {
             for (auto* member : str->Members()) {
-                Value* from =
-                    builder.Access(member->Type(), inner_result, u32(member->Index()))->Result();
+                Value* from = builder.Access(member->Type(), inner_result, u32(member->Index()));
                 backend->SetOutput(builder, member->Index(), from);
             }
         } else if (!inner_result->Type()->Is<core::type::Void>()) {

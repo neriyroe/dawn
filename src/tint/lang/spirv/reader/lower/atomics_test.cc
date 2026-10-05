@@ -3217,7 +3217,7 @@ TEST_F(SpirvReader_AtomicsTest, ArrayLength) {
         auto* a = b.Access(ty.ptr<storage, u32, read_write>(), buffer, 1_i);
         b.Call<spirv::ir::BuiltinCall>(ty.void_(), spirv::BuiltinFn::kAtomicStore, a, 1_u, 0_u,
                                        1_u);
-        b.Call<core::ir::CoreBuiltinCall>(ty.u32(), core::BuiltinFn::kArrayLength, buffer);
+        b.Call(ty.u32(), core::BuiltinFn::kArrayLength, buffer);
         b.Return(f);
     });
 
@@ -3609,8 +3609,7 @@ $B1: {  # root
   $B2: {
     %3:ptr<storage, u32, read_write> = access %buffer, 1i
     %4:u32 = spirv.atomic_i_add %3, 1u, 0u, 1u
-    %5:array<u32, 4> = construct 0u, 1u, 2u, 3u
-    store %buffer, %5
+    store %buffer, array<u32, 4>(0u, 1u, 2u, 3u)
     ret
   }
 }
@@ -3625,19 +3624,14 @@ $B1: {  # root
   $B2: {
     %3:ptr<storage, atomic<u32>, read_write> = access %buffer, 1i
     %4:u32 = atomicAdd %3, 1u
-    %5:array<u32, 4> = construct 0u, 1u, 2u, 3u
-    %6:ptr<storage, atomic<u32>, read_write> = access %buffer, 0u
-    %7:u32 = access %5, 0u
-    %8:void = atomicStore %6, %7
-    %9:ptr<storage, atomic<u32>, read_write> = access %buffer, 1u
-    %10:u32 = access %5, 1u
-    %11:void = atomicStore %9, %10
-    %12:ptr<storage, atomic<u32>, read_write> = access %buffer, 2u
-    %13:u32 = access %5, 2u
-    %14:void = atomicStore %12, %13
-    %15:ptr<storage, atomic<u32>, read_write> = access %buffer, 3u
-    %16:u32 = access %5, 3u
-    %17:void = atomicStore %15, %16
+    %5:ptr<storage, atomic<u32>, read_write> = access %buffer, 0u
+    %6:void = atomicStore %5, 0u
+    %7:ptr<storage, atomic<u32>, read_write> = access %buffer, 1u
+    %8:void = atomicStore %7, 1u
+    %9:ptr<storage, atomic<u32>, read_write> = access %buffer, 2u
+    %10:void = atomicStore %9, 2u
+    %11:ptr<storage, atomic<u32>, read_write> = access %buffer, 3u
+    %12:void = atomicStore %11, 3u
     ret
   }
 }
@@ -4090,10 +4084,7 @@ $B1: {  # root
   $B2: {
     %3:ptr<storage, u32, read_write> = access %buffer, 1i, 1u
     %4:u32 = spirv.atomic_i_add %3, 1u, 0u, 1u
-    %5:S = construct 1.0f, 2u
-    %6:S = construct 3.0f, 4u
-    %7:array<S, 2> = construct %5, %6
-    store %buffer, %7
+    store %buffer, array<S, 2>(S(1.0f, 2u), S(3.0f, 4u))
     ret
   }
 }
@@ -4118,25 +4109,16 @@ $B1: {  # root
   $B2: {
     %3:ptr<storage, atomic<u32>, read_write> = access %buffer, 1i, 1u
     %4:u32 = atomicAdd %3, 1u
-    %5:S = construct 1.0f, 2u
-    %6:S = construct 3.0f, 4u
-    %7:array<S, 2> = construct %5, %6
-    %8:ptr<storage, S_atomic, read_write> = access %buffer, 0u
-    %9:S = access %7, 0u
-    %10:ptr<storage, f32, read_write> = access %8, 0u
-    %11:f32 = access %9, 0u
-    store %10, %11
-    %12:ptr<storage, atomic<u32>, read_write> = access %8, 1u
-    %13:u32 = access %9, 1u
-    %14:void = atomicStore %12, %13
-    %15:ptr<storage, S_atomic, read_write> = access %buffer, 1u
-    %16:S = access %7, 1u
-    %17:ptr<storage, f32, read_write> = access %15, 0u
-    %18:f32 = access %16, 0u
-    store %17, %18
-    %19:ptr<storage, atomic<u32>, read_write> = access %15, 1u
-    %20:u32 = access %16, 1u
-    %21:void = atomicStore %19, %20
+    %5:ptr<storage, S_atomic, read_write> = access %buffer, 0u
+    %6:ptr<storage, f32, read_write> = access %5, 0u
+    store %6, 1.0f
+    %7:ptr<storage, atomic<u32>, read_write> = access %5, 1u
+    %8:void = atomicStore %7, 2u
+    %9:ptr<storage, S_atomic, read_write> = access %buffer, 1u
+    %10:ptr<storage, f32, read_write> = access %9, 0u
+    store %10, 3.0f
+    %11:ptr<storage, atomic<u32>, read_write> = access %9, 1u
+    %12:void = atomicStore %11, 4u
     ret
   }
 }
@@ -4195,9 +4177,7 @@ $B1: {  # root
   $B2: {
     %3:ptr<storage, u32, read_write> = access %buffer, 1u, 1u
     %4:u32 = spirv.atomic_i_add %3, 1u, 0u, 1u
-    %5:Inner = construct 1.0f, 2u
-    %6:Outer = construct 1i, %5
-    store %buffer, %6
+    store %buffer, Outer(1i, Inner(1.0f, 2u))
     ret
   }
 }
@@ -4232,19 +4212,13 @@ $B1: {  # root
   $B2: {
     %3:ptr<storage, atomic<u32>, read_write> = access %buffer, 1u, 1u
     %4:u32 = atomicAdd %3, 1u
-    %5:Inner = construct 1.0f, 2u
-    %6:Outer = construct 1i, %5
-    %7:ptr<storage, i32, read_write> = access %buffer, 0u
-    %8:i32 = access %6, 0u
-    store %7, %8
-    %9:ptr<storage, Inner_atomic, read_write> = access %buffer, 1u
-    %10:Inner = access %6, 1u
-    %11:ptr<storage, f32, read_write> = access %9, 0u
-    %12:f32 = access %10, 0u
-    store %11, %12
-    %13:ptr<storage, atomic<u32>, read_write> = access %9, 1u
-    %14:u32 = access %10, 1u
-    %15:void = atomicStore %13, %14
+    %5:ptr<storage, i32, read_write> = access %buffer, 0u
+    store %5, 1i
+    %6:ptr<storage, Inner_atomic, read_write> = access %buffer, 1u
+    %7:ptr<storage, f32, read_write> = access %6, 0u
+    store %7, 1.0f
+    %8:ptr<storage, atomic<u32>, read_write> = access %6, 1u
+    %9:void = atomicStore %8, 2u
     ret
   }
 }
@@ -4316,10 +4290,7 @@ $B1: {  # root
   $B2: {
     %3:ptr<storage, u32, read_write> = access %buffer, 0u, 1u
     %4:u32 = spirv.atomic_i_add %3, 1u, 0u, 1u
-    %5:AtomicInner = construct 1.0f, 2u
-    %6:NonAtomicInner = construct 3.0f, 4u
-    %7:Outer = construct %5, %6
-    store %buffer, %7
+    store %buffer, Outer(AtomicInner(1.0f, 2u), NonAtomicInner(3.0f, 4u))
     ret
   }
 }
@@ -4359,20 +4330,13 @@ $B1: {  # root
   $B2: {
     %3:ptr<storage, atomic<u32>, read_write> = access %buffer, 0u, 1u
     %4:u32 = atomicAdd %3, 1u
-    %5:AtomicInner = construct 1.0f, 2u
-    %6:NonAtomicInner = construct 3.0f, 4u
-    %7:Outer = construct %5, %6
-    %8:ptr<storage, AtomicInner_atomic, read_write> = access %buffer, 0u
-    %9:AtomicInner = access %7, 0u
-    %10:ptr<storage, f32, read_write> = access %8, 0u
-    %11:f32 = access %9, 0u
-    store %10, %11
-    %12:ptr<storage, atomic<u32>, read_write> = access %8, 1u
-    %13:u32 = access %9, 1u
-    %14:void = atomicStore %12, %13
-    %15:ptr<storage, NonAtomicInner, read_write> = access %buffer, 1u
-    %16:NonAtomicInner = access %7, 1u
-    store %15, %16
+    %5:ptr<storage, AtomicInner_atomic, read_write> = access %buffer, 0u
+    %6:ptr<storage, f32, read_write> = access %5, 0u
+    store %6, 1.0f
+    %7:ptr<storage, atomic<u32>, read_write> = access %5, 1u
+    %8:void = atomicStore %7, 2u
+    %9:ptr<storage, NonAtomicInner, read_write> = access %buffer, 1u
+    store %9, NonAtomicInner(3.0f, 4u)
     ret
   }
 }

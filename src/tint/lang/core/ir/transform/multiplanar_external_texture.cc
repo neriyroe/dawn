@@ -31,7 +31,7 @@
 
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/external_texture.h"
 #include "src/tint/lang/core/type/sampled_texture.h"
 
@@ -291,16 +291,17 @@ struct State {
                         b.InsertBefore(call, [&] {
                             auto* apparent_size = b.Access<vec2u>(params, 12_u);
                             auto* vec2u_1_1 = b.Splat<vec2u>(1_u);
-                            b.AddWithResult(call->DetachResult(), apparent_size, vec2u_1_1);
+                            b.AddReplaceResult(call->DetachResult(), apparent_size, vec2u_1_1);
                         });
                         call->Destroy();
                     } else if (call->Func() == core::BuiltinFn::kTextureLoad) {
                         // Convert the coordinates to unsigned integers if necessary.
                         auto* coords = call->Args()[1];
                         if (coords->Type()->IsSignedIntegerVector()) {
-                            auto* convert = b.Convert(ty.vec2u(), coords);
-                            convert->InsertBefore(call);
-                            coords = convert->Result();
+                            b.InsertBefore(call, [&] {
+                                auto* convert = b.Convert(ty.vec2u(), coords);
+                                coords = convert;
+                            });
                         }
 
                         // Call the `TextureLoadExternal()` helper function.

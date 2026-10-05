@@ -106,7 +106,7 @@ class Buffer final : public BufferBase {
     // unmapped/flushed if necessary. The op function receives a span of exactly the requested
     // size.
     template <typename F>
-    MaybeError MapMemoryAndPerformOperation(uint64_t requestedOffset, size_t requestedSize, F&& op);
+    MaybeError MapMemoryAndPerformOperation(size_t requestedOffset, size_t requestedSize, F&& op);
 
     MaybeError MapAsyncImpl(wgpu::MapMode mode, size_t offset, size_t size) override;
     MaybeError FinalizeMapImpl(BufferState newState) override;
@@ -124,7 +124,7 @@ class Buffer final : public BufferBase {
     VkDeviceMemory mDedicatedDeviceMemory = VK_NULL_HANDLE;
 
     wgpu::Callback mHostMappedDisposeCallback = nullptr;
-    raw_ptr<void, DisableDanglingPtrDetection> mHostMappedDisposeUserdata = nullptr;
+    raw_ptr<void> mHostMappedDisposeUserdata = nullptr;
 
     // Track which usage was the last to write to the buffer.
     wgpu::BufferUsage mLastWriteUsage = wgpu::BufferUsage::None;

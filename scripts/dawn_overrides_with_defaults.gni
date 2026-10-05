@@ -37,6 +37,10 @@ if (!defined(dawn_standalone)) {
   dawn_standalone = false
 }
 
+if (!defined(checkout_v8)) {
+  checkout_v8 = false
+}
+
 if (!defined(dawn_root)) {
   dawn_root = get_path_info("..", "abspath")
 }
@@ -99,6 +103,14 @@ if (!defined(dawn_dxc_gn_dir)) {
 
 if (!defined(dawn_dxheaders_dir)) {
   dawn_dxheaders_dir = "//third_party/directx-headers/src"
+}
+
+if (!defined(dawn_agility_sdk_dir)) {
+  dawn_agility_sdk_dir = "//third_party/agility-sdk"
+}
+
+if (!defined(dawn_direct3d_warp_dir)) {
+  dawn_direct3d_warp_dir = "//third_party/direct3d-warp"
 }
 
 if (!defined(dawn_version_file)) {

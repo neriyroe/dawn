@@ -29,7 +29,7 @@
 
 #include "gmock/gmock.h"
 #include "src/tint/lang/core/ir/ir_helper_test.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/spirv/ir/builtin_call.h"
 #include "src/tint/lang/spirv/type/image.h"
 #include "src/tint/lang/spirv/type/literal.h"
@@ -268,7 +268,8 @@ TEST_F(SpirvWriter_RelaxedPrecisionDecorationsTest,
     auto* ep = b.ComputeFunction("main");
     b.Append(ep->Block(), [&] {  //
         auto* coords = b.Zero<vec2u>();
-        texel = b.Convert<vec4f>(b.Splat<vec4h>(1_h))->Result();
+        auto* val_h = b.Let("val_h", b.Splat<vec4h>(1_h));
+        texel = b.Convert<vec4f>(val_h);
         b.Call<ir::BuiltinCall>(ty.void_(), BuiltinFn::kImageWrite, b.Load(image), coords, texel,
                                 Literal(0u));
         b.Return(ep);
@@ -281,9 +282,10 @@ $B1: {  # root
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
-    %3:vec4<f32> = convert vec4<f16>(1.0h)
-    %4:spirv.image<f32, 2d, not_depth, non_arrayed, single_sampled, rw_op_compatible, rgba16float, read_write> = load %img
-    %5:void = spirv.image_write %4, vec2<u32>(0u), %3, 0u
+    %val_h:vec4<f16> = let vec4<f16>(1.0h)
+    %4:vec4<f32> = convert %val_h
+    %5:spirv.image<f32, 2d, not_depth, non_arrayed, single_sampled, rw_op_compatible, rgba16float, read_write> = load %img
+    %6:void = spirv.image_write %5, vec2<u32>(0u), %4, 0u
     ret
   }
 }
@@ -309,8 +311,8 @@ TEST_F(SpirvWriter_RelaxedPrecisionDecorationsTest,
     auto* ep = b.ComputeFunction("main");
     b.Append(ep->Block(), [&] {  //
         auto* coords = b.Zero<vec2u>();
-        auto* val_h = b.Splat<vec4h>(1_h);
-        converted_f = b.Convert<vec4f>(val_h)->Result();
+        auto* val_h = b.Let("val_h", b.Splat<vec4h>(1_h));
+        converted_f = b.Convert<vec4f>(val_h);
         tmp1 = b.Let("tmp1", converted_f);
         auto* tmp2 = b.Let("tmp2", tmp1);
         texel = tmp2->Result();
@@ -326,11 +328,12 @@ $B1: {  # root
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
-    %3:vec4<f32> = convert vec4<f16>(1.0h)
-    %tmp1:vec4<f32> = let %3
+    %val_h:vec4<f16> = let vec4<f16>(1.0h)
+    %4:vec4<f32> = convert %val_h
+    %tmp1:vec4<f32> = let %4
     %tmp2:vec4<f32> = let %tmp1
-    %6:spirv.image<f32, 2d, not_depth, non_arrayed, single_sampled, rw_op_compatible, rgba32float, read_write> = load %img
-    %7:void = spirv.image_write %6, vec2<u32>(0u), %tmp2, 0u
+    %7:spirv.image<f32, 2d, not_depth, non_arrayed, single_sampled, rw_op_compatible, rgba32float, read_write> = load %img
+    %8:void = spirv.image_write %7, vec2<u32>(0u), %tmp2, 0u
     ret
   }
 }
@@ -475,7 +478,8 @@ TEST_F(SpirvWriter_RelaxedPrecisionDecorationsTest,
     auto* ep = b.ComputeFunction("main");
     b.Append(ep->Block(), [&] {  //
         auto* coords = b.Zero<vec2u>();
-        texel = b.Convert<vec4f>(b.Splat<vec4h>(1_h))->Result();
+        auto* val_h = b.Let("val_h", b.Splat<vec4h>(1_h));
+        texel = b.Convert<vec4f>(val_h);
         b.Call<ir::BuiltinCall>(ty.void_(), BuiltinFn::kImageWrite, b.Load(image), coords, texel,
                                 Literal(0u));
         b.Return(ep);
@@ -488,9 +492,10 @@ $B1: {  # root
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
-    %3:vec4<f32> = convert vec4<f16>(1.0h)
-    %4:spirv.image<f32, 2d, not_depth, non_arrayed, single_sampled, rw_op_compatible, rgba32float, read_write> = load %img
-    %5:void = spirv.image_write %4, vec2<u32>(0u), %3, 0u
+    %val_h:vec4<f16> = let vec4<f16>(1.0h)
+    %4:vec4<f32> = convert %val_h
+    %5:spirv.image<f32, 2d, not_depth, non_arrayed, single_sampled, rw_op_compatible, rgba32float, read_write> = load %img
+    %6:void = spirv.image_write %5, vec2<u32>(0u), %4, 0u
     ret
   }
 }
@@ -605,7 +610,8 @@ TEST_F(SpirvWriter_RelaxedPrecisionDecorationsTest,
     b.Append(ep->Block(), [&] {  //
         auto* coords = b.Zero<vec2u>();
 
-        texel1 = b.Convert<vec4f>(b.Splat<vec4h>(1_h))->Result();
+        auto* val_h = b.Let("val_h", b.Splat<vec4h>(1_h));
+        texel1 = b.Convert<vec4f>(val_h);
         b.Call<ir::BuiltinCall>(ty.void_(), BuiltinFn::kImageWrite, b.Load(image), coords, texel1,
                                 Literal(0u));
 
@@ -623,12 +629,13 @@ $B1: {  # root
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
-    %3:vec4<f32> = convert vec4<f16>(1.0h)
-    %4:spirv.image<f32, 2d, not_depth, non_arrayed, single_sampled, rw_op_compatible, rgba32float, read_write> = load %img
-    %5:void = spirv.image_write %4, vec2<u32>(0u), %3, 0u
+    %val_h:vec4<f16> = let vec4<f16>(1.0h)
+    %4:vec4<f32> = convert %val_h
+    %5:spirv.image<f32, 2d, not_depth, non_arrayed, single_sampled, rw_op_compatible, rgba32float, read_write> = load %img
+    %6:void = spirv.image_write %5, vec2<u32>(0u), %4, 0u
     %value:vec4<f32> = let vec4<f32>(1.0f)
-    %7:spirv.image<f32, 2d, not_depth, non_arrayed, single_sampled, rw_op_compatible, rgba32float, read_write> = load %img
-    %8:void = spirv.image_write %7, vec2<u32>(0u), %value, 0u
+    %8:spirv.image<f32, 2d, not_depth, non_arrayed, single_sampled, rw_op_compatible, rgba32float, read_write> = load %img
+    %9:void = spirv.image_write %8, vec2<u32>(0u), %value, 0u
     ret
   }
 }
@@ -1092,7 +1099,7 @@ TEST_F(SpirvWriter_RelaxedPrecisionDecorationsTest,
         texel = b.Call<ir::BuiltinCall>(ty.vec4f(), BuiltinFn::kImageRead, b.Load(image), coords,
                                         Literal(0u))
                     ->Result();
-        swiz = b.Swizzle(ty.vec4f(), texel, {3, 2, 1, 0});
+        swiz = b.Swizzle(ty.vec4f(), texel, {3, 2, 1, 0})->AsInstruction();
         b.Let("result", b.Multiply(b.Convert<vec4h>(swiz), 2_h));
         b.Return(ep);
     });
@@ -1136,9 +1143,9 @@ TEST_F(SpirvWriter_RelaxedPrecisionDecorationsTest,
     auto* ep = b.ComputeFunction("main");
     b.Append(ep->Block(), [&] {  //
         auto* coords = b.Zero<vec2u>();
-        auto* val_h = b.Splat<vec4h>(1_h);
-        converted_f = b.Convert<vec4f>(val_h)->Result();
-        swiz = b.Swizzle(ty.vec4f(), converted_f, {3, 2, 1, 0});
+        auto* val_h = b.Let("val_h", b.Splat<vec4h>(1_h));
+        converted_f = b.Convert<vec4f>(val_h);
+        swiz = b.Swizzle(ty.vec4f(), converted_f, {3, 2, 1, 0})->AsInstruction();
         texel = swiz->Result();
         b.Call<ir::BuiltinCall>(ty.void_(), BuiltinFn::kImageWrite, b.Load(image), coords, texel,
                                 Literal(0u));
@@ -1152,10 +1159,11 @@ $B1: {  # root
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
-    %3:vec4<f32> = convert vec4<f16>(1.0h)
-    %4:vec4<f32> = swizzle %3, wzyx
-    %5:spirv.image<f32, 2d, not_depth, non_arrayed, single_sampled, rw_op_compatible, rgba32float, read_write> = load %img
-    %6:void = spirv.image_write %5, vec2<u32>(0u), %4, 0u
+    %val_h:vec4<f16> = let vec4<f16>(1.0h)
+    %4:vec4<f32> = convert %val_h
+    %5:vec4<f32> = swizzle %4, wzyx
+    %6:spirv.image<f32, 2d, not_depth, non_arrayed, single_sampled, rw_op_compatible, rgba32float, read_write> = load %img
+    %7:void = spirv.image_write %6, vec2<u32>(0u), %5, 0u
     ret
   }
 }

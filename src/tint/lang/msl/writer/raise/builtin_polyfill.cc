@@ -38,7 +38,7 @@
 #include "src/tint/lang/core/ir/core_builtin_call.h"
 #include "src/tint/lang/core/ir/function.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/number.h"
 #include "src/tint/lang/core/type/depth_multisampled_texture.h"
 #include "src/tint/lang/core/type/manager.h"
@@ -433,8 +433,7 @@ struct State {
         b.InsertBefore(builtin, [&] {
             auto* offset = builtin->Args()[2];
             auto* clamped = b.Min(offset, 31_u);
-            builtin->SetOperand(core::ir::CoreBuiltinCall::kArgsOperandOffset + 2,
-                                clamped->Result());
+            builtin->SetOperand(core::ir::CoreBuiltinCall::kArgsOperandOffset + 2, clamped);
         });
     }
 
@@ -447,7 +446,7 @@ struct State {
             if (arg0->Type()->Is<core::type::Scalar>()) {
                 // Calls to `distance` with a scalar argument are replaced with `abs(a - b)`.
                 auto* sub = b.Subtract(arg0, arg1);
-                b.CallWithResult(builtin->DetachResult(), core::BuiltinFn::kAbs, sub);
+                b.CallReplaceResult(builtin->DetachResult(), core::BuiltinFn::kAbs, sub);
             } else {
                 b.CallWithResult<msl::ir::BuiltinCall>(builtin->DetachResult(),
                                                        msl::BuiltinFn::kDistance, arg0, arg1);
@@ -479,7 +478,7 @@ struct State {
                     func->SetParams({lhs, rhs});
                     b.Append(func->Block(), [&] {
                         auto* mul = b.Multiply(lhs, rhs);
-                        core::ir::Value* sum = b.Access(el_ty, mul, u32(0))->Result();
+                        core::ir::Value* sum = b.Access(el_ty, mul, u32(0));
                         for (uint32_t i = 1; i < vec->Width(); i++) {
                             sum = b.Add(sum, b.Access(el_ty, mul, u32(i)));
                         }
@@ -509,7 +508,7 @@ struct State {
 
             auto* in = b.Convert(f32_ty, args[0]);
             auto* c = b.Call(f32_ty, core::BuiltinFn::kTanh, in);
-            b.ConvertWithResult(builtin->DetachResult(), c);
+            b.ConvertReplaceResult(builtin->DetachResult(), c);
         });
         builtin->Destroy();
     }
@@ -548,8 +547,9 @@ struct State {
         auto* arg = builtin->Args()[0];
         if (arg->Type()->Is<core::type::Scalar>()) {
             // Calls to `length` with a scalar argument are replaced with `abs`.
-            auto* call = b.CallWithResult(builtin->DetachResult(), core::BuiltinFn::kAbs, arg);
-            call->InsertBefore(builtin);
+            b.InsertBefore(builtin, [&] {
+                b.CallReplaceResult(builtin->DetachResult(), core::BuiltinFn::kAbs, arg);
+            });
         } else {
             auto* call = b.CallWithResult<msl::ir::BuiltinCall>(builtin->DetachResult(),
                                                                 msl::BuiltinFn::kLength, arg);
@@ -592,8 +592,7 @@ struct State {
         ir.properties.Add(core::ir::Property::kAllow16BitFloats);
         b.InsertBefore(builtin, [&] {
             auto* convert = b.Convert<vec2<f16>>(builtin->Args()[0]);
-            auto* bitcast = b.Bitcast(ty.u32(), convert);
-            bitcast->SetResult(builtin->DetachResult());
+            b.BitcastReplaceResult(builtin->DetachResult(), convert);
         });
         builtin->Destroy();
     }
@@ -606,8 +605,8 @@ struct State {
         // Convert the argument to f16 and then back again.
         ir.properties.Add(core::ir::Property::kAllow16BitFloats);
         b.InsertBefore(builtin, [&] {
-            b.ConvertWithResult(builtin->DetachResult(),
-                                b.Convert(ty.MatchWidth(ty.f16(), arg->Type()), arg));
+            b.ConvertReplaceResult(builtin->DetachResult(),
+                                   b.Convert(ty.MatchWidth(ty.f16(), arg->Type()), arg));
         });
         builtin->Destroy();
     }
@@ -626,8 +625,8 @@ struct State {
                 auto* zero = b.Zero(type);
                 auto* sign = b.Call(type, core::BuiltinFn::kSelect, neg_one, pos_one,
                                     b.GreaterThan(arg, zero));
-                b.CallWithResult(builtin->DetachResult(), core::BuiltinFn::kSelect, sign, zero,
-                                 b.Equal(arg, zero));
+                b.CallReplaceResult(builtin->DetachResult(), core::BuiltinFn::kSelect, sign, zero,
+                                    b.Equal(arg, zero));
             } else {
                 b.CallWithResult<msl::ir::BuiltinCall>(builtin->DetachResult(),
                                                        msl::BuiltinFn::kSign, arg);
@@ -654,7 +653,7 @@ struct State {
                 } else {
                     lod = builtin->Args()[1];
                     if (lod->Type()->IsSignedIntegerScalar()) {
-                        lod = b.Convert<u32>(lod)->Result();
+                        lod = b.Convert<u32>(lod);
                     }
                 }
             }
@@ -677,7 +676,7 @@ struct State {
             }
 
             // Reconstruct the original result type from the individual dimensions.
-            b.ConstructWithResult(builtin->DetachResult(), std::move(values));
+            b.ConstructReplaceResult(builtin->DetachResult(), std::move(values));
         });
         builtin->Destroy();
     }
@@ -758,7 +757,7 @@ struct State {
         b.InsertBefore(builtin, [&] {
             // Convert the coordinates to unsigned integers if necessary.
             if (coords->Type()->IsSignedIntegerScalarOrVector()) {
-                coords = b.Convert(ty.MatchWidth(ty.u32(), coords->Type()), coords)->Result();
+                coords = b.Convert(ty.MatchWidth(ty.u32(), coords->Type()), coords);
             }
 
             // Call the `read()` member function.
@@ -799,7 +798,7 @@ struct State {
                 const uint32_t kArrayIndex = 2;
                 auto* index_arg = builtin->Args()[kArrayIndex];
                 if (index_arg->Type()->IsSignedIntegerScalar()) {
-                    builtin->SetArg(kArrayIndex, b.Max(index_arg, b.Zero<i32>())->Result());
+                    builtin->SetArg(kArrayIndex, b.Max(index_arg, b.Zero<i32>()));
                 }
             }
         });
@@ -850,7 +849,7 @@ struct State {
                 tex_type->Dim() == core::type::TextureDimension::kCubeArray) {
                 bias_idx = 3;
             }
-            args[bias_idx] = b.Construct(ty.Get<msl::type::Bias>(), args[bias_idx])->Result();
+            args[bias_idx] = b.Construct(ty.Get<msl::type::Bias>(), args[bias_idx]);
         });
         // Call the `sample()` member function.
         auto* call = b.MemberCallWithResult<msl::ir::MemberBuiltinCall>(
@@ -886,7 +885,7 @@ struct State {
         b.InsertBefore(builtin, [&] {
             // Insert a constant zero LOD argument.
             // The LOD goes before the offset if there is one, otherwise at the end.
-            auto* lod = b.Construct(ty.Get<msl::type::Level>(), u32(0))->Result();
+            auto* lod = b.Construct(ty.Get<msl::type::Level>(), u32(0));
             if (has_offset) {
                 args.Insert(args.Length() - 1, lod);
             } else {
@@ -937,7 +936,7 @@ struct State {
                 case core::type::TextureDimension::kNone:
                     TINT_IR_UNREACHABLE(ir);
             }
-            args[grad_idx] = b.Construct(ty.Get<msl::type::Gradient>(dim), ddx, ddy)->Result();
+            args[grad_idx] = b.Construct(ty.Get<msl::type::Gradient>(dim), ddx, ddy);
 
             // Resize the argument list as the gradient argument only takes up one argument.
             // Move the offset argument back one place if present.
@@ -974,7 +973,7 @@ struct State {
                 // Remove level for 1d.
                 args.Resize(args.Length() - 1);
             } else {
-                args[lod_idx] = b.Construct(ty.Get<msl::type::Level>(), args[lod_idx])->Result();
+                args[lod_idx] = b.Construct(ty.Get<msl::type::Level>(), args[lod_idx]);
             }
             // Call the `sample()` member function.
             auto* call = b.MemberCallWithResult<msl::ir::MemberBuiltinCall>(
@@ -1010,7 +1009,7 @@ struct State {
 
             // Convert the coordinates to unsigned integers if necessary.
             if (coords->Type()->IsSignedIntegerScalarOrVector()) {
-                coords = b.Convert(ty.MatchWidth(ty.u32(), coords->Type()), coords)->Result();
+                coords = b.Convert(ty.MatchWidth(ty.u32(), coords->Type()), coords);
             }
 
             // Call the `write()` member function.
@@ -1063,7 +1062,7 @@ struct State {
         ir.properties.Add(core::ir::Property::kAllow16BitFloats);
         b.InsertBefore(builtin, [&] {
             auto* bitcast = b.Bitcast<vec2<f16>>(builtin->Args()[0]);
-            b.ConvertWithResult(builtin->DetachResult(), bitcast);
+            b.ConvertReplaceResult(builtin->DetachResult(), bitcast);
         });
         builtin->Destroy();
     }
@@ -1084,7 +1083,7 @@ struct State {
 
             auto* lower = b.Splat(ty.vec2f(), -1_f);
             auto* upper = b.Splat(ty.vec2f(), 1_f);
-            b.Clamp(scale, lower, upper)->SetResult(builtin->DetachResult());
+            b.ClampReplaceResult(builtin->DetachResult(), scale, lower, upper);
         });
         builtin->Destroy();
     }
@@ -1104,7 +1103,7 @@ struct State {
 
             auto* lower = b.Splat(ty.vec2f(), 0_f);
             auto* upper = b.Splat(ty.vec2f(), 1_f);
-            b.Clamp(scale, lower, upper)->SetResult(builtin->DetachResult());
+            b.ClampReplaceResult(builtin->DetachResult(), scale, lower, upper);
         });
         builtin->Destroy();
     }
@@ -1120,15 +1119,16 @@ struct State {
 
             // If the array was a vec3, then FixTypeLayout may have inserted a (soon to be)
             // redundant pointer offset call. Elide it here.
-            if (auto* p_res = p->As<core::ir::InstructionResult>()) {
-                if (auto* pre_cast = p_res->Instruction()->As<msl::ir::BuiltinCall>()) {
-                    if (pre_cast->Func() == msl::BuiltinFn::kPointerOffset &&
-                        pre_cast->Args()[1] == b.Constant(u32(0))) {
-                        p = pre_cast->Args()[0];
+            msl::BuiltinFn ptr_offset = msl::BuiltinFn::kPointerOffset;
+            if (auto* pre_cast = p->AsInstruction<msl::ir::BuiltinCall>()) {
+                if ((pre_cast->Func() == msl::BuiltinFn::kPointerOffset ||
+                     pre_cast->Func() == msl::BuiltinFn::kAliasPointerOffset) &&
+                    pre_cast->Args()[1] == b.Constant(u32(0))) {
+                    ptr_offset = pre_cast->Func();
+                    p = pre_cast->Args()[0];
 
-                        if (p_res->NumUsages() == 1) {
-                            pre_cast->Destroy();
-                        }
+                    if (pre_cast->Result()->NumUsages() == 1) {
+                        pre_cast->Destroy();
                     }
                 }
             }
@@ -1154,8 +1154,7 @@ struct State {
                 offset = b.InsertBitcastIfNeeded(ty.u32(), offset);
                 offset = b.Multiply(offset, u32(arr_stride));
                 src = b.CallExplicit<msl::ir::BuiltinCall>(
-                           ty.ptr(ptr->AddressSpace(), mat_ele, ptr->Access()),
-                           msl::BuiltinFn::kPointerOffset,
+                           ty.ptr(ptr->AddressSpace(), mat_ele, ptr->Access()), ptr_offset,
                            Vector<core::ir::TemplateParameter, 1>{mat_ele}, p, offset)
                           ->Result();
 
@@ -1165,7 +1164,7 @@ struct State {
             } else {
                 // Make a pointer to the first element of the array that we will read from.
                 auto* elem_ptr = ty.ptr(ptr->AddressSpace(), arr->ElemType(), ptr->Access());
-                src = b.Access(elem_ptr, p, offset)->Result();
+                src = b.Access(elem_ptr, p, offset);
             }
 
             // The origin is always (0, 0), as we use `offset` to set the start of the data.
@@ -1202,15 +1201,16 @@ struct State {
 
             // If the array was a vec3, then FixTypeLayout may have inserted a (soon to be)
             // redundant pointer offset call. Elide it here.
-            if (auto* p_res = p->As<core::ir::InstructionResult>()) {
-                if (auto* pre_cast = p_res->Instruction()->As<msl::ir::BuiltinCall>()) {
-                    if (pre_cast->Func() == msl::BuiltinFn::kPointerOffset &&
-                        pre_cast->Args()[1] == b.Constant(u32(0))) {
-                        p = pre_cast->Args()[0];
+            msl::BuiltinFn ptr_offset = msl::BuiltinFn::kPointerOffset;
+            if (auto* pre_cast = p->AsInstruction<msl::ir::BuiltinCall>()) {
+                if ((pre_cast->Func() == msl::BuiltinFn::kPointerOffset ||
+                     pre_cast->Func() == msl::BuiltinFn::kAliasPointerOffset) &&
+                    pre_cast->Args()[1] == b.Constant(u32(0))) {
+                    ptr_offset = pre_cast->Func();
+                    p = pre_cast->Args()[0];
 
-                        if (p_res->NumUsages() == 1) {
-                            pre_cast->Destroy();
-                        }
+                    if (pre_cast->Result()->NumUsages() == 1) {
+                        pre_cast->Destroy();
                     }
                 }
             }
@@ -1236,8 +1236,7 @@ struct State {
                 offset = b.InsertBitcastIfNeeded(ty.u32(), offset);
                 offset = b.Multiply(offset, u32(arr_stride));
                 dst = b.CallExplicit<msl::ir::BuiltinCall>(
-                           ty.ptr(ptr->AddressSpace(), mat_ele, ptr->Access()),
-                           msl::BuiltinFn::kPointerOffset,
+                           ty.ptr(ptr->AddressSpace(), mat_ele, ptr->Access()), ptr_offset,
                            Vector<core::ir::TemplateParameter, 1>{mat_ele}, p, offset)
                           ->Result();
 
@@ -1246,7 +1245,7 @@ struct State {
             } else {
                 // Make a pointer to the first element of the array that we will write to.
                 auto* elem_ptr = ty.ptr(ptr->AddressSpace(), arr->ElemType(), ptr->Access());
-                dst = b.Access(elem_ptr, p, offset)->Result();
+                dst = b.Access(elem_ptr, p, offset);
             }
 
             // Convert the u32 stride to the ulong that MSL expects.
@@ -1390,7 +1389,7 @@ struct State {
             auto* tmp = b.Var(ty.ptr<function>(result_ty));
             auto* val = ConvertSubgroupMatrixToLeft(sm_ty, mat);
             auto* identity = MakeSubgroupRightMatrix(sm_ty, One(sm_ty));
-            auto* acc = MakeSubgroupAccumulatorMatrix(result_ty, b.Negation(scalar)->Result());
+            auto* acc = MakeSubgroupAccumulatorMatrix(result_ty, b.Negation(scalar));
 
             // Note: We need to use a `load` instruction to pass the variable, as the intrinsic
             // definition expects a value type (as we do not have reference types in the IR). The
@@ -1458,13 +1457,12 @@ struct State {
             if (arg->Type()->IsSignedIntegerScalarOrVector()) {
                 auto* flip = b.Complement(use_arg);
                 use_arg = b.Call(u32_ty, core::BuiltinFn::kSelect, flip, use_arg,
-                                 b.LessThan(use_arg, b.MatchWidth(u32(0x80000000), arg->Type())))
-                              ->Result();
+                                 b.LessThan(use_arg, b.MatchWidth(u32(0x80000000), arg->Type())));
             }
             auto* clz = b.Call(u32_ty, core::BuiltinFn::kCountLeadingZeros, use_arg);
             core::ir::Value* result = b.Subtract(c31, clz);
             if (arg->Type()->IsSignedIntegerScalarOrVector()) {
-                result = b.Bitcast(arg->Type(), result)->Result();
+                result = b.Bitcast(arg->Type(), result);
             }
             builtin->Result()->ReplaceAllUsesWith(result);
         });
@@ -1487,7 +1485,7 @@ struct State {
                 n1 = b.MatchWidth(i32(-1), arg->Type());
             }
             auto* eq = b.Equal(arg, b.Zero(arg->Type()));
-            b.CallWithResult(builtin->DetachResult(), core::BuiltinFn::kSelect, ctz, n1, eq);
+            b.CallReplaceResult(builtin->DetachResult(), core::BuiltinFn::kSelect, ctz, n1, eq);
         });
         builtin->Destroy();
     }
@@ -1513,30 +1511,24 @@ struct State {
     void AddSat(core::ir::BuiltinCall* builtin) {
         auto* type = builtin->Result()->Type();
         auto* zero = b.Zero(type);
-        auto* lhs_result = builtin->Args()[0]->As<core::ir::InstructionResult>();
-        auto* rhs_result = builtin->Args()[1]->As<core::ir::InstructionResult>();
         // Replace addSat(msl.madsat(x, y, 0), z) with msl.madsat(x, y, z)
-        if (lhs_result) {
-            if (auto* lhs_call = lhs_result->Instruction()->As<msl::ir::BuiltinCall>()) {
-                if (lhs_call->Func() == msl::BuiltinFn::kMadsat && lhs_call->Args()[2] == zero) {
-                    lhs_call->SetArg(2, builtin->Args()[1]);
-                    builtin->SetArg(0, nullptr);
-                    builtin->Result()->ReplaceAllUsesWith(lhs_result);
-                    builtin->Destroy();
-                    return;
-                }
+        if (auto* lhs_call = builtin->Args()[0]->AsInstruction<msl::ir::BuiltinCall>()) {
+            if (lhs_call->Func() == msl::BuiltinFn::kMadsat && lhs_call->Args()[2] == zero) {
+                lhs_call->SetArg(2, builtin->Args()[1]);
+                builtin->SetArg(0, nullptr);
+                builtin->Result()->ReplaceAllUsesWith(lhs_call->Result());
+                builtin->Destroy();
+                return;
             }
         }
         // Replace addSat(z, msl.madsat(x, y, 0)) with msl.madsat(x, y, z)
-        if (rhs_result) {
-            if (auto* rhs_call = rhs_result->Instruction()->As<msl::ir::BuiltinCall>()) {
-                if (rhs_call->Func() == msl::BuiltinFn::kMadsat && rhs_call->Args()[2] == zero) {
-                    rhs_call->SetArg(2, builtin->Args()[0]);
-                    builtin->SetArg(1, nullptr);
-                    builtin->Result()->ReplaceAllUsesWith(rhs_result);
-                    builtin->Destroy();
-                    return;
-                }
+        if (auto* rhs_call = builtin->Args()[1]->AsInstruction<msl::ir::BuiltinCall>()) {
+            if (rhs_call->Func() == msl::BuiltinFn::kMadsat && rhs_call->Args()[2] == zero) {
+                rhs_call->SetArg(2, builtin->Args()[0]);
+                builtin->SetArg(1, nullptr);
+                builtin->Result()->ReplaceAllUsesWith(rhs_call->Result());
+                builtin->Destroy();
+                return;
             }
         }
     }

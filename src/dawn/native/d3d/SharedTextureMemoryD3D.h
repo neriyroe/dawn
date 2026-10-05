@@ -42,8 +42,8 @@ class SharedTextureMemory : public SharedTextureMemoryBase {
                         SharedTextureMemoryProperties properties,
                         wgpu::TextureDimension dimension = wgpu::TextureDimension::e2D);
 
-    MaybeError BeginAccessImpl(TextureBase* texture,
-                               const UnpackedPtr<BeginAccessDescriptor>& descriptor) override;
+    MaybeValError BeginAccessImpl(TextureBase* texture,
+                                  const UnpackedPtr<BeginAccessDescriptor>& descriptor) override;
     ResultOrError<FenceAndSignalValue> EndAccessImpl(TextureBase* texture,
                                                      ExecutionSerial lastUsageSerial,
                                                      UnpackedPtr<EndAccessState>& state) override;

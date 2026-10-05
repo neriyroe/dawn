@@ -27,11 +27,7 @@
 
 """Code shared by both CI and try CMake builders."""
 
-load("@chromium-luci//builders.star", "cpu", "os")
-
 def _apply_linux_cmake_builder_defaults(kwargs):
-    kwargs.setdefault("cpu", cpu.X86_64)
-
     # n2-standard-8 is specifically targeted for Linux/CMake instead of the more
     # common e2-standard-8 because RBE is not currently supported for CMake
     # builds. The newer CPUs used by n2-standard-8 GCE instances result in
@@ -40,22 +36,13 @@ def _apply_linux_cmake_builder_defaults(kwargs):
     # CMake build times to n2-standard-8, so allow that as well until
     # all n2-standard-8 machines are phased out.
     kwargs.setdefault("machine_type", "n2-standard-8|e4-standard-8")
-    kwargs.setdefault("os", os.LINUX_DEFAULT)
-    kwargs.setdefault("ssd", None)
     return kwargs
 
 def _apply_mac_cmake_builder_defaults(kwargs):
     kwargs.setdefault("caches", [swarming.cache(name = "osx_sdk", path = "cache/osx_sdk")])
-
-    # x64 used for the builders since historically Dawn has tested Mac/CMake on
-    # x64 and tests are run on the same machine as compilation.
-    kwargs.setdefault("cpu", cpu.X86_64)
-    kwargs.setdefault("os", os.MAC_15)
     return kwargs
 
 def _apply_win_cmake_builder_defaults(kwargs):
-    kwargs.setdefault("cpu", cpu.X86_64)
-
     # n2-standard-8 is specifically targeted for Win/CMake instead of the more
     # common e2-standard-8 because Windows compilation takes the most time and
     # the use of MSVC means that RBE is unsupported for remote compilation. The
@@ -65,8 +52,6 @@ def _apply_win_cmake_builder_defaults(kwargs):
     # n2-standard-8, so allow that as well until all n2-standard-8 machines are
     # phased out.
     kwargs.setdefault("machine_type", "n2-standard-8|e4-standard-8")
-    kwargs.setdefault("os", os.WINDOWS_DEFAULT)
-    kwargs.setdefault("ssd", None)
     return kwargs
 
 cmake_builder_defaults = struct(

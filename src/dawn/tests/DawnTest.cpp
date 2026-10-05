@@ -25,15 +25,16 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "src/utils/span.h"
+
 #ifdef UNSAFE_BUFFERS_BUILD
 // TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
 #pragma allow_unsafe_buffers
 #endif
 
-#include "src/dawn/tests/DawnTest.h"
-
 #include <algorithm>
 #include <atomic>
+#include <cstddef>
 #include <cstdio>
 #include <format>
 #include <fstream>
@@ -47,6 +48,8 @@
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
+
+#include "src/dawn/tests/DawnTest.h"
 
 // Need to be included before GLFW/glfw3.h to avoid MSVC warning C4005: 'APIENTRY': macro
 // redefinition
@@ -405,11 +408,20 @@ void DawnTestEnvironment::ParseArgs(int argc, char** argv) {
             continue;
         }
 
+        if (strcmp("--assert-developer-mode", argv[i]) == 0) {
+#if DAWN_PLATFORM_IS(WINDOWS)
+            DAWN_CHECK(IsWindowsDeveloperModeEnabled());
+#else
+            ErrorLog() << "--assert-developer-mode is only supported on Windows";
+            DAWN_UNREACHABLE();
+#endif
+            continue;
+        }
+
         if (strcmp("--check-capture-replay", argv[i]) == 0) {
             mCheckCaptureReplay = true;
             // Force WebGPU backend.
-            mBackendTypeFilter = wgpu::BackendType::WebGPU;
-            mHasBackendTypeFilter = true;
+            mBackendTypeFilters = {wgpu::BackendType::WebGPU};
             continue;
         }
 
@@ -506,30 +518,40 @@ void DawnTestEnvironment::ParseArgs(int argc, char** argv) {
         constexpr const char kBackendArg[] = "--backend=";
         argLen = sizeof(kBackendArg) - 1;
         if (strncmp(argv[i], kBackendArg, argLen) == 0) {
-            const char* param = argv[i] + argLen;
-            if (strcmp("d3d11", param) == 0) {
-                mBackendTypeFilter = wgpu::BackendType::D3D11;
-            } else if (strcmp("d3d12", param) == 0) {
-                mBackendTypeFilter = wgpu::BackendType::D3D12;
-            } else if (strcmp("metal", param) == 0) {
-                mBackendTypeFilter = wgpu::BackendType::Metal;
-            } else if (strcmp("null", param) == 0) {
-                mBackendTypeFilter = wgpu::BackendType::Null;
-            } else if (strcmp("opengl", param) == 0) {
-                mBackendTypeFilter = wgpu::BackendType::OpenGL;
-            } else if (strcmp("opengles", param) == 0) {
-                mBackendTypeFilter = wgpu::BackendType::OpenGLES;
-            } else if (strcmp("vulkan", param) == 0) {
-                mBackendTypeFilter = wgpu::BackendType::Vulkan;
-            } else if (strcmp("webgpu", param) == 0) {
-                mBackendTypeFilter = wgpu::BackendType::WebGPU;
-            } else {
-                ErrorLog() << "Invalid backend \"" << param
-                           << "\". Valid backends are: d3d12, metal, null, opengl, opengles, "
-                              "vulkan, webgpu.";
+            const std::span args(argv, static_cast<size_t>(argc));
+            const std::string backendList{std::string_view(args[i]).substr(argLen)};
+            if (backendList.empty() || backendList.back() == ',') {
+                ErrorLog() << "Invalid backend list \"" << backendList << "\".";
                 DAWN_UNREACHABLE();
             }
-            mHasBackendTypeFilter = true;
+            std::set<wgpu::BackendType> backendTypes;
+            std::istringstream ss(backendList);
+            std::string backend;
+            while (std::getline(ss, backend, ',')) {
+                if (backend == "d3d11") {
+                    backendTypes.insert(wgpu::BackendType::D3D11);
+                } else if (backend == "d3d12") {
+                    backendTypes.insert(wgpu::BackendType::D3D12);
+                } else if (backend == "metal") {
+                    backendTypes.insert(wgpu::BackendType::Metal);
+                } else if (backend == "null") {
+                    backendTypes.insert(wgpu::BackendType::Null);
+                } else if (backend == "opengl") {
+                    backendTypes.insert(wgpu::BackendType::OpenGL);
+                } else if (backend == "opengles") {
+                    backendTypes.insert(wgpu::BackendType::OpenGLES);
+                } else if (backend == "vulkan") {
+                    backendTypes.insert(wgpu::BackendType::Vulkan);
+                } else if (backend == "webgpu") {
+                    backendTypes.insert(wgpu::BackendType::WebGPU);
+                } else {
+                    ErrorLog() << "Invalid backend \"" << backend
+                               << "\". Valid backends are: d3d11, d3d12, metal, null, opengl, "
+                                  "opengles, vulkan, webgpu.";
+                    DAWN_UNREACHABLE();
+                }
+            }
+            mBackendTypeFilters = std::move(backendTypes);
             continue;
         }
 
@@ -572,7 +594,7 @@ void DawnTestEnvironment::ParseArgs(int argc, char** argv) {
                 << "\n\nUsage: " << argv[0]
                 << " [GTEST_FLAGS...] [-w] [-c]\n"
                    "    [--enable-toggles=toggles] [--disable-toggles=toggles]\n"
-                   "    [--backend=x]\n"
+                   "    [--backend=x[,y...]]\n"
                    "    [--adapter-vendor-id=x] "
                    "[--enable-backend-validation[=full,partial,disabled]]\n"
                    "    [--exclusive-device-type-preference=integrated,cpu,discrete]\n\n"
@@ -590,8 +612,8 @@ void DawnTestEnvironment::ParseArgs(int argc, char** argv) {
                    "  --disable-toggles: Comma-delimited list of Dawn toggles to disable\n"
                    "  --adapter-vendor-id: Select adapter by vendor id to run end2end tests"
                    "on multi-GPU systems \n"
-                   "  --backend: Select adapter by backend type. Valid backends are: d3d12, metal, "
-                   "null, opengl, opengles, vulkan, webgpu\n"
+                   "  --backend: Select adapters by a comma-delimited list of backend types. Valid "
+                   "backends are: d3d11, d3d12, metal, null, opengl, opengles, vulkan, webgpu\n"
                    "  --webgpu-inner-backend: Select inner backend for WebGPU backend. "
                    "Valid backends are: undefined, d3d11, d3d12, metal, null, opengl, opengles, "
                    "vulkan, fallback\n"
@@ -599,7 +621,9 @@ void DawnTestEnvironment::ParseArgs(int argc, char** argv) {
                    "types. For each backend, tests will run only on adapters that match the first "
                    "available device type\n"
                    "  --run-suppressed-tests: Run all the tests that will be skipped by the macro "
-                   "DAWN_SUPPRESS_TEST_IF()\n";
+                   "DAWN_SUPPRESS_TEST_IF()\n"
+                   "  --assume-developer-mode: Fail loudly if Windows Developer Mode is not "
+                   "enabled\n";
             continue;
         }
 
@@ -748,9 +772,9 @@ void DawnTestEnvironment::SelectPreferredAdapterProperties(const native::Instanc
             bool selected = true;
 
             // The adapter is deselected if:
-            if (mHasBackendTypeFilter) {
+            if (!mBackendTypeFilters.empty()) {
                 // It doesn't match the backend type, if present.
-                selected &= info.backendType == mBackendTypeFilter;
+                selected &= mBackendTypeFilters.count(info.backendType) != 0;
             }
             if (mHasVendorIdFilter) {
                 // It doesn't match the vendor id, if present.
@@ -795,11 +819,9 @@ void DawnTestEnvironment::SelectPreferredAdapterProperties(const native::Instanc
 }
 
 std::vector<AdapterTestParam> DawnTestEnvironment::GetAvailableAdapterTestParamsForBackends(
-    const BackendTestConfig* params,
-    size_t numParams) {
+    Span<const BackendTestConfig> params) {
     std::vector<AdapterTestParam> testParams;
-    for (size_t i = 0; i < numParams; ++i) {
-        const auto& backendTestParams = params[i];
+    for (const auto& backendTestParams : params) {
         for (const auto& adapterProperties : mAdapterProperties) {
             if (backendTestParams.backendType == adapterProperties.backendType &&
                 adapterProperties.selected) {
@@ -955,11 +977,11 @@ uint32_t DawnTestEnvironment::GetVendorIdFilter() const {
 }
 
 bool DawnTestEnvironment::HasBackendTypeFilter() const {
-    return mHasBackendTypeFilter;
+    return !mBackendTypeFilters.empty();
 }
 
-wgpu::BackendType DawnTestEnvironment::GetBackendTypeFilter() const {
-    return mBackendTypeFilter;
+bool DawnTestEnvironment::BackendTypeMatchesFilter(wgpu::BackendType backendType) const {
+    return mBackendTypeFilters.count(backendType) != 0;
 }
 
 bool DawnTestEnvironment::HasWebGPUInnerBackendTypeFilter() const {
@@ -1090,7 +1112,8 @@ DawnTestBase::DawnTestBase(const AdapterTestParam& param) : mParam(param) {
         return {0};
     };
 
-    mWireHelper = utils::CreateWireHelper(procs, gTestEnv->UsesWire(), gTestEnv->GetWireTraceDir());
+    mWireHelper = utils::CreateWireHelper(procs, gTestEnv->UsesWire(), gTestEnv->GetWireTraceDir(),
+                                          mParam.enableSharedMemoryInWire);
 }
 
 DawnTestBase::~DawnTestBase() {
@@ -1422,8 +1445,8 @@ bool DawnTestBase::HasBackendTypeFilter() const {
     return gTestEnv->HasBackendTypeFilter();
 }
 
-wgpu::BackendType DawnTestBase::GetBackendTypeFilter() const {
-    return gTestEnv->GetBackendTypeFilter();
+bool DawnTestBase::BackendTypeMatchesFilter(wgpu::BackendType backendType) const {
+    return gTestEnv->BackendTypeMatchesFilter(backendType);
 }
 
 const wgpu::Instance& DawnTestBase::GetInstance() const {
@@ -1735,6 +1758,11 @@ void DawnTestBase::SetUp() {
 
     device.GetLimits(deviceLimits.GetLinked());
     queue = device.GetQueue();
+
+    // D3D12 with FXC coverage is not necessary on Qualcomm Windows. D3D11 still uses FXC.
+    if (IsWindows() && IsQualcomm() && IsD3D12() && !IsDXC()) {
+        GTEST_SKIP() << "D3D12 with FXC coverage is not necessary on Qualcomm Windows.";
+    }
 
     mCheckCaptureReplay = gTestEnv->IsCaptureReplayCheckingEnabled();
 
@@ -2241,7 +2269,6 @@ DawnTestBase::ReadbackReservation DawnTestBase::ReserveReadback(wgpu::Device tar
 
     ReadbackSlot slot;
     slot.device = targetDevice;
-    slot.bufferSize = readbackSize;
     slot.label = readbackLabel;
 
     // Create and initialize the slot buffer so that it won't unexpectedly affect the count of
@@ -2271,19 +2298,26 @@ void DawnTestBase::MapSlotsSynchronously(std::span<ReadbackSlot> readbacks) {
     for (size_t slotIndex = 0; slotIndex < readbacks.size(); ++slotIndex) {
         auto& slot = readbacks[slotIndex];
 
-        slot.buffer.MapAsync(wgpu::MapMode::Read, 0, wgpu::kWholeMapSize,
-                             wgpu::CallbackMode::AllowProcessEvents,
-                             [&slot, &pendingMaps](wgpu::MapAsyncStatus status, wgpu::StringView) {
-                                 DAWN_ASSERT(status == wgpu::MapAsyncStatus::Success);
-                                 if (status == wgpu::MapAsyncStatus::Success) {
-                                     slot.mappedData = slot.buffer.GetConstMappedRange();
-                                     DAWN_ASSERT(slot.mappedData != nullptr);
-                                 } else {
-                                     slot.mappedData = nullptr;
-                                 }
+        slot.buffer.MapAsync(
+            wgpu::MapMode::Read, 0, wgpu::kWholeMapSize, wgpu::CallbackMode::AllowProcessEvents,
+            [&slot, &pendingMaps](wgpu::MapAsyncStatus status, wgpu::StringView) {
+                DAWN_ASSERT(status == wgpu::MapAsyncStatus::Success);
+                if (status == wgpu::MapAsyncStatus::Success) {
+                    const std::byte* ptr =
+                        static_cast<const std::byte*>(slot.buffer.GetConstMappedRange());
+                    // SAFETY: The buffer is mapped at offset 0 with
+                    // kWholeMapSize, so the range returned by
+                    // GetConstMappedRange() is valid for exactly GetSize()
+                    // bytes, and stays valid until the buffer is unmapped.
+                    slot.mappedData = DAWN_UNSAFE_BUFFERS(
+                        Span<const std::byte>(ptr, static_cast<size_t>(slot.buffer.GetSize())));
+                    DAWN_ASSERT(slot.mappedData.data() != nullptr);
+                } else {
+                    slot.mappedData = {};
+                }
 
-                                 pendingMaps.fetch_sub(1, std::memory_order_release);
-                             });
+                pendingMaps.fetch_sub(1, std::memory_order_release);
+            });
     }
 
     // Busy wait until all map operations are done.
@@ -2294,11 +2328,11 @@ void DawnTestBase::MapSlotsSynchronously(std::span<ReadbackSlot> readbacks) {
 
 void DawnTestBase::ResolveExpectations() {
     for (const auto& expectation : mDeferredExpectations) {
-        EXPECT_TRUE(mReadbackSlots[expectation.readbackSlot].mappedData != nullptr);
+        EXPECT_TRUE(mReadbackSlots[expectation.readbackSlot].mappedData.data() != nullptr);
 
         // Get a pointer to the mapped copy of the data for the expectation.
         const auto& slot = mReadbackSlots[expectation.readbackSlot];
-        const char* data = static_cast<const char*>(slot.mappedData);
+        const char* data = ReinterpretSpan<const char>(slot.mappedData).data();
 
         // Handle the case where the device was lost so the expected data couldn't be read back.
         if (data == nullptr) {
@@ -2386,7 +2420,7 @@ void DawnTestBase::CheckReplayedReadbackBuffers(std::span<ReadbackSlot> existing
 
     for (auto& readback : existingReadbacks) {
         auto replayedBuffer = replay->GetObjectByLabel<wgpu::Buffer>(readback.label);
-        EXPECT_EQ(replayedBuffer.GetSize(), readback.bufferSize);
+        EXPECT_EQ(replayedBuffer.GetSize(), readback.buffer.GetSize());
         EXPECT_TRUE(replayedBuffer.GetUsage() & wgpu::BufferUsage::MapRead);
 
         wgpu::Future f = replayedBuffer.MapAsync(
@@ -2399,20 +2433,25 @@ void DawnTestBase::CheckReplayedReadbackBuffers(std::span<ReadbackSlot> existing
 
         // Compare the raw bytes of originalData and replayData to see if they are an exact match.
         // We use direct for loop here.
-        auto originalData = static_cast<const uint8_t*>(readback.mappedData);
-        auto replayData = static_cast<const uint8_t*>(replayedBuffer.GetConstMappedRange());
-        for (size_t i = 0; i < readback.bufferSize; ++i) {
+        Span<const std::byte> originalData = readback.mappedData;
+        // SAFETY: The buffer has GetSize() bytes, and we map the entire buffer at offset 0.
+        Span<const std::byte> replayData = DAWN_UNSAFE_BUFFERS(Span<const std::byte>(
+            static_cast<const std::byte*>(replayedBuffer.GetConstMappedRange()),
+            static_cast<size_t>(readback.buffer.GetSize())));
+        for (size_t i = 0; i < readback.buffer.GetSize(); ++i) {
             if (originalData[i] != replayData[i]) {
-                testing::AssertionResult result = testing::AssertionFailure()
-                                                  << "Original data[" << i << "] to be "
-                                                  << originalData[i] << ", replayed "
-                                                  << replayData[i] << "\n";
-                if (readback.bufferSize <= 1024) {
+                testing::AssertionResult result =
+                    testing::AssertionFailure()
+                    << "Original data[" << i << "] to be "
+                    << static_cast<uint32_t>(std::to_integer<uint8_t>(originalData[i]))
+                    << ", replayed "
+                    << static_cast<uint32_t>(std::to_integer<uint8_t>(replayData[i])) << "\n";
+                if (readback.buffer.GetSize() <= 1024) {
                     result << "Original:\n";
-                    printBuffer(result, originalData, readback.bufferSize);
+                    printBuffer(result, originalData.data(), originalData.size());
 
                     result << "Replayed:\n";
-                    printBuffer(result, replayData, readback.bufferSize);
+                    printBuffer(result, replayData.data(), replayData.size());
                 }
                 EXPECT_TRUE(result) << " Failure at Capture Replay Check";
                 break;
@@ -2464,10 +2503,9 @@ bool utils::RGBA8::operator>=(const utils::RGBA8& other) const {
 
 namespace detail {
 std::vector<AdapterTestParam> GetAvailableAdapterTestParamsForBackends(
-    const BackendTestConfig* params,
-    size_t numParams) {
+    Span<const BackendTestConfig> params) {
     DAWN_ASSERT(gTestEnv != nullptr);
-    return gTestEnv->GetAvailableAdapterTestParamsForBackends(params, numParams);
+    return gTestEnv->GetAvailableAdapterTestParamsForBackends(params);
 }
 
 // Helper classes to set expectations

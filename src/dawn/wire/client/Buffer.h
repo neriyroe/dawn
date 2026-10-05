@@ -105,8 +105,7 @@ class Buffer final : public RefCountedWithExternalCount<ObjectWithEventsBase> {
         MapState mappedState = MapState::Unmapped;
         std::optional<MapRequest> pendingMapRequest = std::nullopt;
 
-        // TODO(https://crbug.com/526537224): Use RawSpan instead of Span.
-        Span<std::byte> mappedData = {};
+        RawSpan<std::byte> mappedData = {};
         size_t mappedOffset = 0;
         size_t mappedSize = 0;
 
@@ -117,7 +116,7 @@ class Buffer final : public RefCountedWithExternalCount<ObjectWithEventsBase> {
     void WillDropLastExternalRef() override;
 
     // Prepares the callbacks to be called and potentially calls them.
-    void SetFutureStatus(WGPUMapAsyncStatus status, std::string_view message);
+    void SetFutureStatus(wgpu::MapAsyncStatus status, std::string_view message);
 
     void FreeMappedData(GuardedState& state);
 

@@ -42,6 +42,9 @@
 #include "src/utils/numeric.h"
 
 namespace dawn::wire::client {
+
+using MemoryHandleUse = MemoryTransferService::MemoryHandleUse;
+
 namespace {
 
 // Returns either an error buffer or null, depending on mappedAtCreation.
@@ -54,6 +57,16 @@ namespace {
     errorInfo.outOfMemory = true;
     errorBufferDescriptor.nextInChain = &errorInfo;
     return device->APICreateErrorBuffer(&errorBufferDescriptor);
+}
+
+MemoryHandleUse GetMemoryHandleUse(const BufferDescriptor* descriptor) {
+    if (descriptor->usage & (wgpu::BufferUsage::MapRead | wgpu::BufferUsage::MapWrite)) {
+        return MemoryHandleUse::MappedBuffer;
+    }
+    if (descriptor->mappedAtCreation) {
+        return MemoryHandleUse::MappedAtCreationData;
+    }
+    return MemoryHandleUse::BulkData;
 }
 
 }  // anonymous namespace
@@ -74,11 +87,11 @@ class Buffer::MapAsyncEvent : public TrackedEvent {
     EventType GetType() override { return kType; }
 
     WireResult ReadyHook(FutureID futureID,
-                         WGPUMapAsyncStatus status,
-                         WGPUStringView message,
+                         wgpu::MapAsyncStatus status,
+                         StringView message,
                          Span<const std::byte> readDataUpdateInfo = {}) {
         auto FailRequest = [this](const char* message) -> WireResult {
-            mStatus = static_cast<WGPUMapAsyncStatus>(0);
+            mStatus = static_cast<wgpu::MapAsyncStatus>(0);
             mMessage = message;
             return WireResult::FatalError;
         };
@@ -88,9 +101,9 @@ class Buffer::MapAsyncEvent : public TrackedEvent {
             // to some indeterministic results since the server and the user could race different
             // non-success results. That said, given that it's a non-success result, the race only
             // determines what the user sees as the error message and status.
-            if (status != WGPUMapAsyncStatus_Success) {
+            if (status != wgpu::MapAsyncStatus::Success) {
                 mStatus = status;
-                mMessage = ToString(message);
+                mMessage = message;
                 return WireResult::Success;
             }
 
@@ -129,30 +142,30 @@ class Buffer::MapAsyncEvent : public TrackedEvent {
     void CompleteImpl(FutureID futureID, EventCompletionType completionType) override {
         auto Callback = [&]() {
             if (mCallback) {
-                mCallback(mStatus, ToOutputStringView(mMessage), mUserdata1.ExtractAsDangling(),
-                          mUserdata2.ExtractAsDangling());
+                mCallback(ToAPI(mStatus), ToOutputStringView(mMessage),
+                          mUserdata1.ExtractAsDangling(), mUserdata2.ExtractAsDangling());
             }
         };
 
         return mBuffer->mState.Use([&](auto state) {
             if (completionType == EventCompletionType::Shutdown) {
-                mStatus = WGPUMapAsyncStatus_CallbackCancelled;
+                mStatus = wgpu::MapAsyncStatus::CallbackCancelled;
                 mMessage = "A valid external Instance reference no longer exists.";
             }
 
             // The request has been cancelled before completion, return that result.
             if (!state->PendingRequestIs(futureID)) {
-                DAWN_ASSERT(mStatus != WGPUMapAsyncStatus_Success);
+                DAWN_ASSERT(mStatus != wgpu::MapAsyncStatus::Success);
                 return Callback();
             }
 
             // Device destruction/loss implicitly makes the map requests aborted.
             if (mBuffer->mDevice->IsDestroyed()) {
-                mStatus = WGPUMapAsyncStatus_Aborted;
+                mStatus = wgpu::MapAsyncStatus::Aborted;
                 mMessage = "The Device was lost before mapping was resolved.";
             }
 
-            if (mStatus == WGPUMapAsyncStatus_Success) {
+            if (mStatus == wgpu::MapAsyncStatus::Success) {
                 DAWN_ASSERT(state->pendingMapRequest && state->pendingMapRequest->type);
                 switch (*state->pendingMapRequest->type) {
                     case MapRequestType::Read:
@@ -174,7 +187,7 @@ class Buffer::MapAsyncEvent : public TrackedEvent {
 
     // The response for the map async callback are implicitly protected by the mutex protecting the
     // map state in the Buffer.
-    WGPUMapAsyncStatus mStatus = WGPUMapAsyncStatus_Success;
+    wgpu::MapAsyncStatus mStatus = wgpu::MapAsyncStatus::Success;
     std::string mMessage;
 
     // Strong reference to the buffer for synchronization purposes.
@@ -214,15 +227,16 @@ Buffer* Buffer::Create(Device* device, const BufferDescriptor* descriptor) {
     std::shared_ptr<MemoryTransferService::MemoryHandle> memoryHandle = nullptr;
     size_t memoryHandleCreateInfoLength = 0;
     if (mappable) {
+        MemoryHandleUse memoryHandleUse = GetMemoryHandleUse(descriptor);
         memoryHandle = wireClient->GetMemoryTransferService()->CreateMemoryHandle(
-            checked_cast<size_t>(descriptor->size));
+            checked_cast<size_t>(descriptor->size), memoryHandleUse);
         if (memoryHandle == nullptr) {
             return ReturnOOMAtClient(device, descriptor);
         }
         memoryHandleCreateInfoLength = memoryHandle->GetSerializeCreateSize();
 
         // Prevent uninitialized memory from being visible via GetMappedRange().
-        if (mappableForWrite) {
+        if (mappableForWrite && !memoryHandle->IsInitialized()) {
             std::ranges::fill(memoryHandle->GetData(), std::byte(0u));
         }
     }
@@ -234,14 +248,7 @@ Buffer* Buffer::Create(Device* device, const BufferDescriptor* descriptor) {
 
     DeviceCreateBufferCmd cmd;
     cmd.deviceId = device->GetWireHandle(wireClient).id;
-    cmd.descriptor = ToAPI(descriptor);
-    // SAFETY: This Span is NEVER supposed to be read/serialized, so nullptr is fine.
-    // The member is not serialized because skip_serialize, but is a Span so that on
-    // the deserialization side we have a well-formed member.
-    // TODO(https://crbug.com/542275488): Clean these up if when we update command extension
-    // serialization to serialize into this span directly.
-    cmd.memoryHandleCreateInfo = DAWN_UNSAFE_BUFFERS(Span<const std::byte>(
-        static_cast<const std::byte*>(nullptr), memoryHandleCreateInfoLength));
+    cmd.descriptor = ToWireCmd(descriptor);
     cmd.result = buffer->GetWireHandle(wireClient);
 
     buffer->mState.Use([&](auto state) {
@@ -261,15 +268,15 @@ Buffer* Buffer::Create(Device* device, const BufferDescriptor* descriptor) {
     });
 
     wireClient->SerializeCommand(
-        cmd,
+        std::move(cmd),
         // Extensions to replace fields skipped by skip_serialize.
-        CommandExtension{memoryHandleCreateInfoLength,
-                         [&](Span<volatile std::byte> serializeBuffer) {
-                             if (memoryHandle != nullptr) {
-                                 // Serialize the MemoryHandle into the space after the command.
-                                 memoryHandle->SerializeCreate(std::span(serializeBuffer));
-                             }
-                         }});
+        CommandExtension<&DeviceCreateBufferCmd::memoryHandleCreateInfo>{
+            memoryHandleCreateInfoLength, [&](Span<volatile std::byte> serializeBuffer) {
+                if (memoryHandle != nullptr) {
+                    // Serialize the MemoryHandle into the space after the command.
+                    memoryHandle->SerializeCreate(std::span(serializeBuffer));
+                }
+            }});
 
     return ReturnToAPI2(std::move(buffer));
 }
@@ -280,8 +287,8 @@ Buffer* Buffer::CreateError(Device* device, const BufferDescriptor* descriptor) 
         // This codepath isn't used (at the time of this writing). Just return nullptr
         // (pretend there was a mapping OOM), so we don't have to bother mapping the ErrorBuffer
         // (would have to return nullptr anyway if there was actually an OOM).
-        std::string error = "mappedAtCreation is not implemented for CreateErrorBuffer";
-        device->HandleLogging(WGPULoggingType_Error, WGPUStringView{error.data(), error.size()});
+        device->HandleLogging(wgpu::LoggingType::Error,
+                              "mappedAtCreation is not implemented for CreateErrorBuffer");
         return nullptr;
     }
 
@@ -290,9 +297,9 @@ Buffer* Buffer::CreateError(Device* device, const BufferDescriptor* descriptor) 
 
     DeviceCreateErrorBufferCmd cmd;
     cmd.self = ToAPI(device);
-    cmd.descriptor = ToAPI(descriptor);
+    cmd.descriptor = ToWireCmd(descriptor);
     cmd.result = buffer->GetWireHandle(client);
-    client->SerializeCommand(cmd);
+    client->SerializeCommand(std::move(cmd));
 
     return ReturnToAPI2(std::move(buffer));
 }
@@ -316,7 +323,7 @@ void Buffer::DeleteThis() {
 }
 
 void Buffer::WillDropLastExternalRef() {
-    SetFutureStatus(WGPUMapAsyncStatus_Aborted,
+    SetFutureStatus(wgpu::MapAsyncStatus::Aborted,
                     "Buffer was destroyed before mapping was resolved.");
 }
 
@@ -324,7 +331,7 @@ ObjectType Buffer::GetObjectType() const {
     return ObjectType::Buffer;
 }
 
-void Buffer::SetFutureStatus(WGPUMapAsyncStatus status, std::string_view message) {
+void Buffer::SetFutureStatus(wgpu::MapAsyncStatus status, std::string_view message) {
     auto futureID = mState.Use([&](auto state) -> std::optional<FutureID> {
         if (!state->pendingMapRequest) {
             return std::nullopt;
@@ -338,8 +345,7 @@ void Buffer::SetFutureStatus(WGPUMapAsyncStatus status, std::string_view message
     if (!futureID) {
         return;
     }
-    auto wireStatus = GetEventManager().SetFutureReady<MapAsyncEvent>(*futureID, status,
-                                                                      ToOutputStringView(message));
+    auto wireStatus = GetEventManager().SetFutureReady<MapAsyncEvent>(*futureID, status, message);
     DAWN_CHECK(wireStatus == WireResult::Success);
 }
 
@@ -380,9 +386,9 @@ Future Buffer::APIMapAsync(wgpu::MapMode mode,
         return true;
     });
     if (!success) {
-        [[maybe_unused]] auto id = GetEventManager().SetFutureReady<MapAsyncEvent>(
-            futureIDInternal, WGPUMapAsyncStatus_Error,
-            ToOutputStringView("Buffer already has an outstanding map pending."));
+        std::ignore = GetEventManager().SetFutureReady<MapAsyncEvent>(
+            futureIDInternal, wgpu::MapAsyncStatus::Error,
+            "Buffer already has an outstanding map pending.");
         return {futureIDInternal};
     }
 
@@ -391,18 +397,18 @@ Future Buffer::APIMapAsync(wgpu::MapMode mode,
     cmd.bufferId = GetWireHandle(client).id;
     cmd.instanceId = GetInstance()->GetWireHandle(client).id;
     cmd.future = {futureIDInternal};
-    cmd.mode = ToAPI(mode);
+    cmd.mode = mode;
     cmd.offset = offset;
     cmd.size = size;
 
-    client->SerializeCommand(cmd);
+    client->SerializeCommand(std::move(cmd));
     return {futureIDInternal};
 }
 
 WireResult Client::DoBufferMapAsyncCallback(ObjectId instanceId,
-                                            WGPUFuture future,
-                                            WGPUMapAsyncStatus status,
-                                            WGPUStringView message,
+                                            Future future,
+                                            wgpu::MapAsyncStatus status,
+                                            StringView message,
                                             Span<const std::byte> readDataUpdateInfo) {
     return SetFutureReady<Buffer::MapAsyncEvent>(instanceId, future.id, status, message,
                                                  readDataUpdateInfo);
@@ -412,10 +418,9 @@ void* Buffer::APIGetMappedRange(size_t offset, size_t size) {
     return mState.Use([&](auto state) -> void* {
         if (!state->IsMappedForWriting()) {
             if (state->IsMappedForReading()) {
-                std::string error =
-                    "GetMappedRange: Mapping is read-only. Use GetConstMappedRange instead.";
-                mDevice->HandleLogging(WGPULoggingType_Error,
-                                       WGPUStringView{error.data(), error.size()});
+                mDevice->HandleLogging(
+                    wgpu::LoggingType::Error,
+                    "GetMappedRange: Mapping is read-only. Use GetConstMappedRange instead.");
             }
             return nullptr;
         }
@@ -496,45 +501,35 @@ void Buffer::APIUnmap() {
     });
 
     if (memoryHandle) {
-        size_t memoryDataUpdateInfoLength =
-            memoryHandle->GetSerializeDataUpdateSize(cmd.offset, cmd.size);
-        // SAFETY: This Span is NEVER supposed to be read/serialized, so nullptr is fine.
-        // The member is not serialized because skip_serialize, but is a Span so that on
-        // the deserialization side we have a well-formed member.
-        // TODO(https://crbug.com/542275488): Clean these up if when we update command extension
-        // serialization to serialize into this span directly.
-        cmd.dataUpdateInfo = DAWN_UNSAFE_BUFFERS(Span<const std::byte>(
-            static_cast<const std::byte*>(nullptr), memoryDataUpdateInfoLength));
-
-        client->SerializeCommand(cmd,
+        client->SerializeCommand(std::move(cmd),
                                  // Extensions to replace fields skipped by skip_serialize.
-                                 CommandExtension{memoryDataUpdateInfoLength,
-                                                  [&](Span<volatile std::byte> serializeBuffer) {
-                                                      memoryHandle->SerializeDataUpdate(
-                                                          serializeBuffer, cmd.offset, cmd.size);
-                                                  }});
+                                 CommandExtension<&BufferUpdateMappedDataCmd::dataUpdateInfo>{
+                                     memoryHandle->GetSerializeDataUpdateSize(cmd.offset, cmd.size),
+                                     [&](Span<volatile std::byte> serializeBuffer) {
+                                         memoryHandle->SerializeDataUpdate(serializeBuffer,
+                                                                           cmd.offset, cmd.size);
+                                     }});
     }
 
-    SetFutureStatus(WGPUMapAsyncStatus_Aborted, "Buffer was unmapped before mapping was resolved.");
+    SetFutureStatus(wgpu::MapAsyncStatus::Aborted,
+                    "Buffer was unmapped before mapping was resolved.");
 
     BufferUnmapCmd unmapCmd{};
     unmapCmd.self = ToAPI(this);
-    client->SerializeCommand(unmapCmd);
+    client->SerializeCommand(std::move(unmapCmd));
 }
 
 void Buffer::APIDestroy() {
     Client* client = GetClient();
 
     // Remove the current mapping and destroy MemoryHandle.
-    mState.Use([&](auto state) {
-        FreeMappedData(state);
-    });
-    SetFutureStatus(WGPUMapAsyncStatus_Aborted,
+    mState.Use([&](auto state) { FreeMappedData(state); });
+    SetFutureStatus(wgpu::MapAsyncStatus::Aborted,
                     "Buffer was destroyed before mapping was resolved.");
 
     BufferDestroyCmd cmd{};
     cmd.self = ToAPI(this);
-    client->SerializeCommand(cmd);
+    client->SerializeCommand(std::move(cmd));
 }
 
 wgpu::BufferUsage Buffer::APIGetUsage() const {

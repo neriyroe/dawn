@@ -223,13 +223,12 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, BitcastFromF16) {
     %6:vec2<u16> = hlsl.asuint16 %src
     %7:vec2<u32> = convert %6
     %8:vec2<u32> = and %7, vec2<u32>(65535u)
-    %9:vec2<u32> = construct 0u, 16u
-    %10:vec2<u32> = shl %8, %9
-    %11:u32 = access %10, 0u
-    %12:u32 = access %10, 1u
-    %13:u32 = or %11, %12
-    %14:f32 = hlsl.asfloat %13
-    ret %14
+    %9:vec2<u32> = shl %8, vec2<u32>(0u, 16u)
+    %10:u32 = access %9, 0u
+    %11:u32 = access %9, 1u
+    %12:u32 = or %10, %11
+    %13:f32 = hlsl.asfloat %12
+    ret %13
   }
 }
 )";
@@ -266,13 +265,12 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, BitcastToF16) {
     %6:u32 = hlsl.asuint %src
     %v:u32 = let %6
     %8:vec2<u32> = construct %v, %v
-    %9:vec2<u32> = construct 0u, 16u
-    %10:vec2<u32> = shr %8, %9
-    %11:vec2<u32> = and %10, vec2<u32>(65535u)
-    %12:vec2<u16> = convert %11
-    %v16:vec2<u16> = let %12
-    %14:vec2<f16> = hlsl.asfloat16 %v16
-    ret %14
+    %9:vec2<u32> = shr %8, vec2<u32>(0u, 16u)
+    %10:vec2<u32> = and %9, vec2<u32>(65535u)
+    %11:vec2<u16> = convert %10
+    %v16:vec2<u16> = let %11
+    %13:vec2<f16> = hlsl.asfloat16 %v16
+    ret %13
   }
 }
 )";
@@ -293,11 +291,10 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, BitcastFromVec2F16) {
     auto* src = R"(
 %foo = @fragment func():void {
   $B1: {
-    %2:vec2<f16> = construct 1.0h, 2.0h
-    %a:ptr<function, vec2<f16>, read_write> = var %2
-    %4:vec2<f16> = load %a
-    %5:i32 = bitcast<i32> %4
-    %b:i32 = let %5
+    %a:ptr<function, vec2<f16>, read_write> = var vec2<f16>(1.0h, 2.0h)
+    %3:vec2<f16> = load %a
+    %4:i32 = bitcast<i32> %3
+    %b:i32 = let %4
     ret
   }
 }
@@ -307,26 +304,24 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, BitcastFromVec2F16) {
     auto* expect = R"(
 %foo = @fragment func():void {
   $B1: {
-    %2:vec2<f16> = construct 1.0h, 2.0h
-    %a:ptr<function, vec2<f16>, read_write> = var %2
-    %4:vec2<f16> = load %a
-    %5:i32 = call %tint_bitcast_from_f16, %4
-    %b:i32 = let %5
+    %a:ptr<function, vec2<f16>, read_write> = var vec2<f16>(1.0h, 2.0h)
+    %3:vec2<f16> = load %a
+    %4:i32 = call %tint_bitcast_from_f16, %3
+    %b:i32 = let %4
     ret
   }
 }
 %tint_bitcast_from_f16 = func(%src:vec2<f16>):i32 {
   $B2: {
-    %9:vec2<u16> = hlsl.asuint16 %src
-    %10:vec2<u32> = convert %9
-    %11:vec2<u32> = and %10, vec2<u32>(65535u)
-    %12:vec2<u32> = construct 0u, 16u
-    %13:vec2<u32> = shl %11, %12
-    %14:u32 = access %13, 0u
-    %15:u32 = access %13, 1u
-    %16:u32 = or %14, %15
-    %17:i32 = hlsl.asint %16
-    ret %17
+    %8:vec2<u16> = hlsl.asuint16 %src
+    %9:vec2<u32> = convert %8
+    %10:vec2<u32> = and %9, vec2<u32>(65535u)
+    %11:vec2<u32> = shl %10, vec2<u32>(0u, 16u)
+    %12:u32 = access %11, 0u
+    %13:u32 = access %11, 1u
+    %14:u32 = or %12, %13
+    %15:i32 = hlsl.asint %14
+    ret %15
   }
 }
 )";
@@ -346,11 +341,10 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, BitcastToVec4F16) {
     auto* src = R"(
 %foo = @fragment func():void {
   $B1: {
-    %2:vec2<i32> = construct 1i, 2i
-    %a:ptr<function, vec2<i32>, read_write> = var %2
-    %4:vec2<i32> = load %a
-    %5:vec4<f16> = bitcast<vec4<f16>> %4
-    %b:vec4<f16> = let %5
+    %a:ptr<function, vec2<i32>, read_write> = var vec2<i32>(1i, 2i)
+    %3:vec2<i32> = load %a
+    %4:vec4<f16> = bitcast<vec4<f16>> %3
+    %b:vec4<f16> = let %4
     ret
   }
 }
@@ -360,26 +354,24 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, BitcastToVec4F16) {
     auto* expect = R"(
 %foo = @fragment func():void {
   $B1: {
-    %2:vec2<i32> = construct 1i, 2i
-    %a:ptr<function, vec2<i32>, read_write> = var %2
-    %4:vec2<i32> = load %a
-    %5:vec4<f16> = call %tint_bitcast_to_f16, %4
-    %b:vec4<f16> = let %5
+    %a:ptr<function, vec2<i32>, read_write> = var vec2<i32>(1i, 2i)
+    %3:vec2<i32> = load %a
+    %4:vec4<f16> = call %tint_bitcast_to_f16, %3
+    %b:vec4<f16> = let %4
     ret
   }
 }
 %tint_bitcast_to_f16 = func(%src:vec2<i32>):vec4<f16> {
   $B2: {
-    %9:vec2<u32> = hlsl.asuint %src
-    %v:vec2<u32> = let %9
-    %11:vec4<u32> = swizzle %v, xxyy
-    %12:vec4<u32> = construct 0u, 16u, 0u, 16u
-    %13:vec4<u32> = shr %11, %12
-    %14:vec4<u32> = and %13, vec4<u32>(65535u)
-    %15:vec4<u16> = convert %14
-    %v16:vec4<u16> = let %15
-    %17:vec4<f16> = hlsl.asfloat16 %v16
-    ret %17
+    %8:vec2<u32> = hlsl.asuint %src
+    %v:vec2<u32> = let %8
+    %10:vec4<u32> = swizzle %v, xxyy
+    %11:vec4<u32> = shr %10, vec4<u32>(0u, 16u, 0u, 16u)
+    %12:vec4<u32> = and %11, vec4<u32>(65535u)
+    %13:vec4<u16> = convert %12
+    %v16:vec4<u16> = let %13
+    %15:vec4<f16> = hlsl.asfloat16 %v16
+    ret %15
   }
 }
 )";
@@ -508,12 +500,11 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, BitcastVec2U16ToU32) {
   $B2: {
     %6:vec2<u32> = convert %src
     %7:vec2<u32> = and %6, vec2<u32>(65535u)
-    %8:vec2<u32> = construct 0u, 16u
-    %9:vec2<u32> = shl %7, %8
-    %10:u32 = access %9, 0u
-    %11:u32 = access %9, 1u
-    %12:u32 = or %10, %11
-    ret %12
+    %8:vec2<u32> = shl %7, vec2<u32>(0u, 16u)
+    %9:u32 = access %8, 0u
+    %10:u32 = access %8, 1u
+    %11:u32 = or %9, %10
+    ret %11
   }
 }
 )";
@@ -550,11 +541,10 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, BitcastU32ToVec2U16) {
   $B2: {
     %v:u32 = let %src
     %7:vec2<u32> = construct %v, %v
-    %8:vec2<u32> = construct 0u, 16u
-    %9:vec2<u32> = shr %7, %8
-    %10:vec2<u32> = and %9, vec2<u32>(65535u)
-    %11:vec2<u16> = convert %10
-    %v16:vec2<u16> = let %11
+    %8:vec2<u32> = shr %7, vec2<u32>(0u, 16u)
+    %9:vec2<u32> = and %8, vec2<u32>(65535u)
+    %10:vec2<u16> = convert %9
+    %v16:vec2<u16> = let %10
     ret %v16
   }
 }
@@ -565,17 +555,19 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, BitcastU32ToVec2U16) {
 }
 
 TEST_F(HlslWriter_BuiltinPolyfillTest, Sign) {
-    auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    auto* arg = b.FunctionParam("arg", ty.f32());
+    auto* func = b.Function("foo", ty.void_());
+    func->SetParams({arg});
     b.Append(func->Block(), [&] {
-        b.Let("a", b.Call(ty.f32(), core::BuiltinFn::kSign, -1_f));
+        b.Let("a", b.Call(ty.f32(), core::BuiltinFn::kSign, arg));
         b.Return(func);
     });
 
     auto* src = R"(
-%foo = @fragment func():void {
+%foo = func(%arg:f32):void {
   $B1: {
-    %2:f32 = sign -1.0f
-    %a:f32 = let %2
+    %3:f32 = sign %arg
+    %a:f32 = let %3
     ret
   }
 }
@@ -583,11 +575,11 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, Sign) {
     EXPECT_EQ(src, str());
 
     auto* expect = R"(
-%foo = @fragment func():void {
+%foo = func(%arg:f32):void {
   $B1: {
-    %2:i32 = hlsl.sign -1.0f
-    %3:f32 = convert %2
-    %a:f32 = let %3
+    %3:i32 = hlsl.sign %arg
+    %4:f32 = convert %3
+    %a:f32 = let %4
     ret
   }
 }
@@ -598,18 +590,19 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, Sign) {
 }
 
 TEST_F(HlslWriter_BuiltinPolyfillTest, SignVec) {
-    auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    auto* arg = b.FunctionParam("arg", ty.vec3i());
+    auto* func = b.Function("foo", ty.void_());
+    func->SetParams({arg});
     b.Append(func->Block(), [&] {
-        b.Let("a",
-              b.Call(ty.vec3i(), core::BuiltinFn::kSign, b.Composite(ty.vec3i(), 1_i, 2_i, 3_i)));
+        b.Let("a", b.Call(ty.vec3i(), core::BuiltinFn::kSign, arg));
         b.Return(func);
     });
 
     auto* src = R"(
-%foo = @fragment func():void {
+%foo = func(%arg:vec3<i32>):void {
   $B1: {
-    %2:vec3<i32> = sign vec3<i32>(1i, 2i, 3i)
-    %a:vec3<i32> = let %2
+    %3:vec3<i32> = sign %arg
+    %a:vec3<i32> = let %3
     ret
   }
 }
@@ -617,10 +610,10 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, SignVec) {
     EXPECT_EQ(src, str());
 
     auto* expect = R"(
-%foo = @fragment func():void {
+%foo = func(%arg:vec3<i32>):void {
   $B1: {
-    %2:vec3<i32> = hlsl.sign vec3<i32>(1i, 2i, 3i)
-    %a:vec3<i32> = let %2
+    %3:vec3<i32> = hlsl.sign %arg
+    %a:vec3<i32> = let %3
     ret
   }
 }
@@ -707,6 +700,47 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, TextureNumLayers) {
     EXPECT_EQ(expect, str());
 }
 
+TEST_F(HlslWriter_BuiltinPolyfillTest, TextureNumLayersMultisampledArray) {
+    auto* t = b.FunctionParam(
+        "t", ty.multisampled_texture(core::type::TextureDimension::k2dArray, ty.f32()));
+    auto* func = b.Function("foo", ty.u32());
+    func->SetParams({t});
+    b.Append(func->Block(), [&] {
+        auto* result = b.Call<u32>(core::BuiltinFn::kTextureNumLayers, t);
+        b.Return(func, result);
+    });
+
+    auto* src = R"(
+%foo = func(%t:texture_multisampled_2d_array<f32>):u32 {
+  $B1: {
+    %3:u32 = textureNumLayers %t
+    ret %3
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+%foo = func(%t:texture_multisampled_2d_array<f32>):u32 {
+  $B1: {
+    %3:ptr<function, vec4<u32>, read_write> = var undef
+    %4:ptr<function, u32, read_write> = access %3, 0u
+    %5:ptr<function, u32, read_write> = access %3, 1u
+    %6:ptr<function, u32, read_write> = access %3, 2u
+    %7:ptr<function, u32, read_write> = access %3, 3u
+    %8:void = %t.GetDimensions %4, %5, %6, %7
+    %9:vec4<u32> = load %3
+    %10:u32 = swizzle %9, z
+    ret %10
+  }
+}
+)";
+
+    Run(BuiltinPolyfill, BuiltinPolyfillConfig{});
+
+    EXPECT_EQ(expect, str());
+}
+
 TEST_F(HlslWriter_BuiltinPolyfillTest, TextureNumSamples) {
     auto* t =
         b.FunctionParam("t", ty.multisampled_texture(core::type::TextureDimension::k2d, ty.f32()));
@@ -738,6 +772,47 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, TextureNumSamples) {
     %8:vec3<u32> = load %3
     %9:u32 = swizzle %8, z
     ret %9
+  }
+}
+)";
+
+    Run(BuiltinPolyfill, BuiltinPolyfillConfig{});
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriter_BuiltinPolyfillTest, TextureNumSamplesArray) {
+    auto* t = b.FunctionParam(
+        "t", ty.multisampled_texture(core::type::TextureDimension::k2dArray, ty.f32()));
+    auto* func = b.Function("foo", ty.u32());
+    func->SetParams({t});
+    b.Append(func->Block(), [&] {
+        auto* result = b.Call<u32>(core::BuiltinFn::kTextureNumSamples, t);
+        b.Return(func, result);
+    });
+
+    auto* src = R"(
+%foo = func(%t:texture_multisampled_2d_array<f32>):u32 {
+  $B1: {
+    %3:u32 = textureNumSamples %t
+    ret %3
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+%foo = func(%t:texture_multisampled_2d_array<f32>):u32 {
+  $B1: {
+    %3:ptr<function, vec4<u32>, read_write> = var undef
+    %4:ptr<function, u32, read_write> = access %3, 0u
+    %5:ptr<function, u32, read_write> = access %3, 1u
+    %6:ptr<function, u32, read_write> = access %3, 2u
+    %7:ptr<function, u32, read_write> = access %3, 3u
+    %8:void = %t.GetDimensions %4, %5, %6, %7
+    %9:vec4<u32> = load %3
+    %10:u32 = swizzle %9, w
+    ret %10
   }
 }
 )";
@@ -804,14 +879,13 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, TextureDimensions_1d_WithI32Lod) {
     auto* expect = R"(
 %foo = func(%t:texture_1d<f32>):u32 {
   $B1: {
-    %3:u32 = convert 3i
-    %4:ptr<function, vec2<u32>, read_write> = var undef
-    %5:ptr<function, u32, read_write> = access %4, 0u
-    %6:ptr<function, u32, read_write> = access %4, 1u
-    %7:void = %t.GetDimensions %3, %5, %6
-    %8:vec2<u32> = load %4
-    %9:u32 = swizzle %8, x
-    ret %9
+    %3:ptr<function, vec2<u32>, read_write> = var undef
+    %4:ptr<function, u32, read_write> = access %3, 0u
+    %5:ptr<function, u32, read_write> = access %3, 1u
+    %6:void = %t.GetDimensions 3u, %4, %5
+    %7:vec2<u32> = load %3
+    %8:u32 = swizzle %7, x
+    ret %8
   }
 }
 )";
@@ -918,15 +992,14 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, TextureDimensions_2d_WithI32Lod) {
     auto* expect = R"(
 %foo = func(%t:texture_2d<f32>):vec2<u32> {
   $B1: {
-    %3:u32 = convert 3i
-    %4:ptr<function, vec3<u32>, read_write> = var undef
-    %5:ptr<function, u32, read_write> = access %4, 0u
-    %6:ptr<function, u32, read_write> = access %4, 1u
-    %7:ptr<function, u32, read_write> = access %4, 2u
-    %8:void = %t.GetDimensions %3, %5, %6, %7
-    %9:vec3<u32> = load %4
-    %10:vec2<u32> = swizzle %9, xy
-    ret %10
+    %3:ptr<function, vec3<u32>, read_write> = var undef
+    %4:ptr<function, u32, read_write> = access %3, 0u
+    %5:ptr<function, u32, read_write> = access %3, 1u
+    %6:ptr<function, u32, read_write> = access %3, 2u
+    %7:void = %t.GetDimensions 3u, %4, %5, %6
+    %8:vec3<u32> = load %3
+    %9:vec2<u32> = swizzle %8, xy
+    ret %9
   }
 }
 )";
@@ -998,10 +1071,8 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, TextureLoad_1DF32) {
     auto* expect = R"(
 %foo = func(%t:texture_1d<f32>):vec4<f32> {
   $B1: {
-    %3:i32 = convert 0u
-    %4:vec2<i32> = construct 0i, %3
-    %5:vec4<f32> = %t.Load %4
-    ret %5
+    %3:vec4<f32> = %t.Load vec2<i32>(0i)
+    ret %3
   }
 }
 )";
@@ -1035,9 +1106,8 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, TextureLoad_2DLevelI32) {
     auto* expect = R"(
 %foo = func(%t:texture_2d<i32>):vec4<i32> {
   $B1: {
-    %3:vec3<i32> = construct vec2<i32>(0i), 0i
-    %4:vec4<i32> = %t.Load %3
-    ret %4
+    %3:vec4<i32> = %t.Load vec3<i32>(0i)
+    ret %3
   }
 }
 )";
@@ -1071,10 +1141,8 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, TextureLoad_3DLevelU32) {
     auto* expect = R"(
 %foo = func(%t:texture_3d<f32>):vec4<f32> {
   $B1: {
-    %3:i32 = convert 0u
-    %4:vec4<i32> = construct vec3<i32>(0i), %3
-    %5:vec4<f32> = %t.Load %4
-    ret %5
+    %3:vec4<f32> = %t.Load vec4<i32>(0i)
+    ret %3
   }
 }
 )";
@@ -1109,9 +1177,46 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, TextureLoad_Multisampled2DI32) {
     auto* expect = R"(
 %foo = func(%t:texture_multisampled_2d<i32>):vec4<i32> {
   $B1: {
-    %3:i32 = convert 0u
-    %4:vec4<i32> = %t.Load vec2<i32>(0i), %3
-    ret %4
+    %3:vec4<i32> = %t.Load vec2<i32>(0i), 0i
+    ret %3
+  }
+}
+)";
+
+    Run(BuiltinPolyfill, BuiltinPolyfillConfig{});
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriter_BuiltinPolyfillTest, TextureLoad_Multisampled2DArrayI32) {
+    auto* t = b.FunctionParam(
+        "t", ty.multisampled_texture(core::type::TextureDimension::k2dArray, ty.i32()));
+    auto* func = b.Function("foo", ty.vec4i());
+    func->SetParams({t});
+    b.Append(func->Block(), [&] {
+        auto* coords = b.Zero<vec2<i32>>();
+        auto* array_idx = b.Zero<u32>();
+        auto* sample_idx = b.Zero<u32>();
+        auto* result =
+            b.Call<vec4<i32>>(core::BuiltinFn::kTextureLoad, t, coords, array_idx, sample_idx);
+        b.Return(func, result);
+    });
+
+    auto* src = R"(
+%foo = func(%t:texture_multisampled_2d_array<i32>):vec4<i32> {
+  $B1: {
+    %3:vec4<i32> = textureLoad %t, vec2<i32>(0i), 0u, 0u
+    ret %3
+  }
+}
+)";
+    ASSERT_EQ(src, str());
+
+    auto* expect = R"(
+%foo = func(%t:texture_multisampled_2d_array<i32>):vec4<i32> {
+  $B1: {
+    %3:vec4<i32> = %t.Load vec3<i32>(0i), 0i
+    ret %3
   }
 }
 )";
@@ -1145,11 +1250,9 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, TextureLoad_Depth2DLevelF32) {
     auto* expect = R"(
 %foo = func(%t:texture_depth_2d):f32 {
   $B1: {
-    %3:i32 = convert 0u
-    %4:vec3<i32> = construct vec2<i32>(0i), %3
-    %5:vec4<f32> = %t.Load %4
-    %6:f32 = swizzle %5, x
-    ret %6
+    %3:vec4<f32> = %t.Load vec3<i32>(0i)
+    %4:f32 = swizzle %3, x
+    ret %4
   }
 }
 )";
@@ -1184,12 +1287,9 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, TextureLoad_Depth2DArrayLevelF32) {
     auto* expect = R"(
 %foo = func(%t:texture_depth_2d_array):f32 {
   $B1: {
-    %3:i32 = convert 0u
-    %4:i32 = convert 0u
-    %5:vec4<i32> = construct vec2<i32>(0i), %3, %4
-    %6:vec4<f32> = %t.Load %5
-    %7:f32 = swizzle %6, x
-    ret %7
+    %3:vec4<f32> = %t.Load vec4<i32>(0i)
+    %4:f32 = swizzle %3, x
+    ret %4
   }
 }
 )";
@@ -1224,10 +1324,9 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, TextureLoad_DepthMultisampledF32) {
     auto* expect = R"(
 %foo = func(%t:texture_depth_multisampled_2d):f32 {
   $B1: {
-    %3:i32 = convert 0u
-    %4:vec4<f32> = %t.Load vec2<i32>(0i), %3
-    %5:f32 = swizzle %4, x
-    ret %5
+    %3:vec4<f32> = %t.Load vec2<i32>(0i), 0i
+    %4:f32 = swizzle %3, x
+    ret %4
   }
 }
 )";
@@ -1373,9 +1472,7 @@ $B1: {  # root
 %foo = @fragment func():void {
   $B2: {
     %3:texture_storage_2d_array<rgba32float, read_write> = load %1
-    %4:i32 = convert 3u
-    %5:vec3<i32> = construct vec2<i32>(1i, 2i), %4
-    %6:void = hlsl.textureStore %3, %5, vec4<f32>(0.5f, 0.40000000596046447754f, 0.30000001192092895508f, 1.0f)
+    %4:void = hlsl.textureStore %3, vec3<i32>(1i, 2i, 3i), vec4<f32>(0.5f, 0.40000000596046447754f, 0.30000001192092895508f, 1.0f)
     ret
   }
 }
@@ -1417,11 +1514,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler_comparison = load %2
-    %7:vec4<f32> = textureGatherCompare %5, %6, %4, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler_comparison = load %2
+    %6:vec4<f32> = textureGatherCompare %4, %5, vec2<f32>(1.0f, 2.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -1436,11 +1532,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler_comparison = load %2
-    %7:vec4<f32> = %5.GatherCmp %6, %4, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler_comparison = load %2
+    %6:vec4<f32> = %4.GatherCmp %5, vec2<f32>(1.0f, 2.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -1483,11 +1578,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler_comparison = load %2
-    %7:vec4<f32> = textureGatherCompare %5, %6, %4, 3.0f, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler_comparison = load %2
+    %6:vec4<f32> = textureGatherCompare %4, %5, vec2<f32>(1.0f, 2.0f), 3.0f, vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -1502,11 +1596,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler_comparison = load %2
-    %7:vec4<f32> = %5.GatherCmp %6, %4, 3.0f, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler_comparison = load %2
+    %6:vec4<f32> = %4.GatherCmp %5, vec2<f32>(1.0f, 2.0f), 3.0f, vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -1549,11 +1642,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 2.5f
-    %5:texture_depth_cube_array = load %1
-    %6:sampler_comparison = load %2
-    %7:vec4<f32> = textureGatherCompare %5, %6, %4, 6u, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_depth_cube_array = load %1
+    %5:sampler_comparison = load %2
+    %6:vec4<f32> = textureGatherCompare %4, %5, vec3<f32>(1.0f, 2.0f, 2.5f), 6u, 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -1568,13 +1660,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 2.5f
-    %5:texture_depth_cube_array = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = convert 6u
-    %8:vec4<f32> = construct %4, %7
-    %9:vec4<f32> = %5.GatherCmp %6, %8, 3.0f
-    %x:vec4<f32> = let %9
+    %4:texture_depth_cube_array = load %1
+    %5:sampler_comparison = load %2
+    %6:vec4<f32> = %4.GatherCmp %5, vec4<f32>(1.0f, 2.0f, 2.5f, 6.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -1618,11 +1707,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler_comparison = load %2
-    %7:vec4<f32> = textureGatherCompare %5, %6, %4, 6i, 3.0f, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %7
+    %4:texture_depth_2d_array = load %1
+    %5:sampler_comparison = load %2
+    %6:vec4<f32> = textureGatherCompare %4, %5, vec2<f32>(1.0f, 2.0f), 6i, 3.0f, vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -1637,13 +1725,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = convert 6i
-    %8:vec3<f32> = construct %4, %7
-    %9:vec4<f32> = %5.GatherCmp %6, %8, 3.0f, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %9
+    %4:texture_depth_2d_array = load %1
+    %5:sampler_comparison = load %2
+    %6:vec4<f32> = %4.GatherCmp %5, vec3<f32>(1.0f, 2.0f, 6.0f), 3.0f, vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -1684,11 +1769,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d<i32> = load %1
-    %6:sampler = load %2
-    %7:vec4<i32> = textureGather 3u, %5, %6, %4
-    %x:vec4<i32> = let %7
+    %4:texture_2d<i32> = load %1
+    %5:sampler = load %2
+    %6:vec4<i32> = textureGather 3u, %4, %5, vec2<f32>(1.0f, 2.0f)
+    %x:vec4<i32> = let %6
     ret
   }
 }
@@ -1703,11 +1787,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d<i32> = load %1
-    %6:sampler = load %2
-    %7:vec4<i32> = %5.GatherAlpha %6, %4
-    %x:vec4<i32> = let %7
+    %4:texture_2d<i32> = load %1
+    %5:sampler = load %2
+    %6:vec4<i32> = %4.GatherAlpha %5, vec2<f32>(1.0f, 2.0f)
+    %x:vec4<i32> = let %6
     ret
   }
 }
@@ -1748,11 +1831,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d<i32> = load %1
-    %6:sampler = load %2
-    %7:vec4<i32> = textureGather 0u, %5, %6, %4, vec2<i32>(1i, 3i)
-    %x:vec4<i32> = let %7
+    %4:texture_2d<i32> = load %1
+    %5:sampler = load %2
+    %6:vec4<i32> = textureGather 0u, %4, %5, vec2<f32>(1.0f, 2.0f), vec2<i32>(1i, 3i)
+    %x:vec4<i32> = let %6
     ret
   }
 }
@@ -1767,11 +1849,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d<i32> = load %1
-    %6:sampler = load %2
-    %7:vec4<i32> = %5.GatherRed %6, %4, vec2<i32>(1i, 3i)
-    %x:vec4<i32> = let %7
+    %4:texture_2d<i32> = load %1
+    %5:sampler = load %2
+    %6:vec4<i32> = %4.GatherRed %5, vec2<f32>(1.0f, 2.0f), vec2<i32>(1i, 3i)
+    %x:vec4<i32> = let %6
     ret
   }
 }
@@ -1813,11 +1894,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d_array<i32> = load %1
-    %6:sampler = load %2
-    %7:vec4<i32> = textureGather 1u, %5, %6, %4, 1u
-    %x:vec4<i32> = let %7
+    %4:texture_2d_array<i32> = load %1
+    %5:sampler = load %2
+    %6:vec4<i32> = textureGather 1u, %4, %5, vec2<f32>(1.0f, 2.0f), 1u
+    %x:vec4<i32> = let %6
     ret
   }
 }
@@ -1832,13 +1912,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d_array<i32> = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 1u
-    %8:vec3<f32> = construct %4, %7
-    %9:vec4<i32> = %5.GatherGreen %6, %8
-    %x:vec4<i32> = let %9
+    %4:texture_2d_array<i32> = load %1
+    %5:sampler = load %2
+    %6:vec4<i32> = %4.GatherGreen %5, vec3<f32>(1.0f, 2.0f, 1.0f)
+    %x:vec4<i32> = let %6
     ret
   }
 }
@@ -1882,11 +1959,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d_array<i32> = load %1
-    %6:sampler = load %2
-    %7:vec4<i32> = textureGather 2u, %5, %6, %4, 1i, vec2<i32>(1i, 2i)
-    %x:vec4<i32> = let %7
+    %4:texture_2d_array<i32> = load %1
+    %5:sampler = load %2
+    %6:vec4<i32> = textureGather 2u, %4, %5, vec2<f32>(1.0f, 2.0f), 1i, vec2<i32>(1i, 2i)
+    %x:vec4<i32> = let %6
     ret
   }
 }
@@ -1901,13 +1977,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d_array<i32> = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 1i
-    %8:vec3<f32> = construct %4, %7
-    %9:vec4<i32> = %5.GatherBlue %6, %8, vec2<i32>(1i, 2i)
-    %x:vec4<i32> = let %9
+    %4:texture_2d_array<i32> = load %1
+    %5:sampler = load %2
+    %6:vec4<i32> = %4.GatherBlue %5, vec3<f32>(1.0f, 2.0f, 1.0f), vec2<i32>(1i, 2i)
+    %x:vec4<i32> = let %6
     ret
   }
 }
@@ -1947,11 +2020,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureGather %5, %6, %4
-    %x:vec4<f32> = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureGather %4, %5, vec2<f32>(1.0f, 2.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -1966,11 +2038,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.Gather %6, %4
-    %x:vec4<f32> = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Gather %5, vec2<f32>(1.0f, 2.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2010,11 +2081,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureGather %5, %6, %4, vec2<i32>(3i, 4i)
-    %x:vec4<f32> = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureGather %4, %5, vec2<f32>(1.0f, 2.0f), vec2<i32>(3i, 4i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2029,11 +2099,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.Gather %6, %4, vec2<i32>(3i, 4i)
-    %x:vec4<f32> = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Gather %5, vec2<f32>(1.0f, 2.0f), vec2<i32>(3i, 4i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2073,11 +2142,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureGather %5, %6, %4, 4i
-    %x:vec4<f32> = let %7
+    %4:texture_depth_2d_array = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureGather %4, %5, vec2<f32>(1.0f, 2.0f), 4i
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2092,13 +2160,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4i
-    %8:vec3<f32> = construct %4, %7
-    %9:vec4<f32> = %5.Gather %6, %8
-    %x:vec4<f32> = let %9
+    %4:texture_depth_2d_array = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Gather %5, vec3<f32>(1.0f, 2.0f, 4.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2140,11 +2205,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureGather %5, %6, %4, 4u, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %7
+    %4:texture_depth_2d_array = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureGather %4, %5, vec2<f32>(1.0f, 2.0f), 4u, vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2159,13 +2223,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4u
-    %8:vec3<f32> = construct %4, %7
-    %9:vec4<f32> = %5.Gather %6, %8, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %9
+    %4:texture_depth_2d_array = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Gather %5, vec3<f32>(1.0f, 2.0f, 4.0f), vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2266,11 +2327,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSample %5, %6, %4
-    %x:vec4<f32> = let %7
+    %4:texture_2d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSample %4, %5, vec2<f32>(1.0f, 2.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2285,11 +2345,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.Sample %6, %4
-    %x:vec4<f32> = let %7
+    %4:texture_2d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Sample %5, vec2<f32>(1.0f, 2.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2329,11 +2388,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSample %5, %6, %4, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %7
+    %4:texture_2d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSample %4, %5, vec2<f32>(1.0f, 2.0f), vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2348,11 +2406,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.Sample %6, %4, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %7
+    %4:texture_2d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Sample %5, vec2<f32>(1.0f, 2.0f), vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2392,11 +2449,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d_array<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSample %5, %6, %4, 4u
-    %x:vec4<f32> = let %7
+    %4:texture_2d_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSample %4, %5, vec2<f32>(1.0f, 2.0f), 4u
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2411,13 +2467,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d_array<f32> = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4u
-    %8:vec3<f32> = construct %4, %7
-    %9:vec4<f32> = %5.Sample %6, %8
-    %x:vec4<f32> = let %9
+    %4:texture_2d_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Sample %5, vec3<f32>(1.0f, 2.0f, 4.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2459,11 +2512,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d_array<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSample %5, %6, %4, 4u, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %7
+    %4:texture_2d_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSample %4, %5, vec2<f32>(1.0f, 2.0f), 4u, vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2478,13 +2530,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d_array<f32> = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4u
-    %8:vec3<f32> = construct %4, %7
-    %9:vec4<f32> = %5.Sample %6, %8, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %9
+    %4:texture_2d_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Sample %5, vec3<f32>(1.0f, 2.0f, 4.0f), vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2523,11 +2572,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_3d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSample %5, %6, %4
-    %x:vec4<f32> = let %7
+    %4:texture_3d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSample %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2542,11 +2590,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_3d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.Sample %6, %4
-    %x:vec4<f32> = let %7
+    %4:texture_3d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Sample %5, vec3<f32>(1.0f, 2.0f, 3.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2586,11 +2633,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_3d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSample %5, %6, %4, vec3<i32>(4i, 5i, 6i)
-    %x:vec4<f32> = let %7
+    %4:texture_3d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSample %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), vec3<i32>(4i, 5i, 6i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2605,11 +2651,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_3d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.Sample %6, %4, vec3<i32>(4i, 5i, 6i)
-    %x:vec4<f32> = let %7
+    %4:texture_3d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Sample %5, vec3<f32>(1.0f, 2.0f, 3.0f), vec3<i32>(4i, 5i, 6i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2648,11 +2693,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_cube<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSample %5, %6, %4
-    %x:vec4<f32> = let %7
+    %4:texture_cube<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSample %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2667,11 +2711,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_cube<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.Sample %6, %4
-    %x:vec4<f32> = let %7
+    %4:texture_cube<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Sample %5, vec3<f32>(1.0f, 2.0f, 3.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2711,11 +2754,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_cube_array<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSample %5, %6, %4, 4u
-    %x:vec4<f32> = let %7
+    %4:texture_cube_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSample %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), 4u
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2730,13 +2772,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_cube_array<f32> = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4u
-    %8:vec4<f32> = construct %4, %7
-    %9:vec4<f32> = %5.Sample %6, %8
-    %x:vec4<f32> = let %9
+    %4:texture_cube_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Sample %5, vec4<f32>(1.0f, 2.0f, 3.0f, 4.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -2774,11 +2813,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler = load %2
-    %7:f32 = textureSample %5, %6, %4
-    %x:f32 = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler = load %2
+    %6:f32 = textureSample %4, %5, vec2<f32>(1.0f, 2.0f)
+    %x:f32 = let %6
     ret
   }
 }
@@ -2793,12 +2831,11 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.Sample %6, %4
-    %8:f32 = swizzle %7, x
-    %x:f32 = let %8
+    %4:texture_depth_2d = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Sample %5, vec2<f32>(1.0f, 2.0f)
+    %7:f32 = swizzle %6, x
+    %x:f32 = let %7
     ret
   }
 }
@@ -2837,11 +2874,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler = load %2
-    %7:f32 = textureSample %5, %6, %4, vec2<i32>(4i, 5i)
-    %x:f32 = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler = load %2
+    %6:f32 = textureSample %4, %5, vec2<f32>(1.0f, 2.0f), vec2<i32>(4i, 5i)
+    %x:f32 = let %6
     ret
   }
 }
@@ -2856,12 +2892,11 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.Sample %6, %4, vec2<i32>(4i, 5i)
-    %8:f32 = swizzle %7, x
-    %x:f32 = let %8
+    %4:texture_depth_2d = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Sample %5, vec2<f32>(1.0f, 2.0f), vec2<i32>(4i, 5i)
+    %7:f32 = swizzle %6, x
+    %x:f32 = let %7
     ret
   }
 }
@@ -2900,11 +2935,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler = load %2
-    %7:f32 = textureSample %5, %6, %4, 4u
-    %x:f32 = let %7
+    %4:texture_depth_2d_array = load %1
+    %5:sampler = load %2
+    %6:f32 = textureSample %4, %5, vec2<f32>(1.0f, 2.0f), 4u
+    %x:f32 = let %6
     ret
   }
 }
@@ -2919,14 +2953,11 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4u
-    %8:vec3<f32> = construct %4, %7
-    %9:vec4<f32> = %5.Sample %6, %8
-    %10:f32 = swizzle %9, x
-    %x:f32 = let %10
+    %4:texture_depth_2d_array = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Sample %5, vec3<f32>(1.0f, 2.0f, 4.0f)
+    %7:f32 = swizzle %6, x
+    %x:f32 = let %7
     ret
   }
 }
@@ -2966,11 +2997,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler = load %2
-    %7:f32 = textureSample %5, %6, %4, 4u, vec2<i32>(4i, 5i)
-    %x:f32 = let %7
+    %4:texture_depth_2d_array = load %1
+    %5:sampler = load %2
+    %6:f32 = textureSample %4, %5, vec2<f32>(1.0f, 2.0f), 4u, vec2<i32>(4i, 5i)
+    %x:f32 = let %6
     ret
   }
 }
@@ -2985,14 +3015,11 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4u
-    %8:vec3<f32> = construct %4, %7
-    %9:vec4<f32> = %5.Sample %6, %8, vec2<i32>(4i, 5i)
-    %10:f32 = swizzle %9, x
-    %x:f32 = let %10
+    %4:texture_depth_2d_array = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Sample %5, vec3<f32>(1.0f, 2.0f, 4.0f), vec2<i32>(4i, 5i)
+    %7:f32 = swizzle %6, x
+    %x:f32 = let %7
     ret
   }
 }
@@ -3031,11 +3058,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_depth_cube_array = load %1
-    %6:sampler = load %2
-    %7:f32 = textureSample %5, %6, %4, 4u
-    %x:f32 = let %7
+    %4:texture_depth_cube_array = load %1
+    %5:sampler = load %2
+    %6:f32 = textureSample %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), 4u
+    %x:f32 = let %6
     ret
   }
 }
@@ -3050,14 +3076,11 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_depth_cube_array = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4u
-    %8:vec4<f32> = construct %4, %7
-    %9:vec4<f32> = %5.Sample %6, %8
-    %10:f32 = swizzle %9, x
-    %x:f32 = let %10
+    %4:texture_depth_cube_array = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.Sample %5, vec4<f32>(1.0f, 2.0f, 3.0f, 4.0f)
+    %7:f32 = swizzle %6, x
+    %x:f32 = let %7
     ret
   }
 }
@@ -3096,11 +3119,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSampleBias %5, %6, %4, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_2d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleBias %4, %5, vec2<f32>(1.0f, 2.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -3115,11 +3137,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.SampleBias %6, %4, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_2d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleBias %5, vec2<f32>(1.0f, 2.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -3160,11 +3181,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSampleBias %5, %6, %4, 3.0f, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %7
+    %4:texture_2d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleBias %4, %5, vec2<f32>(1.0f, 2.0f), 3.0f, vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -3179,11 +3199,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.SampleBias %6, %4, 3.0f, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %7
+    %4:texture_2d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleBias %5, vec2<f32>(1.0f, 2.0f), 3.0f, vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -3224,11 +3243,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d_array<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSampleBias %5, %6, %4, 4u, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_2d_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleBias %4, %5, vec2<f32>(1.0f, 2.0f), 4u, 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -3243,13 +3261,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d_array<f32> = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4u
-    %8:vec3<f32> = construct %4, %7
-    %9:vec4<f32> = %5.SampleBias %6, %8, 3.0f
-    %x:vec4<f32> = let %9
+    %4:texture_2d_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleBias %5, vec3<f32>(1.0f, 2.0f, 4.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -3291,11 +3306,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d_array<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSampleBias %5, %6, %4, 4u, 3.0f, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %7
+    %4:texture_2d_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleBias %4, %5, vec2<f32>(1.0f, 2.0f), 4u, 3.0f, vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -3310,13 +3324,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d_array<f32> = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4u
-    %8:vec3<f32> = construct %4, %7
-    %9:vec4<f32> = %5.SampleBias %6, %8, 3.0f, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %9
+    %4:texture_2d_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleBias %5, vec3<f32>(1.0f, 2.0f, 4.0f), 3.0f, vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -3355,11 +3366,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_3d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSampleBias %5, %6, %4, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_3d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleBias %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -3374,11 +3384,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_3d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.SampleBias %6, %4, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_3d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleBias %5, vec3<f32>(1.0f, 2.0f, 3.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -3419,11 +3428,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_3d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSampleBias %5, %6, %4, 3.0f, vec3<i32>(4i, 5i, 6i)
-    %x:vec4<f32> = let %7
+    %4:texture_3d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleBias %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), 3.0f, vec3<i32>(4i, 5i, 6i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -3438,11 +3446,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_3d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.SampleBias %6, %4, 3.0f, vec3<i32>(4i, 5i, 6i)
-    %x:vec4<f32> = let %7
+    %4:texture_3d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleBias %5, vec3<f32>(1.0f, 2.0f, 3.0f), 3.0f, vec3<i32>(4i, 5i, 6i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -3481,11 +3488,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_cube<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSampleBias %5, %6, %4, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_cube<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleBias %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -3500,11 +3506,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_cube<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.SampleBias %6, %4, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_cube<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleBias %5, vec3<f32>(1.0f, 2.0f, 3.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -3545,11 +3550,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_cube_array<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSampleBias %5, %6, %4, 4u, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_cube_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleBias %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), 4u, 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -3564,13 +3568,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_cube_array<f32> = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4u
-    %8:vec4<f32> = construct %4, %7
-    %9:vec4<f32> = %5.SampleBias %6, %8, 3.0f
-    %x:vec4<f32> = let %9
+    %4:texture_cube_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleBias %5, vec4<f32>(1.0f, 2.0f, 3.0f, 4.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -3608,11 +3609,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = textureSampleCompare %5, %6, %4, 3.0f
-    %x:f32 = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = textureSampleCompare %4, %5, vec2<f32>(1.0f, 2.0f), 3.0f
+    %x:f32 = let %6
     ret
   }
 }
@@ -3627,11 +3627,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = %5.SampleCmp %6, %4, 3.0f
-    %x:f32 = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = %4.SampleCmp %5, vec2<f32>(1.0f, 2.0f), 3.0f
+    %x:f32 = let %6
     ret
   }
 }
@@ -3670,11 +3669,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = textureSampleCompare %5, %6, %4, 3.0f, vec2<i32>(4i, 5i)
-    %x:f32 = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = textureSampleCompare %4, %5, vec2<f32>(1.0f, 2.0f), 3.0f, vec2<i32>(4i, 5i)
+    %x:f32 = let %6
     ret
   }
 }
@@ -3689,11 +3687,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = %5.SampleCmp %6, %4, 3.0f, vec2<i32>(4i, 5i)
-    %x:f32 = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = %4.SampleCmp %5, vec2<f32>(1.0f, 2.0f), 3.0f, vec2<i32>(4i, 5i)
+    %x:f32 = let %6
     ret
   }
 }
@@ -3733,11 +3730,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = textureSampleCompare %5, %6, %4, 4u, 3.0f
-    %x:f32 = let %7
+    %4:texture_depth_2d_array = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = textureSampleCompare %4, %5, vec2<f32>(1.0f, 2.0f), 4u, 3.0f
+    %x:f32 = let %6
     ret
   }
 }
@@ -3752,13 +3748,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = convert 4u
-    %8:vec3<f32> = construct %4, %7
-    %9:f32 = %5.SampleCmp %6, %8, 3.0f
-    %x:f32 = let %9
+    %4:texture_depth_2d_array = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = %4.SampleCmp %5, vec3<f32>(1.0f, 2.0f, 4.0f), 3.0f
+    %x:f32 = let %6
     ret
   }
 }
@@ -3799,11 +3792,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = textureSampleCompare %5, %6, %4, 4u, 3.0f, vec2<i32>(4i, 5i)
-    %x:f32 = let %7
+    %4:texture_depth_2d_array = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = textureSampleCompare %4, %5, vec2<f32>(1.0f, 2.0f), 4u, 3.0f, vec2<i32>(4i, 5i)
+    %x:f32 = let %6
     ret
   }
 }
@@ -3818,13 +3810,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = convert 4u
-    %8:vec3<f32> = construct %4, %7
-    %9:f32 = %5.SampleCmp %6, %8, 3.0f, vec2<i32>(4i, 5i)
-    %x:f32 = let %9
+    %4:texture_depth_2d_array = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = %4.SampleCmp %5, vec3<f32>(1.0f, 2.0f, 4.0f), 3.0f, vec2<i32>(4i, 5i)
+    %x:f32 = let %6
     ret
   }
 }
@@ -3862,11 +3851,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_depth_cube = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = textureSampleCompare %5, %6, %4, 3.0f
-    %x:f32 = let %7
+    %4:texture_depth_cube = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = textureSampleCompare %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), 3.0f
+    %x:f32 = let %6
     ret
   }
 }
@@ -3881,11 +3869,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_depth_cube = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = %5.SampleCmp %6, %4, 3.0f
-    %x:f32 = let %7
+    %4:texture_depth_cube = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = %4.SampleCmp %5, vec3<f32>(1.0f, 2.0f, 3.0f), 3.0f
+    %x:f32 = let %6
     ret
   }
 }
@@ -3925,11 +3912,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_depth_cube_array = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = textureSampleCompare %5, %6, %4, 4u, 3.0f
-    %x:f32 = let %7
+    %4:texture_depth_cube_array = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = textureSampleCompare %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), 4u, 3.0f
+    %x:f32 = let %6
     ret
   }
 }
@@ -3944,13 +3930,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_depth_cube_array = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = convert 4u
-    %8:vec4<f32> = construct %4, %7
-    %9:f32 = %5.SampleCmp %6, %8, 3.0f
-    %x:f32 = let %9
+    %4:texture_depth_cube_array = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = %4.SampleCmp %5, vec4<f32>(1.0f, 2.0f, 3.0f, 4.0f), 3.0f
+    %x:f32 = let %6
     ret
   }
 }
@@ -3988,11 +3971,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = textureSampleCompareLevel %5, %6, %4, 3.0f
-    %x:f32 = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = textureSampleCompareLevel %4, %5, vec2<f32>(1.0f, 2.0f), 3.0f
+    %x:f32 = let %6
     ret
   }
 }
@@ -4007,11 +3989,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = %5.SampleCmpLevelZero %6, %4, 3.0f
-    %x:f32 = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = %4.SampleCmpLevelZero %5, vec2<f32>(1.0f, 2.0f), 3.0f
+    %x:f32 = let %6
     ret
   }
 }
@@ -4051,11 +4032,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = textureSampleCompareLevel %5, %6, %4, 3.0f, vec2<i32>(4i, 5i)
-    %x:f32 = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = textureSampleCompareLevel %4, %5, vec2<f32>(1.0f, 2.0f), 3.0f, vec2<i32>(4i, 5i)
+    %x:f32 = let %6
     ret
   }
 }
@@ -4070,11 +4050,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = %5.SampleCmpLevelZero %6, %4, 3.0f, vec2<i32>(4i, 5i)
-    %x:f32 = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = %4.SampleCmpLevelZero %5, vec2<f32>(1.0f, 2.0f), 3.0f, vec2<i32>(4i, 5i)
+    %x:f32 = let %6
     ret
   }
 }
@@ -4114,11 +4093,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = textureSampleCompareLevel %5, %6, %4, 4u, 3.0f
-    %x:f32 = let %7
+    %4:texture_depth_2d_array = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = textureSampleCompareLevel %4, %5, vec2<f32>(1.0f, 2.0f), 4u, 3.0f
+    %x:f32 = let %6
     ret
   }
 }
@@ -4133,13 +4111,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = convert 4u
-    %8:vec3<f32> = construct %4, %7
-    %9:f32 = %5.SampleCmpLevelZero %6, %8, 3.0f
-    %x:f32 = let %9
+    %4:texture_depth_2d_array = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = %4.SampleCmpLevelZero %5, vec3<f32>(1.0f, 2.0f, 4.0f), 3.0f
+    %x:f32 = let %6
     ret
   }
 }
@@ -4180,11 +4155,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = textureSampleCompareLevel %5, %6, %4, 4u, 3.0f, vec2<i32>(4i, 5i)
-    %x:f32 = let %7
+    %4:texture_depth_2d_array = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = textureSampleCompareLevel %4, %5, vec2<f32>(1.0f, 2.0f), 4u, 3.0f, vec2<i32>(4i, 5i)
+    %x:f32 = let %6
     ret
   }
 }
@@ -4199,13 +4173,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = convert 4u
-    %8:vec3<f32> = construct %4, %7
-    %9:f32 = %5.SampleCmpLevelZero %6, %8, 3.0f, vec2<i32>(4i, 5i)
-    %x:f32 = let %9
+    %4:texture_depth_2d_array = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = %4.SampleCmpLevelZero %5, vec3<f32>(1.0f, 2.0f, 4.0f), 3.0f, vec2<i32>(4i, 5i)
+    %x:f32 = let %6
     ret
   }
 }
@@ -4243,11 +4214,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_depth_cube = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = textureSampleCompareLevel %5, %6, %4, 3.0f
-    %x:f32 = let %7
+    %4:texture_depth_cube = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = textureSampleCompareLevel %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), 3.0f
+    %x:f32 = let %6
     ret
   }
 }
@@ -4262,11 +4232,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_depth_cube = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = %5.SampleCmpLevelZero %6, %4, 3.0f
-    %x:f32 = let %7
+    %4:texture_depth_cube = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = %4.SampleCmpLevelZero %5, vec3<f32>(1.0f, 2.0f, 3.0f), 3.0f
+    %x:f32 = let %6
     ret
   }
 }
@@ -4306,11 +4275,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_depth_cube_array = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = textureSampleCompareLevel %5, %6, %4, 4u, 3.0f
-    %x:f32 = let %7
+    %4:texture_depth_cube_array = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = textureSampleCompareLevel %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), 4u, 3.0f
+    %x:f32 = let %6
     ret
   }
 }
@@ -4325,13 +4293,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_depth_cube_array = load %1
-    %6:sampler_comparison = load %2
-    %7:f32 = convert 4u
-    %8:vec4<f32> = construct %4, %7
-    %9:f32 = %5.SampleCmpLevelZero %6, %8, 3.0f
-    %x:f32 = let %9
+    %4:texture_depth_cube_array = load %1
+    %5:sampler_comparison = load %2
+    %6:f32 = %4.SampleCmpLevelZero %5, vec4<f32>(1.0f, 2.0f, 3.0f, 4.0f), 3.0f
+    %x:f32 = let %6
     ret
   }
 }
@@ -4372,13 +4337,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:vec2<f32> = construct 3.0f, 4.0f
-    %6:vec2<f32> = construct 6.0f, 7.0f
-    %7:texture_2d<f32> = load %1
-    %8:sampler = load %2
-    %9:vec4<f32> = textureSampleGrad %7, %8, %4, %5, %6
-    %x:vec4<f32> = let %9
+    %4:texture_2d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleGrad %4, %5, vec2<f32>(1.0f, 2.0f), vec2<f32>(3.0f, 4.0f), vec2<f32>(6.0f, 7.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -4393,13 +4355,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:vec2<f32> = construct 3.0f, 4.0f
-    %6:vec2<f32> = construct 6.0f, 7.0f
-    %7:texture_2d<f32> = load %1
-    %8:sampler = load %2
-    %9:vec4<f32> = %7.SampleGrad %8, %4, %5, %6
-    %x:vec4<f32> = let %9
+    %4:texture_2d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleGrad %5, vec2<f32>(1.0f, 2.0f), vec2<f32>(3.0f, 4.0f), vec2<f32>(6.0f, 7.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -4442,13 +4401,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:vec2<f32> = construct 3.0f, 4.0f
-    %6:vec2<f32> = construct 6.0f, 7.0f
-    %7:texture_2d<f32> = load %1
-    %8:sampler = load %2
-    %9:vec4<f32> = textureSampleGrad %7, %8, %4, %5, %6, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %9
+    %4:texture_2d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleGrad %4, %5, vec2<f32>(1.0f, 2.0f), vec2<f32>(3.0f, 4.0f), vec2<f32>(6.0f, 7.0f), vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -4463,13 +4419,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:vec2<f32> = construct 3.0f, 4.0f
-    %6:vec2<f32> = construct 6.0f, 7.0f
-    %7:texture_2d<f32> = load %1
-    %8:sampler = load %2
-    %9:vec4<f32> = %7.SampleGrad %8, %4, %5, %6, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %9
+    %4:texture_2d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleGrad %5, vec2<f32>(1.0f, 2.0f), vec2<f32>(3.0f, 4.0f), vec2<f32>(6.0f, 7.0f), vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -4512,13 +4465,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:vec2<f32> = construct 3.0f, 4.0f
-    %6:vec2<f32> = construct 6.0f, 7.0f
-    %7:texture_2d_array<f32> = load %1
-    %8:sampler = load %2
-    %9:vec4<f32> = textureSampleGrad %7, %8, %4, 4u, %5, %6
-    %x:vec4<f32> = let %9
+    %4:texture_2d_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleGrad %4, %5, vec2<f32>(1.0f, 2.0f), 4u, vec2<f32>(3.0f, 4.0f), vec2<f32>(6.0f, 7.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -4533,15 +4483,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:vec2<f32> = construct 3.0f, 4.0f
-    %6:vec2<f32> = construct 6.0f, 7.0f
-    %7:texture_2d_array<f32> = load %1
-    %8:sampler = load %2
-    %9:f32 = convert 4u
-    %10:vec3<f32> = construct %4, %9
-    %11:vec4<f32> = %7.SampleGrad %8, %10, %5, %6
-    %x:vec4<f32> = let %11
+    %4:texture_2d_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleGrad %5, vec3<f32>(1.0f, 2.0f, 4.0f), vec2<f32>(3.0f, 4.0f), vec2<f32>(6.0f, 7.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -4585,13 +4530,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:vec2<f32> = construct 3.0f, 4.0f
-    %6:vec2<f32> = construct 6.0f, 7.0f
-    %7:texture_2d_array<f32> = load %1
-    %8:sampler = load %2
-    %9:vec4<f32> = textureSampleGrad %7, %8, %4, 4u, %5, %6, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %9
+    %4:texture_2d_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleGrad %4, %5, vec2<f32>(1.0f, 2.0f), 4u, vec2<f32>(3.0f, 4.0f), vec2<f32>(6.0f, 7.0f), vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -4606,15 +4548,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:vec2<f32> = construct 3.0f, 4.0f
-    %6:vec2<f32> = construct 6.0f, 7.0f
-    %7:texture_2d_array<f32> = load %1
-    %8:sampler = load %2
-    %9:f32 = convert 4u
-    %10:vec3<f32> = construct %4, %9
-    %11:vec4<f32> = %7.SampleGrad %8, %10, %5, %6, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %11
+    %4:texture_2d_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleGrad %5, vec3<f32>(1.0f, 2.0f, 4.0f), vec2<f32>(3.0f, 4.0f), vec2<f32>(6.0f, 7.0f), vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -4655,13 +4592,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:vec3<f32> = construct 3.0f, 4.0f, 5.0f
-    %6:vec3<f32> = construct 6.0f, 7.0f, 8.0f
-    %7:texture_3d<f32> = load %1
-    %8:sampler = load %2
-    %9:vec4<f32> = textureSampleGrad %7, %8, %4, %5, %6
-    %x:vec4<f32> = let %9
+    %4:texture_3d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleGrad %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), vec3<f32>(3.0f, 4.0f, 5.0f), vec3<f32>(6.0f, 7.0f, 8.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -4676,13 +4610,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:vec3<f32> = construct 3.0f, 4.0f, 5.0f
-    %6:vec3<f32> = construct 6.0f, 7.0f, 8.0f
-    %7:texture_3d<f32> = load %1
-    %8:sampler = load %2
-    %9:vec4<f32> = %7.SampleGrad %8, %4, %5, %6
-    %x:vec4<f32> = let %9
+    %4:texture_3d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleGrad %5, vec3<f32>(1.0f, 2.0f, 3.0f), vec3<f32>(3.0f, 4.0f, 5.0f), vec3<f32>(6.0f, 7.0f, 8.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -4725,13 +4656,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:vec3<f32> = construct 3.0f, 4.0f, 5.0f
-    %6:vec3<f32> = construct 6.0f, 7.0f, 8.0f
-    %7:texture_3d<f32> = load %1
-    %8:sampler = load %2
-    %9:vec4<f32> = textureSampleGrad %7, %8, %4, %5, %6, vec3<i32>(4i, 5i, 6i)
-    %x:vec4<f32> = let %9
+    %4:texture_3d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleGrad %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), vec3<f32>(3.0f, 4.0f, 5.0f), vec3<f32>(6.0f, 7.0f, 8.0f), vec3<i32>(4i, 5i, 6i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -4746,13 +4674,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:vec3<f32> = construct 3.0f, 4.0f, 5.0f
-    %6:vec3<f32> = construct 6.0f, 7.0f, 8.0f
-    %7:texture_3d<f32> = load %1
-    %8:sampler = load %2
-    %9:vec4<f32> = %7.SampleGrad %8, %4, %5, %6, vec3<i32>(4i, 5i, 6i)
-    %x:vec4<f32> = let %9
+    %4:texture_3d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleGrad %5, vec3<f32>(1.0f, 2.0f, 3.0f), vec3<f32>(3.0f, 4.0f, 5.0f), vec3<f32>(6.0f, 7.0f, 8.0f), vec3<i32>(4i, 5i, 6i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -4793,13 +4718,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:vec3<f32> = construct 3.0f, 4.0f, 5.0f
-    %6:vec3<f32> = construct 6.0f, 7.0f, 8.0f
-    %7:texture_cube<f32> = load %1
-    %8:sampler = load %2
-    %9:vec4<f32> = textureSampleGrad %7, %8, %4, %5, %6
-    %x:vec4<f32> = let %9
+    %4:texture_cube<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleGrad %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), vec3<f32>(3.0f, 4.0f, 5.0f), vec3<f32>(6.0f, 7.0f, 8.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -4814,13 +4736,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:vec3<f32> = construct 3.0f, 4.0f, 5.0f
-    %6:vec3<f32> = construct 6.0f, 7.0f, 8.0f
-    %7:texture_cube<f32> = load %1
-    %8:sampler = load %2
-    %9:vec4<f32> = %7.SampleGrad %8, %4, %5, %6
-    %x:vec4<f32> = let %9
+    %4:texture_cube<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleGrad %5, vec3<f32>(1.0f, 2.0f, 3.0f), vec3<f32>(3.0f, 4.0f, 5.0f), vec3<f32>(6.0f, 7.0f, 8.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -4863,13 +4782,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:vec3<f32> = construct 3.0f, 4.0f, 5.0f
-    %6:vec3<f32> = construct 6.0f, 7.0f, 8.0f
-    %7:texture_cube_array<f32> = load %1
-    %8:sampler = load %2
-    %9:vec4<f32> = textureSampleGrad %7, %8, %4, 4u, %5, %6
-    %x:vec4<f32> = let %9
+    %4:texture_cube_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleGrad %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), 4u, vec3<f32>(3.0f, 4.0f, 5.0f), vec3<f32>(6.0f, 7.0f, 8.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -4884,15 +4800,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:vec3<f32> = construct 3.0f, 4.0f, 5.0f
-    %6:vec3<f32> = construct 6.0f, 7.0f, 8.0f
-    %7:texture_cube_array<f32> = load %1
-    %8:sampler = load %2
-    %9:f32 = convert 4u
-    %10:vec4<f32> = construct %4, %9
-    %11:vec4<f32> = %7.SampleGrad %8, %10, %5, %6
-    %x:vec4<f32> = let %11
+    %4:texture_cube_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleGrad %5, vec4<f32>(1.0f, 2.0f, 3.0f, 4.0f), vec3<f32>(3.0f, 4.0f, 5.0f), vec3<f32>(6.0f, 7.0f, 8.0f)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -4991,11 +4902,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSampleLevel %5, %6, %4, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_2d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleLevel %4, %5, vec2<f32>(1.0f, 2.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -5010,11 +4920,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.SampleLevel %6, %4, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_2d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleLevel %5, vec2<f32>(1.0f, 2.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -5055,11 +4964,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSampleLevel %5, %6, %4, 3.0f, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %7
+    %4:texture_2d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleLevel %4, %5, vec2<f32>(1.0f, 2.0f), 3.0f, vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -5074,11 +4982,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.SampleLevel %6, %4, 3.0f, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %7
+    %4:texture_2d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleLevel %5, vec2<f32>(1.0f, 2.0f), 3.0f, vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -5119,11 +5026,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d_array<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSampleLevel %5, %6, %4, 4u, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_2d_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleLevel %4, %5, vec2<f32>(1.0f, 2.0f), 4u, 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -5138,13 +5044,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d_array<f32> = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4u
-    %8:vec3<f32> = construct %4, %7
-    %9:vec4<f32> = %5.SampleLevel %6, %8, 3.0f
-    %x:vec4<f32> = let %9
+    %4:texture_2d_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleLevel %5, vec3<f32>(1.0f, 2.0f, 4.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -5186,11 +5089,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d_array<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSampleLevel %5, %6, %4, 4u, 3.0f, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %7
+    %4:texture_2d_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleLevel %4, %5, vec2<f32>(1.0f, 2.0f), 4u, 3.0f, vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -5205,13 +5107,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_2d_array<f32> = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4u
-    %8:vec3<f32> = construct %4, %7
-    %9:vec4<f32> = %5.SampleLevel %6, %8, 3.0f, vec2<i32>(4i, 5i)
-    %x:vec4<f32> = let %9
+    %4:texture_2d_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleLevel %5, vec3<f32>(1.0f, 2.0f, 4.0f), 3.0f, vec2<i32>(4i, 5i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -5250,11 +5149,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_3d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSampleLevel %5, %6, %4, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_3d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleLevel %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -5269,11 +5167,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_3d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.SampleLevel %6, %4, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_3d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleLevel %5, vec3<f32>(1.0f, 2.0f, 3.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -5314,11 +5211,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_3d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSampleLevel %5, %6, %4, 3.0f, vec3<i32>(4i, 5i, 6i)
-    %x:vec4<f32> = let %7
+    %4:texture_3d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleLevel %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), 3.0f, vec3<i32>(4i, 5i, 6i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -5333,11 +5229,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_3d<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.SampleLevel %6, %4, 3.0f, vec3<i32>(4i, 5i, 6i)
-    %x:vec4<f32> = let %7
+    %4:texture_3d<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleLevel %5, vec3<f32>(1.0f, 2.0f, 3.0f), 3.0f, vec3<i32>(4i, 5i, 6i)
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -5376,11 +5271,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_cube<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSampleLevel %5, %6, %4, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_cube<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleLevel %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -5395,11 +5289,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_cube<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = %5.SampleLevel %6, %4, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_cube<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleLevel %5, vec3<f32>(1.0f, 2.0f, 3.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -5440,11 +5333,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_cube_array<f32> = load %1
-    %6:sampler = load %2
-    %7:vec4<f32> = textureSampleLevel %5, %6, %4, 4u, 3.0f
-    %x:vec4<f32> = let %7
+    %4:texture_cube_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = textureSampleLevel %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), 4u, 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -5459,13 +5351,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_cube_array<f32> = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4u
-    %8:vec4<f32> = construct %4, %7
-    %9:vec4<f32> = %5.SampleLevel %6, %8, 3.0f
-    %x:vec4<f32> = let %9
+    %4:texture_cube_array<f32> = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleLevel %5, vec4<f32>(1.0f, 2.0f, 3.0f, 4.0f), 3.0f
+    %x:vec4<f32> = let %6
     ret
   }
 }
@@ -5503,11 +5392,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler = load %2
-    %7:f32 = textureSampleLevel %5, %6, %4, 3i
-    %x:f32 = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler = load %2
+    %6:f32 = textureSampleLevel %4, %5, vec2<f32>(1.0f, 2.0f), 3i
+    %x:f32 = let %6
     ret
   }
 }
@@ -5522,13 +5410,11 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 3i
-    %8:vec4<f32> = %5.SampleLevel %6, %4, %7
-    %9:f32 = swizzle %8, x
-    %x:f32 = let %9
+    %4:texture_depth_2d = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleLevel %5, vec2<f32>(1.0f, 2.0f), 3.0f
+    %7:f32 = swizzle %6, x
+    %x:f32 = let %7
     ret
   }
 }
@@ -5567,11 +5453,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler = load %2
-    %7:f32 = textureSampleLevel %5, %6, %4, 3u, vec2<i32>(4i, 5i)
-    %x:f32 = let %7
+    %4:texture_depth_2d = load %1
+    %5:sampler = load %2
+    %6:f32 = textureSampleLevel %4, %5, vec2<f32>(1.0f, 2.0f), 3u, vec2<i32>(4i, 5i)
+    %x:f32 = let %6
     ret
   }
 }
@@ -5586,13 +5471,11 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 3u
-    %8:vec4<f32> = %5.SampleLevel %6, %4, %7, vec2<i32>(4i, 5i)
-    %9:f32 = swizzle %8, x
-    %x:f32 = let %9
+    %4:texture_depth_2d = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleLevel %5, vec2<f32>(1.0f, 2.0f), 3.0f, vec2<i32>(4i, 5i)
+    %7:f32 = swizzle %6, x
+    %x:f32 = let %7
     ret
   }
 }
@@ -5631,11 +5514,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler = load %2
-    %7:f32 = textureSampleLevel %5, %6, %4, 4u, 3i
-    %x:f32 = let %7
+    %4:texture_depth_2d_array = load %1
+    %5:sampler = load %2
+    %6:f32 = textureSampleLevel %4, %5, vec2<f32>(1.0f, 2.0f), 4u, 3i
+    %x:f32 = let %6
     ret
   }
 }
@@ -5650,15 +5532,11 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4u
-    %8:vec3<f32> = construct %4, %7
-    %9:f32 = convert 3i
-    %10:vec4<f32> = %5.SampleLevel %6, %8, %9
-    %11:f32 = swizzle %10, x
-    %x:f32 = let %11
+    %4:texture_depth_2d_array = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleLevel %5, vec3<f32>(1.0f, 2.0f, 4.0f), 3.0f
+    %7:f32 = swizzle %6, x
+    %x:f32 = let %7
     ret
   }
 }
@@ -5699,11 +5577,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler = load %2
-    %7:f32 = textureSampleLevel %5, %6, %4, 4u, 3u, vec2<i32>(4i, 5i)
-    %x:f32 = let %7
+    %4:texture_depth_2d_array = load %1
+    %5:sampler = load %2
+    %6:f32 = textureSampleLevel %4, %5, vec2<f32>(1.0f, 2.0f), 4u, 3u, vec2<i32>(4i, 5i)
+    %x:f32 = let %6
     ret
   }
 }
@@ -5718,15 +5595,11 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec2<f32> = construct 1.0f, 2.0f
-    %5:texture_depth_2d_array = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4u
-    %8:vec3<f32> = construct %4, %7
-    %9:f32 = convert 3u
-    %10:vec4<f32> = %5.SampleLevel %6, %8, %9, vec2<i32>(4i, 5i)
-    %11:f32 = swizzle %10, x
-    %x:f32 = let %11
+    %4:texture_depth_2d_array = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleLevel %5, vec3<f32>(1.0f, 2.0f, 4.0f), 3.0f, vec2<i32>(4i, 5i)
+    %7:f32 = swizzle %6, x
+    %x:f32 = let %7
     ret
   }
 }
@@ -5765,11 +5638,10 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_depth_cube_array = load %1
-    %6:sampler = load %2
-    %7:f32 = textureSampleLevel %5, %6, %4, 4u, 3i
-    %x:f32 = let %7
+    %4:texture_depth_cube_array = load %1
+    %5:sampler = load %2
+    %6:f32 = textureSampleLevel %4, %5, vec3<f32>(1.0f, 2.0f, 3.0f), 4u, 3i
+    %x:f32 = let %6
     ret
   }
 }
@@ -5784,15 +5656,11 @@ $B1: {  # root
 
 %foo = @fragment func():void {
   $B2: {
-    %4:vec3<f32> = construct 1.0f, 2.0f, 3.0f
-    %5:texture_depth_cube_array = load %1
-    %6:sampler = load %2
-    %7:f32 = convert 4u
-    %8:vec4<f32> = construct %4, %7
-    %9:f32 = convert 3i
-    %10:vec4<f32> = %5.SampleLevel %6, %8, %9
-    %11:f32 = swizzle %10, x
-    %x:f32 = let %11
+    %4:texture_depth_cube_array = load %1
+    %5:sampler = load %2
+    %6:vec4<f32> = %4.SampleLevel %5, vec4<f32>(1.0f, 2.0f, 3.0f, 4.0f), 3.0f
+    %7:f32 = swizzle %6, x
+    %x:f32 = let %7
     ret
   }
 }
@@ -6093,16 +5961,14 @@ $B1: {  # root
   $B2: {
     %3:ptr<workgroup, atomic<i32>, read_write> = access %v, 1u
     %4:ptr<function, i32, read_write> = var 0i
-    %5:i32 = sub 0i, 123i
-    %6:void = hlsl.InterlockedAdd %3, %5, %4
-    %7:i32 = load %4
-    %x:i32 = let %7
-    %9:ptr<workgroup, atomic<u32>, read_write> = access %v, 2u
-    %10:ptr<function, u32, read_write> = var 0u
-    %11:u32 = sub 0u, 123u
-    %12:void = hlsl.InterlockedAdd %9, %11, %10
-    %13:u32 = load %10
-    %y:u32 = let %13
+    %5:void = hlsl.InterlockedAdd %3, -123i, %4
+    %6:i32 = load %4
+    %x:i32 = let %6
+    %8:ptr<workgroup, atomic<u32>, read_write> = access %v, 2u
+    %9:ptr<function, u32, read_write> = var 0u
+    %10:void = hlsl.InterlockedAdd %8, 4294967173u, %9
+    %11:u32 = load %9
+    %y:u32 = let %11
     ret
   }
 }
@@ -7582,6 +7448,80 @@ TEST_F(HlslWriter_BuiltinPolyfillTest, Select_2021) {
 )";
 
     Run(BuiltinPolyfill, BuiltinPolyfillConfig{.use_hlsl_2021_select = true});
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriter_BuiltinPolyfillTest, PolyfillF16Ceil) {
+    auto* value = b.FunctionParam<f16>("value");
+    auto* func = b.Function("foo", ty.f16());
+    func->SetParams({value});
+    b.Append(func->Block(),
+             [&] { b.Return(func, b.Call(ty.f16(), core::BuiltinFn::kCeil, value)); });
+
+    auto* src = R"(
+%foo = func(%value:f16):f16 {
+  $B1: {
+    %3:f16 = ceil %value
+    ret %3
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    Run(BuiltinPolyfill, BuiltinPolyfillConfig{.polyfill_f16_ceil_floor = true});
+
+    auto* expect = R"(
+%foo = func(%value:f16):f16 {
+  $B1: {
+    %3:f32 = convert %value
+    %4:f32 = trunc %3
+    %5:f32 = add %4, 1.0f
+    %6:bool = gt %3, %4
+    %7:f32 = hlsl.ternary %4, %5, %6
+    %8:f16 = convert %7
+    %9:bool = eq %value, 0.0h
+    %10:f16 = hlsl.ternary %8, %value, %9
+    ret %10
+  }
+}
+)";
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriter_BuiltinPolyfillTest, PolyfillVecF16Floor) {
+    auto* value = b.FunctionParam<vec3<f16>>("value");
+    auto* func = b.Function("foo", ty.vec3<f16>());
+    func->SetParams({value});
+    b.Append(func->Block(),
+             [&] { b.Return(func, b.Call(ty.vec3<f16>(), core::BuiltinFn::kFloor, value)); });
+
+    auto* src = R"(
+%foo = func(%value:vec3<f16>):vec3<f16> {
+  $B1: {
+    %3:vec3<f16> = floor %value
+    ret %3
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    Run(BuiltinPolyfill, BuiltinPolyfillConfig{.polyfill_f16_ceil_floor = true});
+
+    auto* expect = R"(
+%foo = func(%value:vec3<f16>):vec3<f16> {
+  $B1: {
+    %3:vec3<f32> = convert %value
+    %4:vec3<f32> = trunc %3
+    %5:vec3<f32> = sub %4, vec3<f32>(1.0f)
+    %6:vec3<bool> = lt %3, %4
+    %7:vec3<f32> = hlsl.ternary %4, %5, %6
+    %8:vec3<f16> = convert %7
+    %9:vec3<bool> = eq %value, vec3<f16>(0.0h)
+    %10:vec3<f16> = hlsl.ternary %8, %value, %9
+    ret %10
+  }
+}
+)";
     EXPECT_EQ(expect, str());
 }
 

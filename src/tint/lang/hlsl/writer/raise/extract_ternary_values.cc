@@ -35,7 +35,7 @@
 #include "src/tint/lang/core/ir/instruction_result.h"
 #include "src/tint/lang/core/ir/loop.h"
 #include "src/tint/lang/core/ir/switch.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/bool.h"
 #include "src/tint/lang/core/type/manager.h"
 #include "src/tint/lang/hlsl/ir/ternary.h"
@@ -69,8 +69,7 @@ struct State {
                 bool cond = ternary->Cmp()->As<core::ir::Constant>()->Value()->ValueAs<bool>();
                 // Check whether the ternary value that will not be selected may have side effects.
                 auto* unselected_side = cond ? ternary->False() : ternary->True();
-                if (auto* instruction_result = unselected_side->As<core::ir::InstructionResult>()) {
-                    auto* instruction = instruction_result->Instruction();
+                if (auto* instruction = unselected_side->AsInstruction()) {
                     if (!instruction->GetSideEffects().Empty()) {
                         worklist.Push(ternary);
                     }

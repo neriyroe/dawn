@@ -83,7 +83,7 @@ MaybeError GetVendorIdFromVendors(id<MTLDevice> device, PCIIDs* ids) {
     }
 
     if (vendorId == 0) {
-        return DAWN_INTERNAL_ERROR("Failed to find vendor id with the device");
+        return DAWN_UNRECOVERABLE_ERROR("Failed to find vendor id with the device");
     }
 
     // Set vendor id with 0
@@ -132,7 +132,7 @@ MaybeError GetDeviceIORegistryPCIInfo(id<MTLDevice> device, PCIIDs* ids) {
     CFRef<CFMutableDictionaryRef> matchingDict =
         AcquireCFRef(IORegistryEntryIDMatching([device registryID]));
     if (matchingDict == nullptr) {
-        return DAWN_INTERNAL_ERROR("Failed to create the matching dict for the device");
+        return DAWN_UNRECOVERABLE_ERROR("Failed to create the matching dict for the device");
     }
 
     // IOServiceGetMatchingService will consume the reference on the matching dictionary,
@@ -141,14 +141,14 @@ MaybeError GetDeviceIORegistryPCIInfo(id<MTLDevice> device, PCIIDs* ids) {
         AcquireIORef(IOServiceGetMatchingService(kIOMainPortDefault, matchingDict.Detach()));
 
     if (acceleratorEntry == IO_OBJECT_NULL) {
-        return DAWN_INTERNAL_ERROR("Failed to get the IO registry entry for the accelerator");
+        return DAWN_UNRECOVERABLE_ERROR("Failed to get the IO registry entry for the accelerator");
     }
 
     // Get the parent entry that will be the IOPCIDevice
     IORef<io_registry_entry_t> deviceEntry;
     if (IORegistryEntryGetParentEntry(acceleratorEntry.Get(), kIOServicePlane,
                                       deviceEntry.InitializeInto()) != kIOReturnSuccess) {
-        return DAWN_INTERNAL_ERROR("Failed to get the IO registry entry for the device");
+        return DAWN_UNRECOVERABLE_ERROR("Failed to get the IO registry entry for the device");
     }
 
     DAWN_ASSERT(deviceEntry != IO_OBJECT_NULL);
@@ -389,10 +389,24 @@ ResultOrError<Ref<DeviceBase>> PhysicalDevice::CreateDeviceImpl(
 }
 
 void PhysicalDevice::SetupBackendAdapterToggles(dawn::platform::Platform* platform,
-                                                TogglesState* adapterToggles) const {}
+                                                TogglesState* adapterToggles) const {
+#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 260000
+    if (@available(macos 26.0, ios 26.0, *)) {
+        if (![*mDevice supportsFamily:MTLGPUFamilyMetal4]) {
+            adapterToggles->ForceSet(Toggle::MetalEnableTensors, false);
+        }
+    } else
+#endif
+    {
+        adapterToggles->ForceSet(Toggle::MetalEnableTensors, false);
+    }
+}
 
 void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platform,
                                                TogglesState* deviceToggles) const {
+    uint32_t deviceId = GetDeviceId();
+    uint32_t vendorId = GetVendorId();
+
     {
         bool haveStoreAndMSAAResolve = false;
 #if DAWN_PLATFORM_IS(MACOS)
@@ -446,13 +460,17 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
     // of the Metal Spec (v3.2).
     // TODO(crbug/390426577): Consider removing this toggle as it is no longer needs to be toggled
     // as it is (semantically correctly) supported for all Metal 2.3+.
-    deviceToggles->Default(Toggle::DisableDemoteToHelper, true);
+    if (gpu_info::IsApple(vendorId)) {
+        // When per-sample shading is enabled, writes that occur after discard_fragment() are
+        // sometimes still visible on Apple Silicon, so we use DemoteToHelper.
+        // See https://crbug.com/562093713
+        deviceToggles->Default(Toggle::DisableDemoteToHelper, false);
+    } else {
+        deviceToggles->Default(Toggle::DisableDemoteToHelper, true);
+    }
 
     // TODO(crbug.com/dawn/846): tighten this workaround when the driver bug is fixed.
     deviceToggles->Default(Toggle::AlwaysResolveIntoZeroLevelAndLayer, true);
-
-    uint32_t deviceId = GetDeviceId();
-    uint32_t vendorId = GetVendorId();
 
     // TODO(crbug.com/dawn/847): Use MTLStorageModeShared instead of MTLStorageModePrivate when
     // creating MTLCounterSampleBuffer in QuerySet on Intel platforms, otherwise it fails to
@@ -538,7 +556,7 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
 
         // Dynamically indexed stores on boolean vectors cause problems on Intel Mac
         // (crbug.com/540789158).
-        deviceToggles->Default(Toggle::MetalPolyfillBoolVecDynamicStore, true);
+        deviceToggles->Default(Toggle::PolyfillBoolVecDynamicStore, true);
 
         if ([NSProcessInfo.processInfo
                 isOperatingSystemAtLeastVersion:NSOperatingSystemVersion{12, 0, 0}]) {
@@ -1065,23 +1083,50 @@ void PhysicalDevice::PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info,
         }
     }
     if (auto* subgroupMatrixConfigs = info.Get<AdapterPropertiesSubgroupMatrixConfigs>()) {
-        DAWN_ASSERT([*mDevice supportsFamily:MTLGPUFamilyApple7]);
+        if (toggles.IsEnabled(Toggle::MetalEnableTensors)) {
+#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 260000
+            if (@available(macos 26.0, ios 26.0, *)) {
+                DAWN_ASSERT([*mDevice supportsFamily:MTLGPUFamilyMetal4]);
+            } else
+#endif
+            {
+                DAWN_ASSERT(false);
+            }
 
-        auto configs = HeapArray<SubgroupMatrixConfig>(2);
+            // TODO(553457823): decide which other matrix configurations to expose.
+            auto configs = HeapArray<SubgroupMatrixConfig>(1);
+            configs[0].componentType = wgpu::SubgroupMatrixComponentType::F16;
+            configs[0].resultComponentType = wgpu::SubgroupMatrixComponentType::F16;
+            configs[0].M = 32;
+            configs[0].N = 32;
+            configs[0].K = 32;
+            configs[0].minSubgroupSize = GetSubgroupMinSize();
+            configs[0].maxSubgroupSize = GetSubgroupMaxSize();
 
-        configs[0].componentType = wgpu::SubgroupMatrixComponentType::F32;
-        configs[0].resultComponentType = wgpu::SubgroupMatrixComponentType::F32;
-        configs[0].M = 8;
-        configs[0].N = 8;
-        configs[0].K = 8;
+            subgroupMatrixConfigs->configs = std::move(configs).MoveToSpan();
+        } else {
+            DAWN_ASSERT([*mDevice supportsFamily:MTLGPUFamilyApple7]);
 
-        configs[1].componentType = wgpu::SubgroupMatrixComponentType::F16;
-        configs[1].resultComponentType = wgpu::SubgroupMatrixComponentType::F16;
-        configs[1].M = 8;
-        configs[1].N = 8;
-        configs[1].K = 8;
+            auto configs = HeapArray<SubgroupMatrixConfig>(2);
 
-        subgroupMatrixConfigs->configs = std::move(configs).MoveToSpan();
+            configs[0].componentType = wgpu::SubgroupMatrixComponentType::F32;
+            configs[0].resultComponentType = wgpu::SubgroupMatrixComponentType::F32;
+            configs[0].M = 8;
+            configs[0].N = 8;
+            configs[0].K = 8;
+            configs[0].minSubgroupSize = GetSubgroupMinSize();
+            configs[0].maxSubgroupSize = GetSubgroupMaxSize();
+
+            configs[1].componentType = wgpu::SubgroupMatrixComponentType::F16;
+            configs[1].resultComponentType = wgpu::SubgroupMatrixComponentType::F16;
+            configs[1].M = 8;
+            configs[1].N = 8;
+            configs[1].K = 8;
+            configs[1].minSubgroupSize = GetSubgroupMinSize();
+            configs[1].maxSubgroupSize = GetSubgroupMaxSize();
+
+            subgroupMatrixConfigs->configs = std::move(configs).MoveToSpan();
+        }
     }
 }
 }  // namespace dawn::native::metal

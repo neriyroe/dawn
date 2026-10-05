@@ -30,7 +30,7 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/traverse.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/utils/containers/hashmap.h"
 #include "src/tint/utils/containers/hashset.h"
 
@@ -77,15 +77,15 @@ struct State {
             }
 
             auto* root = RootIdentifier(call->Args()[0]);
-            auto* buffer_ty = root->Type()->UnwrapPtr()->As<type::Buffer>();
-            if (buffer_ty->Count()->Is<type::RuntimeArrayCount>()) {
+            auto* buffer_ty = root->Type()->UnwrapPtr()->As<core::type::Buffer>();
+            if (buffer_ty->Count()->Is<core::type::RuntimeArrayCount>()) {
                 if (auto* param = root->As<FunctionParam>()) {
                     calls.GetOrAddZero(param).Push(call);
                 }
                 return;
             }
 
-            TINT_IR_ASSERT(ir, buffer_ty->Count()->Is<type::ConstantArrayCount>());
+            TINT_IR_ASSERT(ir, buffer_ty->Count()->Is<core::type::ConstantArrayCount>());
             call->AppendArg(b.Constant(u32(buffer_ty->ConstantCount().value())));
         });
 
@@ -118,7 +118,7 @@ struct State {
             TraceRoots(param, roots);
             if (roots.Count() == 1) {
                 auto* root = roots.Vector()[0];
-                auto* buffer_ty = root->Type()->UnwrapPtr()->As<type::Buffer>();
+                auto* buffer_ty = root->Type()->UnwrapPtr()->As<core::type::Buffer>();
                 auto count = buffer_ty->ConstantCount();
                 if (count != std::nullopt) {
                     auto param_calls = calls.Get(param);
@@ -140,7 +140,7 @@ struct State {
                 b.InsertBefore(call, [&] {
                     auto len =
                         b.Call(ty.u32(), BuiltinFn::kBufferLength, call->Args()[param->Index()]);
-                    call->AppendArg(len->Result());
+                    call->AppendArg(len);
                 });
             }
 
@@ -160,19 +160,12 @@ struct State {
     void AdjustOperands(CoreBuiltinCall* call) {
         auto* store_ty = call->Result()->Type()->UnwrapPtr();
         auto* offset = call->Args()[1];
-        if (auto* offset_cnst = offset->As<Constant>()) {
-            auto offset_value = offset_cnst->Value()->ValueAs<uint32_t>();
-            if ((offset_value & store_ty->Align()) != 0) {
-                call->SetArg(1, b.Constant(u32(offset_value & ~(store_ty->Align() - 1))));
-            }
-        } else {
-            b.InsertBefore(call, [&] {
-                // Modify offset to be aligned to the result store type's alignment.
-                offset = b.InsertBitcastIfNeeded(ty.u32(), offset);
-                offset = b.And(offset, u32(~(store_ty->Align() - 1)));
-                call->SetArg(1, offset);
-            });
-        }
+        b.InsertBefore(call, [&] {
+            // Modify offset to be aligned to the result store type's alignment.
+            offset = b.InsertBitcastIfNeeded(ty.u32(), offset);
+            offset = b.And(offset, u32(~(store_ty->Align() - 1)));
+            call->SetArg(1, offset);
+        });
 
         if (call->Func() == BuiltinFn::kBufferView) {
             return;
@@ -182,41 +175,33 @@ struct State {
         uint32_t ty_offset = 0;
         uint32_t ty_stride = 0;
         TINT_IR_ASSERT(ir, !store_ty->HasFixedFootprint());
-        if (auto* str_ty = store_ty->As<type::Struct>()) {
+        if (auto* str_ty = store_ty->As<core::type::Struct>()) {
             auto last = str_ty->Members().Back();
             auto last_ty = last->Type();
-            TINT_IR_ASSERT(ir, last_ty->Is<type::Array>());
+            TINT_IR_ASSERT(ir, last_ty->Is<core::type::Array>());
             ty_offset = last->Offset();
-            ty_stride = last_ty->As<type::Array>()->ImplicitStride();
+            ty_stride = last_ty->As<core::type::Array>()->ImplicitStride();
         } else {
-            TINT_IR_ASSERT(ir, store_ty->Is<type::Array>());
-            ty_stride = store_ty->As<type::Array>()->ImplicitStride();
+            TINT_IR_ASSERT(ir, store_ty->Is<core::type::Array>());
+            ty_stride = store_ty->As<core::type::Array>()->ImplicitStride();
         }
-        if (auto* size_cnst = size->As<Constant>()) {
-            auto size_value = size_cnst->Value()->ValueAs<uint32_t>();
-            if ((size_value - ty_offset) % ty_stride != 0) {
-                call->SetArg(
-                    2, b.Constant(
-                           u32((((size_value - ty_offset) / ty_stride) * ty_stride) + ty_offset)));
+
+        b.InsertBefore(call, [&] {
+            // Round down to a multiple of stride, but don't include the struct offset in that
+            // rounding.
+            size = b.InsertBitcastIfNeeded(ty.u32(), size);
+            if (ty_offset != 0) {
+                // Avoid potential underflow if size < ty_offset.
+                size = b.Call(ty.u32(), BuiltinFn::kMax, size, u32(ty_offset));
+                size = b.Subtract(size, u32(ty_offset));
             }
-        } else {
-            b.InsertBefore(call, [&] {
-                // Round down to a multiple of stride, but don't include the struct offset in that
-                // rounding.
-                size = b.InsertBitcastIfNeeded(ty.u32(), size);
-                if (ty_offset != 0) {
-                    // Avoid potential underflow if size < ty_offset.
-                    size = b.Call(ty.u32(), BuiltinFn::kMax, size, u32(ty_offset))->Result();
-                    size = b.Subtract(size, u32(ty_offset));
-                }
-                size = b.Divide(size, u32(ty_stride));
-                size = b.Multiply(size, u32(ty_stride));
-                if (ty_offset != 0) {
-                    size = b.Add(size, u32(ty_offset));
-                }
-                call->SetArg(2, size);
-            });
-        }
+            size = b.Divide(size, u32(ty_stride));
+            size = b.Multiply(size, u32(ty_stride));
+            if (ty_offset != 0) {
+                size = b.Add(size, u32(ty_offset));
+            }
+            call->SetArg(2, size);
+        });
     }
 
     /// Find the roots of `param`. Each root is either:
@@ -236,10 +221,10 @@ struct State {
             auto* root = RootIdentifier(arg);
             if (auto* root_param = root->As<FunctionParam>()) {
                 auto* store_ty = root_param->Type()->UnwrapPtr();
-                TINT_IR_ASSERT(ir, store_ty->Is<type::Buffer>());
-                auto* buffer_ty = store_ty->As<type::Buffer>();
+                TINT_IR_ASSERT(ir, store_ty->Is<core::type::Buffer>());
+                auto* buffer_ty = store_ty->As<core::type::Buffer>();
                 auto* count = buffer_ty->Count();
-                if (count->Is<type::RuntimeArrayCount>()) {
+                if (count->Is<core::type::RuntimeArrayCount>()) {
                     TraceRoots(root_param, roots);
                 } else {
                     roots.Add(root_param);

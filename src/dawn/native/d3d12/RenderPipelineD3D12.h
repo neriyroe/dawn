@@ -29,6 +29,7 @@
 #define SRC_DAWN_NATIVE_D3D12_RENDERPIPELINED3D12_H_
 
 #include "src/dawn/native/RenderPipeline.h"
+#include "src/dawn/native/d3d12/DeviceD3D12.h"
 #include "src/dawn/native/d3d12/PipelineLayoutHandle.h"
 #include "src/dawn/native/d3d12/ShaderModuleD3D12.h"
 #include "src/dawn/native/d3d12/d3d12_platform.h"
@@ -54,9 +55,8 @@ class RenderPipeline final : public RenderPipelineBase {
     // Dawn API
     void SetLabelImpl() override;
 
-    ComPtr<ID3D12CommandSignature> GetDrawIndirectCommandSignature();
-
-    ComPtr<ID3D12CommandSignature> GetDrawIndexedIndirectCommandSignature();
+    const CommandSignature& GetDrawIndirectCommandSignature();
+    const CommandSignature& GetDrawIndexedIndirectCommandSignature();
 
   private:
     ~RenderPipeline() override;
@@ -69,7 +69,7 @@ class RenderPipeline final : public RenderPipelineBase {
     D3D12_DEPTH_STENCIL_DESC ComputeDepthStencilDesc();
 
     Ref<PipelineLayoutHandle> mPipelineLayoutHandle;
-    D3D12_PRIMITIVE_TOPOLOGY mD3d12PrimitiveTopology;
+    D3D12_PRIMITIVE_TOPOLOGY mD3d12PrimitiveTopology{};
     ComPtr<ID3D12PipelineState> mPipelineState;
 };
 

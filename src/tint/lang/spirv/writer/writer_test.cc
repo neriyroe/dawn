@@ -61,6 +61,25 @@ TEST_F(SpirvWriterTest, ModuleHeader_VulkanMemoryModel) {
     EXPECT_INST("OpMemoryModel Logical Vulkan");
 }
 
+TEST_F(SpirvWriterTest, ViewIndex) {
+    auto* view_index = b.FunctionParam("view_index", ty.u32());
+    view_index->SetBuiltin(core::BuiltinValue::kViewIndex);
+
+    auto* ep = b.Function("main", ty.vec4f(), core::ir::Function::PipelineStage::kVertex);
+    ep->SetParams({view_index});
+    ep->SetReturnAttributes({.builtin = core::BuiltinValue::kPosition});
+    b.Append(ep->Block(), [&] {
+        b.Let("view", view_index);
+        b.Return(ep, b.Zero(ty.vec4f()));
+    });
+
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_;
+    EXPECT_INST("OpExtension \"SPV_KHR_multiview\"");
+    EXPECT_INST("OpCapability MultiView");
+    EXPECT_INST("BuiltIn ViewIndex");
+}
+
 TEST_F(SpirvWriterTest, CanGenerate_SubgroupMatrixRequiresVulkanMemoryModel) {
     core::ir::Var* v = nullptr;
     b.Append(mod.root_block,
@@ -703,7 +722,7 @@ TEST_F(SpirvWriterTest, Alignment_CooperativeMatrixLoad) {
             mat_ty, core::BuiltinFn::kSubgroupMatrixLoad,
             Vector<core::ir::TemplateParameter, 2>{mat_ty, core::Majorness::kRowMajor}, v, 0_u,
             8_u);
-        ld->SetAlignment(64);
+        ld->AsInstruction()->SetAlignment(64);
         b.Return(ep);
     });
 
@@ -711,7 +730,7 @@ TEST_F(SpirvWriterTest, Alignment_CooperativeMatrixLoad) {
     options.extensions.use_vulkan_memory_model = true;
     auto result = Generate(options);
     ASSERT_EQ(result, Success) << result.Failure() << output_;
-    EXPECT_INST("OpCooperativeMatrixLoadKHR %43 %40 %uint_0 %38 Aligned|NonPrivatePointer 64");
+    EXPECT_INST("OpCooperativeMatrixLoadKHR %25 %22 %uint_0 %19 Aligned|NonPrivatePointer 64");
 }
 
 TEST_F(SpirvWriterTest, Alignment_CooperativeMatrixStore) {
@@ -726,7 +745,7 @@ TEST_F(SpirvWriterTest, Alignment_CooperativeMatrixStore) {
         auto* st = b.CallExplicit(
             ty.void_(), core::BuiltinFn::kSubgroupMatrixStore,
             Vector<core::ir::TemplateParameter, 1>{core::Majorness::kRowMajor}, v, 0_u, m, 8_u);
-        st->SetAlignment(64);
+        st->AsInstruction()->SetAlignment(64);
         b.Return(ep);
     });
 
@@ -734,7 +753,7 @@ TEST_F(SpirvWriterTest, Alignment_CooperativeMatrixStore) {
     options.extensions.use_vulkan_memory_model = true;
     auto result = Generate(options);
     ASSERT_EQ(result, Success) << result.Failure() << output_;
-    EXPECT_INST("OpCooperativeMatrixStoreKHR %43 %10 %uint_0 %41 Aligned|NonPrivatePointer 64");
+    EXPECT_INST("OpCooperativeMatrixStoreKHR %25 %10 %uint_0 %23 Aligned|NonPrivatePointer 64");
 }
 
 }  // namespace

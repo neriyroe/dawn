@@ -30,7 +30,7 @@
 #include "src/tint/lang/core/ir/core_builtin_call.h"
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/referenced_module_vars.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/ir/var.h"
 #include "src/tint/lang/core/type/f16.h"
 #include "src/tint/lang/core/type/f32.h"
@@ -51,14 +51,7 @@ namespace {
 Result<SuccessType> CanGenerate(const core::ir::Module& ir, const Options& options) {
     // Check for unsupported types.
     for (auto* ty : ir.Types()) {
-        if (auto* m = ty->As<core::type::SubgroupMatrix>()) {
-            if (!m->Type()->IsAnyOf<core::type::F16, core::type::F32>()) {
-                return Failure("non-float subgroup matrices are not supported by the MSL backend");
-            }
-            if (m->Columns() != 8 || m->Rows() != 8) {
-                return Failure("the MSL backend only supports 8x8 subgroup matrices");
-            }
-        } else if (ty->Is<core::type::TexelBuffer>()) {
+        if (ty->Is<core::type::TexelBuffer>()) {
             // TODO(crbug/382544164): Prototype texel buffer feature
             return Failure("texel buffers are not supported by the MSL backend");
         }
@@ -73,18 +66,6 @@ Result<SuccessType> CanGenerate(const core::ir::Module& ir, const Options& optio
             if (res != Success) {
                 return res.Failure();
             }
-        }
-    }
-
-    for (auto* i : ir.Instructions()) {
-        auto* call = i->As<core::ir::CoreBuiltinCall>();
-        if (!call) {
-            continue;
-        }
-
-        if (call->Func() == core::BuiltinFn::kGetResource ||
-            call->Func() == core::BuiltinFn::kHasResource) {
-            return Failure("resource tables not supported by the MSL backend");
         }
     }
 
@@ -224,11 +205,8 @@ Result<Output> Generate(core::ir::Module& ir, const Options& options) {
     TINT_CHECK_RESULT(CanGenerate(ir, options));
 
     // Raise from core-dialect to MSL-dialect.
-    TINT_CHECK_RESULT_UNWRAP(raise_result, Raise(ir, options));
-    TINT_CHECK_RESULT_UNWRAP(result, Print(ir, options));
-
-    result.needs_storage_buffer_sizes = raise_result.needs_storage_buffer_sizes;
-    return result;
+    TINT_CHECK_RESULT(Raise(ir, options));
+    return Print(ir, options);
 }
 
 }  // namespace tint::msl::writer

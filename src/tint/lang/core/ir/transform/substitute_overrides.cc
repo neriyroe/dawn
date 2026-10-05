@@ -32,6 +32,7 @@
 #include <limits>
 #include <utility>
 
+#include "src/tint/lang/core/ir/array_count.h"
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/constexpr_if.h"
 #include "src/tint/lang/core/ir/construct.h"
@@ -41,8 +42,7 @@
 #include "src/tint/lang/core/ir/override.h"
 #include "src/tint/lang/core/ir/terminator.h"
 #include "src/tint/lang/core/ir/traverse.h"
-#include "src/tint/lang/core/ir/type/array_count.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/ir/value.h"
 #include "src/tint/utils/math/math.h"
 #include "src/utils/numeric.h"

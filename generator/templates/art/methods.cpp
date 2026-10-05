@@ -45,8 +45,8 @@ namespace dawn::kotlin_api {
 
 jobject toByteBuffer(JNIEnv *env, const void* address, jlong size) {
     if (!address) {
-      //* TODO(b/344805524): custom exception for Dawn.
-      env->ThrowNew(env->FindClass("java/lang/Error"), "Invalid byte buffer.");
+      JNIClasses* classes = JNIClasses::getInstance(env);
+      env->ThrowNew(classes->dawnException, "Invalid byte buffer.");
       return nullptr;
     }
     jclass byteBufferClass = env->FindClass("java/nio/ByteBuffer");
@@ -71,7 +71,8 @@ jobject toByteBuffer(JNIEnv *env, const void* address, jlong size) {
 
 {% macro render_method(method, object) %}
     {% set ObjectName = kotlin_name(object) if object else "GPU" %}
-    {% set FunctionSuffix = ObjectName + "_" +  method.name.camelCase() %}
+    {% set MethodName = kotlin_name(method) %}
+    {% set FunctionSuffix = ObjectName + "_" + MethodName %}
     {% set KotlinRecord = FunctionSuffix + "KotlinRecord" %}
     {% set ArgsStruct = FunctionSuffix + "ArgsStruct" %}
 
@@ -168,13 +169,20 @@ jobject toByteBuffer(JNIEnv *env, const void* address, jlong size) {
                 jclass exClass = env->FindClass("androidx/webgpu/WebGpuException");
                 jmethodID exConstructor =
                     env->GetMethodID(exClass, "<init>", "(Ljava/lang/String;I)V");
-                std::string message = "Method GPU{% if object %}{{ object.name.CamelCase() + "." }}{% endif %}{{ method.name.camelCase() }} failed.";
+                std::string message = "Method {{ ObjectName }}.{{ MethodName }} failed.";
                 jstring jmessage = env->NewStringUTF(message.c_str());
                 jobject exception = env->NewObject(exClass, exConstructor, jmessage, result);
                 env->Throw(static_cast<jthrowable>(exception));
                 return{{ ' 0' if _kotlin_return }};
             }
         {% endif %}
+    {% endif %}
+    {% if object and object.name.get() == 'device' %}
+        // Note: We intentionally only register recurring callbacks for WGPUDevice, as it is
+        // the only object in Dawn with a terminal lifecycle event (device lost callback)
+        // that guarantees safe cleanup. Instance does not have recurring callbacks in dawn.json.
+        RegisterDeviceCallbacks(handle, c.recurringCallbacks);
+        c.recurringCallbacks.clear();
     {% endif %}
     {% if _kotlin_return %}
         {% if _kotlin_return.type.name.get() in ['void const *', 'void *'] %}
@@ -186,6 +194,13 @@ jobject toByteBuffer(JNIEnv *env, const void* address, jlong size) {
                 }
             {% endif %}
         {% endif %}
+        {% if object and method.name.get() == 'create device' %}
+            if (result != nullptr) {
+                // Transfer callbacks to the newly created device.
+                RegisterDeviceCallbacks(result, c.recurringCallbacks);
+            }
+            c.recurringCallbacks.clear();
+        {% endif %}
         {{ convert_to_kotlin("args." + as_varName(_kotlin_return.name) if _kotlin_return.annotation == '*' else 'result',
                              'result_kt',
                              'size' if _kotlin_return.type.name.get() in ['void const *', 'void *'] or _kotlin_return.length == 'size_t',
@@ -195,7 +210,7 @@ jobject toByteBuffer(JNIEnv *env, const void* address, jlong size) {
 } {% endmacro %}
 
 {% for obj in by_category['object'] %}
-    {% for method in obj.methods if include_method(obj, method) %}
+    {% for method in obj.methods if include_method(method) %}
         {{ render_method(method, obj) }}
     {% endfor %}
 
@@ -213,7 +228,7 @@ jobject toByteBuffer(JNIEnv *env, const void* address, jlong size) {
 {% endfor %}
 
 //* Global functions don't have an associated class.
-{% for function in by_category['function'] if include_method(None, function) %}
+{% for function in by_category['function'] if include_method(function) %}
     {{ render_method(function, None) }}
 {% endfor %}
 

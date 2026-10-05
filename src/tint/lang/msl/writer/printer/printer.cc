@@ -27,11 +27,15 @@
 
 #include "src/tint/lang/msl/writer/printer/printer.h"
 
+#include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "src/tint/lang/core/constant/splat.h"
 #include "src/tint/lang/core/constant/string.h"
@@ -67,7 +71,7 @@
 #include "src/tint/lang/core/ir/unreachable.h"
 #include "src/tint/lang/core/ir/unused.h"
 #include "src/tint/lang/core/ir/user_call.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/ir/var.h"
 #include "src/tint/lang/core/type/array.h"
 #include "src/tint/lang/core/type/atomic.h"
@@ -83,6 +87,7 @@
 #include "src/tint/lang/core/type/matrix.h"
 #include "src/tint/lang/core/type/multisampled_texture.h"
 #include "src/tint/lang/core/type/pointer.h"
+#include "src/tint/lang/core/type/resource_table.h"
 #include "src/tint/lang/core/type/sampled_texture.h"
 #include "src/tint/lang/core/type/storage_texture.h"
 #include "src/tint/lang/core/type/string.h"
@@ -99,8 +104,10 @@
 #include "src/tint/lang/msl/ir/member_builtin_call.h"
 #include "src/tint/lang/msl/ir/memory_order.h"
 #include "src/tint/lang/msl/type/bias.h"
+#include "src/tint/lang/msl/type/cooperative_tensor.h"
 #include "src/tint/lang/msl/type/gradient.h"
 #include "src/tint/lang/msl/type/level.h"
+#include "src/tint/lang/msl/type/tensor_inline.h"
 #include "src/tint/lang/msl/writer/common/options.h"
 #include "src/tint/lang/msl/writer/common/printer_support.h"
 #include "src/tint/utils/macros/scoped_assignment.h"
@@ -112,6 +119,8 @@ using namespace tint::core::fluent_types;  // NOLINT
 
 namespace tint::msl::writer {
 namespace {
+
+constexpr std::string_view kResourceName = "resource";
 
 /// @returns true if @p ident is an MSL keyword that needs to be avoided
 bool IsKeyword(std::string_view ident);
@@ -153,6 +162,9 @@ class Printer : public tint::TextGenerator {
         // Determine which structures will need to be emitted with host-shareable memory layouts.
         FindHostShareableStructs();
 
+        // Determine results that potentially need attributed as aliasable.
+        FindAliasedResults();
+
         // Emit functions.
         for (auto* func : ir_.DependencyOrderedFunctions()) {
             EmitFunction(func);
@@ -187,47 +199,85 @@ class Printer : public tint::TextGenerator {
 
     Hashset<const core::type::Struct*, 16> host_shareable_structs_;
     Hashset<const core::type::Struct*, 4> emitted_structs_;
+    Hashmap<const core::type::ResourceTable*, Symbol, 4> resource_table_to_name_;
+
+    Hashset<const core::ir::Value*, 64> aliased_values_;
+    Hashmap<const core::type::Type*, std::string, 16> aliased_typedefs_;
+
+    /// The name of the templated alias for matmul2d operations, if emitted.
+    std::string tensor_operation_template_;
+
+    std::string fill_cooperative_tensor_;
+    std::string copy_cooperative_tensor_;
+
+    // We declare type aliases for cooperative tensors using the templated matmul2d operation alias.
+    // Build a map from MNK dimensions + input/result types to the set of alias names for that
+    // operation shape.
+    struct TensorConfig {
+        uint32_t m;
+        uint32_t n;
+        uint32_t k;
+        const core::type::Type* input_type;
+        const core::type::Type* result_type;
+
+        bool operator==(const TensorConfig& other) const {
+            return m == other.m && n == other.n && k == other.k && input_type == other.input_type &&
+                   result_type == other.input_type;
+        }
+        struct Hasher {
+            HashCode operator()(const TensorConfig& cfg) const {
+                auto hash = Hash(cfg.m);
+                hash = HashCombine(hash, cfg.n);
+                hash = HashCombine(hash, cfg.k);
+                hash = HashCombine(hash, cfg.input_type);
+                hash = HashCombine(hash, cfg.result_type);
+                return hash;
+            }
+        };
+    };
+    struct TensorAliases {
+        std::string left;
+        std::string right;
+        std::string result;
+    };
+    Hashmap<TensorConfig, TensorAliases, 4, TensorConfig::Hasher> tensor_config_to_aliases_;
 
     /// The current function being emitted
     const core::ir::Function* current_function_ = nullptr;
     /// The current block being emitted
     const core::ir::Block* current_block_ = nullptr;
 
-    /// Unique name of the tint_array<T, N> template.
-    /// Non-empty only if the template has been generated.
-    std::string array_template_name_;
-
     /// Block to emit for a continuing
-    std::function<void()> emit_continuing_;
+    std::vector<std::unique_ptr<std::function<void()>>> emit_continuing_;
 
-    /// @returns the name of the templated `tint_array` helper type, generating it if needed
-    const std::string& ArrayTemplateName() {
-        if (!array_template_name_.empty()) {
-            return array_template_name_;
-        }
-
-        array_template_name_ = UniqueIdentifier("tint_array");
-
-        TINT_SCOPED_ASSIGNMENT(current_buffer_, &preamble_buffer_);
-        Line();
-        Line() << "template<typename T, size_t N>";
-        Line() << "struct " << array_template_name_ << " {";
-
-        {
-            ScopedIndent si(current_buffer_);
-            Line()
-                << "const constant T& operator[](size_t i) const constant { return elements[i]; }";
-            for (auto* space : {"device", "thread", "threadgroup"}) {
-                Line() << space << " T& operator[](size_t i) " << space
-                       << " { return elements[i]; }";
-                Line() << "const " << space << " T& operator[](size_t i) const " << space
-                       << " { return elements[i]; }";
+    void FindAliasedResults() {
+        // Aliasable roots are the results of msl.alias_pointer_offset calls.
+        Vector<core::ir::Value*, 16> worklist;
+        for (auto* inst : ir_.Instructions()) {
+            if (auto* builtin = inst->As<msl::ir::BuiltinCall>()) {
+                if (builtin->Func() == msl::BuiltinFn::kAliasPointerOffset) {
+                    worklist.Push(builtin->Result());
+                }
             }
-            Line() << "T elements[N];";
         }
-        Line() << "};";
 
-        return array_template_name_;
+        while (!worklist.IsEmpty()) {
+            auto value = worklist.Pop();
+            aliased_values_.Add(value);
+            for (auto use : value->UsagesUnsorted()) {
+                if (auto* call = use->instruction->As<core::ir::UserCall>()) {
+                    // Mark the parameter as aliased and keep traversing in the target.
+                    auto* target = call->Target();
+                    auto param_index = use->operand_index - call->ArgsOperandOffset();
+                    auto* param = target->Params()[param_index];
+                    aliased_values_.Add(param);
+                    worklist.Push(param);
+                } else if (use->instruction->Results().Length() == 1 &&
+                           use->instruction->Result()->Type()->Is<core::type::Pointer>()) {
+                    worklist.Push(use->instruction->Result());
+                }
+            }
+        }
     }
 
     /// Find all structures that are used in host-shareable address spaces and mark them as such so
@@ -267,7 +317,8 @@ class Printer : public tint::TextGenerator {
         // (and workgroup storage class).
         for (auto func : ir_.functions) {
             Traverse(func->Block(), [&](msl::ir::BuiltinCall* call) {
-                if (call->Func() != msl::BuiltinFn::kPointerOffset) {
+                if (call->Func() != msl::BuiltinFn::kPointerOffset &&
+                    call->Func() != msl::BuiltinFn::kAliasPointerOffset) {
                     return;
                 }
                 auto* ptr = call->Result()->Type()->As<core::type::Pointer>();
@@ -292,7 +343,8 @@ class Printer : public tint::TextGenerator {
             value->As<core::ir::InstructionResult>()->Instruction(),
             [&](const msl::ir::BuiltinCall* c) {
                 // Pointer offset is always a pointer
-                return c->Func() == msl::BuiltinFn::kPointerOffset;
+                return c->Func() == msl::BuiltinFn::kPointerOffset ||
+                       c->Func() == msl::BuiltinFn::kAliasPointerOffset;
             },
             [&](const core::ir::Var*) {
                 // Variable declarations are always references.
@@ -300,6 +352,10 @@ class Printer : public tint::TextGenerator {
             },
             [&](const core::ir::Let*) {
                 // Let declarations capture actual pointers.
+                return true;
+            },
+            [&](const core::ir::Load*) {
+                // Load instructions produce real pointers when loading nested pointers.
                 return true;
             },
             [&](const core::ir::Access* a) {
@@ -404,7 +460,11 @@ class Printer : public tint::TextGenerator {
                 }
                 ++i;
 
-                EmitType(out, param->Type());
+                if (aliased_values_.Contains(param)) {
+                    EmitAliasedType(out, param->Type());
+                } else {
+                    EmitType(out, param->Type());
+                }
                 out << " ";
 
                 // Non-entrypoint pointers are set to `const` for the value
@@ -689,8 +749,10 @@ class Printer : public tint::TextGenerator {
             EmitValue(out, v->Initializer());
         } else if (space == core::AddressSpace::kPrivate ||
                    space == core::AddressSpace::kFunction) {
-            out << " = ";
-            EmitZeroValue(out, ptr->UnwrapPtr());
+            if (!ptr->StoreType()->Is<type::CooperativeTensor>()) {
+                out << " = ";
+                EmitZeroValue(out, ptr->StoreType());
+            }
         }
         out << ";";
     }
@@ -706,7 +768,11 @@ class Printer : public tint::TextGenerator {
             // (constructor) in metal is not constexpr.
             out << "const constant ";
         }
-        EmitType(out, l->Result()->Type());
+        if (aliased_values_.Contains(l->Result())) {
+            EmitAliasedType(out, l->Result()->Type());
+        } else {
+            EmitType(out, l->Result()->Type());
+        }
         out << " ";
         if (current_function_ != nullptr) {
             out << "const ";
@@ -726,8 +792,9 @@ class Printer : public tint::TextGenerator {
     }
 
     void EmitContinue(const core::ir::Continue* c) {
-        if (emit_continuing_) {
-            emit_continuing_();
+        if (!emit_continuing_.empty()) {
+            auto fn = emit_continuing_.back().get();
+            (*fn)();
         }
         if (c->Block() != c->Loop()->Body()) {
             Line() << "continue;";
@@ -745,18 +812,17 @@ class Printer : public tint::TextGenerator {
         //   }
         // }
 
-        auto emit_continuing = [&] {
-            Line() << "{";
-            {
-                const ScopedIndent si(current_buffer_);
-                EmitBlock(l->Continuing());
-            }
-            Line() << "}";
-        };
-        TINT_SCOPED_ASSIGNMENT(emit_continuing_, emit_continuing);
-
         Line() << "{";
         {
+            emit_continuing_.push_back(std::make_unique<std::function<void()>>([&] {
+                Line() << "{";
+                {
+                    const ScopedIndent si(current_buffer_);
+                    EmitBlock(l->Continuing());
+                }
+                Line() << "}";
+            }));
+
             ScopedIndent init(current_buffer_);
             EmitBlock(l->Initializer());
 
@@ -766,6 +832,8 @@ class Printer : public tint::TextGenerator {
                 EmitBlock(l->Body());
             }
             Line() << "}";
+
+            emit_continuing_.pop_back();
         }
         Line() << "}";
     }
@@ -830,10 +898,10 @@ class Printer : public tint::TextGenerator {
         }
     }
 
-    void EmitVectorAccess(StringStream& out, const core::ir::Value* index) {
+    void EmitVectorAccess(StringStream& out, const core::ir::Value* index, uint32_t max) {
         if (auto* cnst = index->As<core::ir::Constant>()) {
             out << ".";
-            IdxToComponent(out, cnst->Value()->ValueAs<uint32_t>());
+            IdxToComponent(out, std::min(cnst->Value()->ValueAs<uint32_t>(), max));
         } else {
             out << "[";
             EmitValue(out, index);
@@ -845,7 +913,8 @@ class Printer : public tint::TextGenerator {
         auto out = Line();
 
         EmitAndDerefIfNeeded(out, s->To());
-        EmitVectorAccess(out, s->Index());
+        EmitVectorAccess(out, s->Index(),
+                         s->To()->Type()->UnwrapPtr()->As<core::type::Vector>()->Width() - 1);
         out << " = ";
         EmitValue(out, s->Value());
         out << ";";
@@ -853,7 +922,8 @@ class Printer : public tint::TextGenerator {
 
     void EmitLoadVectorElement(StringStream& out, const core::ir::LoadVectorElement* l) {
         EmitAndDerefIfNeeded(out, l->From());
-        EmitVectorAccess(out, l->Index());
+        EmitVectorAccess(out, l->Index(),
+                         l->From()->Type()->UnwrapPtr()->As<core::type::Vector>()->Width() - 1);
     }
 
     /// Emit an if instruction
@@ -956,8 +1026,8 @@ class Printer : public tint::TextGenerator {
                     out << "." << NameOf(member);
                     current_type = member->Type();
                 },
-                [&](const core::type::Vector*) {  //
-                    EmitVectorAccess(out, index);
+                [&](const core::type::Vector* vec) {  //
+                    EmitVectorAccess(out, index, vec->Width() - 1);
                 },
                 [&](Default) {
                     out << "[";
@@ -1025,7 +1095,8 @@ class Printer : public tint::TextGenerator {
             out << ")";
             return;
         }
-        if (c->Func() == msl::BuiltinFn::kPointerOffset) {
+        if (c->Func() == msl::BuiltinFn::kPointerOffset ||
+            c->Func() == msl::BuiltinFn::kAliasPointerOffset) {
             const auto* result_type = c->Result()->Type()->As<core::type::Pointer>();
             out << "reinterpret_cast<";
             EmitType(out, result_type);
@@ -1081,6 +1152,113 @@ class Printer : public tint::TextGenerator {
                     << "volatile constexpr constant uint " << volatile_zero_name_ << " = 0u;";
             }
             out << " " << volatile_zero_name_;
+            return;
+        }
+        if (c->Func() == msl::BuiltinFn::kReinterpretCast) {
+            TINT_IR_ASSERT(ir_, !c->ExplicitTemplateParams().IsEmpty());
+
+            auto& tmpl = c->ExplicitTemplateParams()[0];
+            TINT_IR_ASSERT(ir_, std::holds_alternative<const core::type::Type*>(tmpl));
+
+            out << "reinterpret_cast<";
+            EmitType(out, std::get<const core::type::Type*>(tmpl));
+            out << ">(";
+            EmitValue(out, c->Args()[0]);
+            out << ")";
+            return;
+        }
+        if (c->Func() == msl::BuiltinFn::kResourceLoad) {
+            EmitValue(out, c->Args()[0]);
+            out << "[";
+            EmitValue(out, c->Args()[1]);
+            out << "]." << kResourceName;
+            return;
+        }
+        if (c->Func() == BuiltinFn::kFillCooperativeTensor) {
+            if (fill_cooperative_tensor_.empty()) {
+                TINT_SCOPED_ASSIGNMENT(current_buffer_, &preamble_buffer_);
+
+                fill_cooperative_tensor_ = UniqueIdentifier("tint_fill_cooperative_tensor");
+                Line();
+                Line() << "template<typename T, typename V>";
+                Line() << "void " << fill_cooperative_tensor_ << "(thread T* dst, V value) {";
+                Line() << "  for (uint i = 0; i < dst->get_capacity(); i++) {";
+                Line() << "    dst->set(i, value);";
+                Line() << "  }";
+                Line() << "}";
+            }
+            out << fill_cooperative_tensor_ << "(";
+            EmitAndTakeAddressIfNeeded(out, c->Args()[0]);
+            out << ", ";
+            EmitValue(out, c->Args()[1]);
+            out << ")";
+            return;
+        }
+        if (c->Func() == BuiltinFn::kCopyCooperativeTensor) {
+            if (copy_cooperative_tensor_.empty()) {
+                TINT_SCOPED_ASSIGNMENT(current_buffer_, &preamble_buffer_);
+
+                copy_cooperative_tensor_ = UniqueIdentifier("tint_copy_cooperative_tensor");
+                Line();
+                Line() << "template<typename T>";
+                Line() << "void " << copy_cooperative_tensor_
+                       << "(thread T* dst, const thread T* src) {";
+                Line() << "  for (uint i = 0; i < dst->get_capacity(); i++) {";
+                Line() << "    dst->set(i, src->get(i));";
+                Line() << "  }";
+                Line() << "}";
+            }
+            out << copy_cooperative_tensor_ << "(";
+            EmitAndTakeAddressIfNeeded(out, c->Args()[0]);
+            out << ", ";
+            EmitAndTakeAddressIfNeeded(out, c->Args()[1]);
+            out << ")";
+            return;
+        }
+        if (c->Func() == msl::BuiltinFn::kMakeTensorInline) {
+            auto args = c->Args();
+            auto* p = args[0];
+            auto* ptr = p->Type()->As<core::type::Pointer>();
+            auto* extents = args[1]->As<core::ir::Constant>()->Value();
+            auto* stride = args[2];
+
+            out << "tensor<";
+            EmitAddressSpace(out, ptr->AddressSpace());
+            out << " ";
+            EmitType(out, ptr->StoreType());
+            out << ", dextents<uint, 2>, tensor_inline>(";
+            if (ptr->Access() == core::Access::kRead) {
+                out << "const_cast<";
+                EmitAddressSpace(out, ptr->AddressSpace());
+                out << " ";
+                EmitType(out, ptr->StoreType());
+                out << "*>(";
+                EmitAndTakeAddressIfNeeded(out, p);
+                out << ")";
+            } else {
+                EmitAndTakeAddressIfNeeded(out, p);
+            }
+            out << ", dextents<uint, 2>(" << extents->Index(0)->ValueAs<uint32_t>() << ", "
+                << extents->Index(1)->ValueAs<uint32_t>() << "), array<uint, 2>({1u, ";
+            EmitValue(out, stride);
+            out << "}))";
+            return;
+        }
+        if (c->Func() == msl::BuiltinFn::kRunTensorMultiply ||
+            c->Func() == msl::BuiltinFn::kRunTensorMultiplyAccumulate) {
+            auto tmpl = GetTensorOperationTemplate();
+            auto* tensor = c->Args()[2]->Type()->As<type::CooperativeTensor>();
+            out << tmpl << "<" << tensor->M() << ", " << tensor->N() << ", " << tensor->K();
+            if (c->Func() == msl::BuiltinFn::kRunTensorMultiplyAccumulate) {
+                out << ", mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate";
+            }
+            out << ">().run(";
+            EmitValue(out, c->Args()[0]);
+            out << ", ";
+            EmitValue(out, c->Args()[1]);
+            out << ", ";
+            EmitValue(out, c->Args()[2]);
+            out << ")";
             return;
         }
 
@@ -1363,7 +1541,7 @@ class Printer : public tint::TextGenerator {
                     if (i > 0) {
                         out << ", ";
                     }
-                    EmitValue(out, arg);
+                    EmitAndTakeAddressIfNeeded(out, arg);
                     i++;
                 }
                 out << "}";
@@ -1478,6 +1656,10 @@ class Printer : public tint::TextGenerator {
                 }
             },                                                 //
             [&](const msl::type::Level*) { out << "level"; },  //
+            [&](const msl::type::CooperativeTensor* tensor) {
+                out << GetCooperativeTensorTypeAlias(tensor);
+            },
+            [&](const msl::type::TensorInline*) { out << "auto"; },  //
             [&](const core::type::SubgroupMatrix* sm) {
                 TINT_IR_ASSERT(ir_, (sm->Type()->IsAnyOf<core::type::F32, core::type::F16>()));
                 TINT_IR_ASSERT(ir_, sm->Columns() == 8);
@@ -1487,8 +1669,58 @@ class Printer : public tint::TextGenerator {
                 EmitType(out, sm->Type());
                 out << sm->Columns() << "x" << sm->Rows();
             },
+            [&](const core::type::ResourceTable* rt) {
+                auto rt_sym = resource_table_to_name_.GetOrAdd(rt, [&] {
+                    auto sym = ir_.symbols.New("tint_resource_table_struct_" +
+                                               rt->GetBindingType()->IdentifierName());
+
+                    TINT_SCOPED_ASSIGNMENT(current_buffer_, &preamble_buffer_);
+                    Line() << "\nstruct " << sym.Name() << " {";
+                    current_buffer_->IncrementIndent();
+                    {
+                        auto l = Line();
+                        EmitType(l, rt->GetBindingType());
+                        l << " " << kResourceName << ";";
+                    }
+                    current_buffer_->DecrementIndent();
+                    Line() << "};";
+
+                    return sym;
+                });
+
+                out << "const constant " << rt_sym.Name() << "*";
+            },
 
             TINT_ICE_ON_NO_MATCH);
+    }
+
+    /// Handles emission of aliasable types.
+    ///
+    /// Generates a typedef the first time the store type of `type` is encountered that has the
+    /// attribute `__may_alias__` attached.
+    /// Emits the pointer using the typedef name.
+    /// @param out the output stream
+    /// @param type the pointer type
+    void EmitAliasedType(StringStream& out, const core::type::Type* type) {
+        TINT_IR_ASSERT(ir_, type->Is<core::type::Pointer>());
+        auto* ptr_type = type->As<core::type::Pointer>();
+        auto* ele_type = ptr_type->StoreType();
+
+        std::string alias_name = aliased_typedefs_.GetOrAdd(ele_type, [&] {
+            StringStream type_str;
+            EmitType(type_str, ele_type);
+            auto real_type = type_str.str();
+            std::string alias = UniqueIdentifier("tint_aliased_" + ele_type->IdentifierName());
+            TINT_SCOPED_ASSIGNMENT(current_buffer_, &preamble_buffer_);
+            Line() << "typedef " << real_type << " __attribute__((__may_alias__)) " << alias << ";";
+            return alias;
+        });
+
+        if (ptr_type->Access() == core::Access::kRead) {
+            out << "const ";
+        }
+        EmitAddressSpace(out, ptr_type->AddressSpace());
+        out << " " << alias_name << "*";
     }
 
     /// Handles generating a pointer declaration
@@ -1528,7 +1760,7 @@ class Printer : public tint::TextGenerator {
     /// @param out the output stream
     /// @param arr the array to emit
     void EmitArrayType(StringStream& out, const core::type::Array* arr) {
-        out << ArrayTemplateName() << "<";
+        out << "array<";
         EmitType(out, arr->ElemType());
         out << ", ";
         if (arr->Count()->Is<core::type::RuntimeArrayCount>()) {
@@ -1584,6 +1816,9 @@ class Printer : public tint::TextGenerator {
             TINT_IR_ICE(ir_) << "Multiplanar external texture transform was not run.";
         }
 
+        const bool is_multisampled =
+            tex->IsAnyOf<core::type::MultisampledTexture, core::type::DepthMultisampledTexture>();
+
         if (tex->IsAnyOf<core::type::DepthTexture, core::type::DepthMultisampledTexture>()) {
             out << "depth";
         } else {
@@ -1598,7 +1833,7 @@ class Printer : public tint::TextGenerator {
                 out << "2d";
                 break;
             case core::type::TextureDimension::k2dArray:
-                out << "2d_array";
+                out << (is_multisampled ? "2d_ms_array" : "2d_array");
                 break;
             case core::type::TextureDimension::k3d:
                 out << "3d";
@@ -1612,7 +1847,7 @@ class Printer : public tint::TextGenerator {
             default:
                 TINT_IR_ICE(ir_) << "invalid texture dimensions";
         }
-        if (tex->IsAnyOf<core::type::MultisampledTexture, core::type::DepthMultisampledTexture>()) {
+        if (is_multisampled && tex->Dim() != core::type::TextureDimension::k2dArray) {
             out << "_ms";
         }
         out << "<";
@@ -1656,10 +1891,10 @@ class Printer : public tint::TextGenerator {
             return;
         }
 
-        // This does not append directly to the preamble because a struct may require other
-        // structs, or the array template, to get emitted before it. So, the struct emits into a
-        // temporary text buffer, then anything it depends on will emit to the preamble first,
-        // and then it copies the text buffer into the preamble.
+        // This does not append directly to the preamble because a struct may require other structs
+        // to get emitted before it. So, the struct emits into a temporary text buffer, then
+        // anything it depends on will emit to the preamble first, and then it copies the text
+        // buffer into the preamble.
         TextBuffer str_buf;
         Line(&str_buf);
         Line(&str_buf) << "struct " << StructName(str) << " {";
@@ -1681,7 +1916,7 @@ class Printer : public tint::TextGenerator {
 
             auto out = Line(&str_buf);
             add_byte_offset_comment(out, msl_offset);
-            out << ArrayTemplateName() << "<int8_t, " << size << "> " << name << ";";
+            out << "array<int8_t, " << size << "> " << name << ";";
         };
 
         str_buf.IncrementIndent();
@@ -1712,8 +1947,8 @@ class Printer : public tint::TextGenerator {
             auto* ty = mem->Type();
 
             // The clip distances builtin is an array, but needs to be emitted as a C-style array
-            // instead of using Tint's array wrapper. Additionally, the builtin attribute needs to
-            // be emitted after the member name and before the array count.
+            // instead of using the `metal::array` class. Additionally, the builtin attribute needs
+            // to be emitted after the member name and before the array count.
             if (mem->Attributes().builtin == core::BuiltinValue::kClipDistances) {
                 auto* arr = ty->As<core::type::Array>();
                 out << "float " << mem_name << " [[clip_distance]] ["
@@ -1818,6 +2053,89 @@ class Printer : public tint::TextGenerator {
         Line(&str_buf) << "};";
 
         preamble_buffer_.Append(str_buf);
+    }
+
+    std::string GetTensorOperationTemplate() {
+        if (tensor_operation_template_.empty()) {
+            TINT_SCOPED_ASSIGNMENT(current_buffer_, &preamble_buffer_);
+
+            Line();
+            Line() << "#include <MetalPerformancePrimitives/MetalPerformancePrimitives.h>";
+            Line();
+
+            // Declare the matmul2d_descriptor object.
+            std::string descriptor_name = UniqueIdentifier("tint_matmul2d_descriptor");
+            Line() << "template<uint M, uint N, uint K,";
+            Line() << "         mpp::tensor_ops::matmul2d_descriptor::mode O>";
+            Line() << "constant constexpr auto " << descriptor_name << " =";
+            Line() << "  mpp::tensor_ops::matmul2d_descriptor(M, N, K, false, false, false, O);";
+            Line();
+
+            // Declare an alias for the matmul2d operation type.
+            tensor_operation_template_ = UniqueIdentifier("tint_matmul2d_operation");
+            Line() << "template<uint M, uint N, uint K,";
+            Line() << "         mpp::tensor_ops::matmul2d_descriptor::mode O = "
+                      "mpp::tensor_ops::matmul2d_descriptor::mode::multiply>";
+            Line() << "using " << tensor_operation_template_ << " =";
+            Line() << "  mpp::tensor_ops::matmul2d<" << descriptor_name
+                   << "<M, N, K, O>, execution_simdgroup>;";
+        }
+        return tensor_operation_template_;
+    }
+
+    std::string GetCooperativeTensorTypeAlias(const type::CooperativeTensor* tensor) {
+        // Get or emit the type aliases for the left/right/result cooperative tensors that match the
+        // operation shape used by `tensor`.
+        TensorConfig cfg = {
+            .m = tensor->M(),
+            .n = tensor->N(),
+            .k = tensor->K(),
+            .input_type = tensor->InputType(),
+            .result_type = tensor->ResultType(),
+        };
+        auto type_aliases = tensor_config_to_aliases_.GetOrAdd(cfg, [&] {
+            auto operation = GetTensorOperationTemplate();
+
+            TINT_SCOPED_ASSIGNMENT(current_buffer_, &preamble_buffer_);
+            Line();
+
+            StringStream input_type;
+            StringStream result_type;
+            EmitType(input_type, tensor->InputType());
+            EmitType(result_type, tensor->ResultType());
+            auto emit_tensor = [&](const char* tensor_kind, std::string_view left_type,
+                                   std::string_view right_type) {
+                StringStream name_stream;
+                name_stream << "tint_" << tensor_kind << "_" << tensor->M() << "_" << tensor->N()
+                            << "_" << tensor->K() << "_" << input_type.str() << "_"
+                            << result_type.str();
+                auto name = UniqueIdentifier(name_stream.str());
+                Line() << "using " << name << " =";
+                Line() << "  decltype(declval<" << operation << "<" << tensor->M() << ", "
+                       << tensor->N() << ", " << tensor->K() << ">>()";
+                Line() << "             .get_" << tensor_kind << "_cooperative_tensor<" << left_type
+                       << ", " << right_type << ", " << result_type.str() << ">());";
+                return name;
+            };
+
+            TensorAliases aliases;
+            aliases.left = emit_tensor("left_input", input_type.str(), input_type.str());
+            aliases.right = emit_tensor("right_input", input_type.str(), input_type.str());
+            aliases.result = emit_tensor("destination", aliases.left, aliases.right);
+            return aliases;
+        });
+
+        // Pick the alias that corresponds the the cooperative_tensor kind that we are emitting.
+        switch (tensor->Kind()) {
+            case core::SubgroupMatrixKind::kLeft:
+                return type_aliases.left;
+            case core::SubgroupMatrixKind::kRight:
+                return type_aliases.right;
+            case core::SubgroupMatrixKind::kResult:
+                return type_aliases.result;
+            case core::SubgroupMatrixKind::kUndefined:
+                TINT_IR_UNREACHABLE(ir_);
+        }
     }
 
     /// Handles core::ir::Constant values

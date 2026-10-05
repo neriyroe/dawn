@@ -34,7 +34,7 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/clone_context.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/sampled_texture.h"
 #include "src/tint/lang/core/type/storage_texture.h"
 #include "src/tint/lang/spirv/builtin_fn.h"
@@ -593,7 +593,7 @@ struct State {
             }
 
             auto* new_ty = ty.MatchWidth(coords->Type()->DeepestElement(), count);
-            return b.Swizzle(new_ty, coords, swizzle_idx)->Result();
+            return b.Swizzle(new_ty, coords, swizzle_idx);
         };
 
         auto coords_needed = CoordsRequiredForDim(tex_ty->Dim(), is_proj);
@@ -612,8 +612,7 @@ struct State {
         auto* new_coords_ty = ty.MatchWidth(coords_ty->Type(), new_coords_width);
 
         auto* swizzle = mk_coords(new_coords_width);
-        core::ir::Value* last =
-            b.Swizzle(coords_ty->Type(), coords, Vector{new_coords_width})->Result();
+        core::ir::Value* last = b.Swizzle(coords_ty->Type(), coords, Vector{new_coords_width});
 
         if (is_proj) {
             // New coords
@@ -627,7 +626,7 @@ struct State {
             new_args.Push(swizzle);
             // Array index
             if (!last->Type()->Is<core::type::I32>()) {
-                last = b.Convert(ty.i32(), last)->Result();
+                last = b.Convert(ty.i32(), last);
             }
             new_args.Push(last);
         }
@@ -682,8 +681,7 @@ struct State {
     void Image(spirv::ir::BuiltinCall* call) {
         const auto& args = call->Args();
         core::ir::Value* tex = nullptr;
-        [[maybe_unused]] core::ir::Value* sampler = nullptr;
-        std::tie(tex, sampler) = GetTextureSampler(args[0]);
+        std::tie(tex, std::ignore) = GetTextureSampler(args[0]);
 
         call->Result()->ReplaceAllUsesWith(tex);
         call->Destroy();
@@ -707,7 +705,7 @@ struct State {
                 core::ir::Value* lod = args[idx++];
 
                 if (!lod->Type()->Is<core::type::I32>()) {
-                    lod = b.Convert(ty.i32(), lod)->Result();
+                    lod = b.Convert(ty.i32(), lod);
                 }
                 new_args.Push(lod);
             } else if (!tex_ty->IsAnyOf<core::type::DepthMultisampledTexture,
@@ -721,7 +719,7 @@ struct State {
                 core::ir::Value* sample = args[idx++];
 
                 if (!sample->Type()->Is<core::type::I32>()) {
-                    sample = b.Convert(ty.i32(), sample)->Result();
+                    sample = b.Convert(ty.i32(), sample);
                 }
                 new_args.Push(sample);
             }
@@ -731,7 +729,7 @@ struct State {
             if (tex_ty->IsAnyOf<core::type::DepthTexture, core::type::DepthMultisampledTexture>()) {
                 call_ty = call_ty->DeepestElement();
             }
-            auto* res = b.Call(call_ty, core::BuiltinFn::kTextureLoad, new_args)->Result();
+            auto* res = b.Call(call_ty, core::BuiltinFn::kTextureLoad, new_args);
 
             // Restore the vec4 result by padding with 0's.
             if (call_ty != call->Result()->Type()) {
@@ -739,7 +737,7 @@ struct State {
                 TINT_ASSERT(vec && vec->Width() == 4);
 
                 auto* z = b.Zero(call_ty);
-                res = b.Construct(call->Result()->Type(), res, z, z, z)->Result();
+                res = b.Construct(call->Result()->Type(), res, z, z, z);
             }
             call->Result()->ReplaceAllUsesWith(res);
         });
@@ -782,8 +780,8 @@ struct State {
                 ProcessOffset(args[4], new_args);
             }
 
-            b.CallWithResult(call->DetachResult(), core::BuiltinFn::kTextureGatherCompare,
-                             new_args);
+            b.CallReplaceResult(call->DetachResult(), core::BuiltinFn::kTextureGatherCompare,
+                                new_args);
         });
         call->Destroy();
     }
@@ -814,7 +812,7 @@ struct State {
                 ProcessOffset(args[4], new_args);
             }
 
-            b.CallWithResult(call->DetachResult(), core::BuiltinFn::kTextureGather, new_args);
+            b.CallReplaceResult(call->DetachResult(), core::BuiltinFn::kTextureGather, new_args);
         });
         call->Destroy();
     }
@@ -871,7 +869,7 @@ struct State {
                 ProcessOffset(args[idx++], new_args);
             }
 
-            b.CallWithResult(call->DetachResult(), fn, new_args);
+            b.CallReplaceResult(call->DetachResult(), fn, new_args);
         });
 
         call->Destroy();
@@ -915,7 +913,7 @@ struct State {
                 // Depth texture LOD in WGSL is i32/u32 but f32 in SPIR-V.
                 // Convert to i32
                 if (tex_ty->Is<core::type::DepthTexture>()) {
-                    lod = b.Convert(ty.i32(), lod)->Result();
+                    lod = b.Convert(ty.i32(), lod);
                 }
                 new_args.Push(lod);
             }
@@ -933,7 +931,7 @@ struct State {
             if (tex_ty->IsAnyOf<core::type::DepthTexture, core::type::DepthMultisampledTexture>()) {
                 call_ty = call_ty->DeepestElement();
             }
-            auto* res = b.Call(call_ty, fn, new_args)->Result();
+            auto* res = b.Call(call_ty, fn, new_args);
 
             // Restore the vec4 result by padding with 0's.
             if (call_ty != call->Result()->Type()) {
@@ -941,7 +939,7 @@ struct State {
                 TINT_ASSERT(vec && vec->Width() == 4);
 
                 auto* z = b.Zero(call_ty);
-                res = b.Construct(call->Result()->Type(), res, z, z, z)->Result();
+                res = b.Construct(call->Result()->Type(), res, z, z, z);
             }
 
             call->Result()->ReplaceAllUsesWith(res);
@@ -976,10 +974,9 @@ struct State {
             auto* type = call->Result()->Type();
 
             // WGSL requires a `u32` result component where SPIR-V allows `i32` or `u32`
-            core::ir::Value* res =
-                b.Call(ty.MatchWidth(ty.u32(), type), fn, Vector{image})->Result();
+            core::ir::Value* res = b.Call(ty.MatchWidth(ty.u32(), type), fn, Vector{image});
             if (type->IsSignedIntegerScalarOrVector()) {
-                res = b.Convert(type, res)->Result();
+                res = b.Convert(type, res);
             }
 
             call->Result()->ReplaceAllUsesWith(res);
@@ -1013,17 +1010,16 @@ struct State {
                 args.Push(call->Args()[1]);
             }
 
-            core::ir::Value* res =
-                b.Call(wgsl_type, core::BuiltinFn::kTextureDimensions, args)->Result();
+            core::ir::Value* res = b.Call(wgsl_type, core::BuiltinFn::kTextureDimensions, args);
 
             if (core::type::IsTextureArray(tex_ty->Dim())) {
                 core::ir::Value* layers =
-                    b.Call(ty.u32(), core::BuiltinFn::kTextureNumLayers, image)->Result();
-                res = b.Construct(ty.MatchWidth(ty.u32(), type), res, layers)->Result();
+                    b.Call(ty.u32(), core::BuiltinFn::kTextureNumLayers, image);
+                res = b.Construct(ty.MatchWidth(ty.u32(), type), res, layers);
             }
 
             if (type->IsSignedIntegerScalarOrVector()) {
-                res = b.Convert(type, res)->Result();
+                res = b.Convert(type, res);
             }
 
             call->Result()->ReplaceAllUsesWith(res);

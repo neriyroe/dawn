@@ -179,91 +179,6 @@ void SharedTextureMemoryTests::TearDown() {
     GetParam().mBackend->TearDown();
 }
 
-wgpu::SharedFence SharedTextureMemoryTestBackend::ImportFenceTo(const wgpu::Device& importingDevice,
-                                                                const wgpu::SharedFence& fence) {
-    wgpu::SharedFenceExportInfo exportInfo;
-    fence.ExportInfo(&exportInfo);
-
-    switch (exportInfo.type) {
-        case wgpu::SharedFenceType::VkSemaphoreOpaqueFD: {
-            wgpu::SharedFenceVkSemaphoreOpaqueFDExportInfo vkExportInfo;
-            exportInfo.nextInChain = &vkExportInfo;
-            fence.ExportInfo(&exportInfo);
-
-            wgpu::SharedFenceVkSemaphoreOpaqueFDDescriptor vkDesc;
-            vkDesc.handle = vkExportInfo.handle;
-
-            wgpu::SharedFenceDescriptor fenceDesc;
-            fenceDesc.nextInChain = &vkDesc;
-            return importingDevice.ImportSharedFence(&fenceDesc);
-        }
-        case wgpu::SharedFenceType::SyncFD: {
-            wgpu::SharedFenceSyncFDExportInfo vkExportInfo;
-            exportInfo.nextInChain = &vkExportInfo;
-            fence.ExportInfo(&exportInfo);
-
-            wgpu::SharedFenceSyncFDDescriptor vkDesc;
-            vkDesc.handle = vkExportInfo.handle;
-
-            wgpu::SharedFenceDescriptor fenceDesc;
-            fenceDesc.nextInChain = &vkDesc;
-            return importingDevice.ImportSharedFence(&fenceDesc);
-        }
-        case wgpu::SharedFenceType::VkSemaphoreZirconHandle: {
-            wgpu::SharedFenceVkSemaphoreZirconHandleExportInfo vkExportInfo;
-            exportInfo.nextInChain = &vkExportInfo;
-            fence.ExportInfo(&exportInfo);
-
-            wgpu::SharedFenceVkSemaphoreZirconHandleDescriptor vkDesc;
-            vkDesc.handle = vkExportInfo.handle;
-
-            wgpu::SharedFenceDescriptor fenceDesc;
-            fenceDesc.nextInChain = &vkDesc;
-            return importingDevice.ImportSharedFence(&fenceDesc);
-        }
-        case wgpu::SharedFenceType::DXGISharedHandle: {
-            wgpu::SharedFenceDXGISharedHandleExportInfo dxgiExportInfo;
-            exportInfo.nextInChain = &dxgiExportInfo;
-            fence.ExportInfo(&exportInfo);
-
-            wgpu::SharedFenceDXGISharedHandleDescriptor dxgiDesc;
-            dxgiDesc.handle = dxgiExportInfo.handle;
-
-            wgpu::SharedFenceDescriptor fenceDesc;
-            fenceDesc.nextInChain = &dxgiDesc;
-            return importingDevice.ImportSharedFence(&fenceDesc);
-        }
-        case wgpu::SharedFenceType::MTLSharedEvent: {
-            wgpu::SharedFenceMTLSharedEventExportInfo sharedEventInfo;
-            exportInfo.nextInChain = &sharedEventInfo;
-
-            fence.ExportInfo(&exportInfo);
-
-            wgpu::SharedFenceMTLSharedEventDescriptor sharedEventDesc;
-            sharedEventDesc.sharedEvent = sharedEventInfo.sharedEvent;
-
-            wgpu::SharedFenceDescriptor fenceDesc;
-            fenceDesc.nextInChain = &sharedEventDesc;
-            return importingDevice.ImportSharedFence(&fenceDesc);
-        }
-        case wgpu::SharedFenceType::EGLSync: {
-            wgpu::SharedFenceEGLSyncExportInfo eglSyncInfo;
-            exportInfo.nextInChain = &eglSyncInfo;
-
-            fence.ExportInfo(&exportInfo);
-
-            wgpu::SharedFenceEGLSyncDescriptor eglSyncDesc;
-            eglSyncDesc.sync = eglSyncInfo.sync;
-
-            wgpu::SharedFenceDescriptor fenceDesc;
-            fenceDesc.nextInChain = &eglSyncDesc;
-            return importingDevice.ImportSharedFence(&fenceDesc);
-        }
-        default:
-            DAWN_UNREACHABLE();
-    }
-}
-
 std::vector<wgpu::SharedTextureMemory> SharedTextureMemoryTestBackend::CreateSharedTextureMemories(
     wgpu::Device& device,
     int layerCount) {
@@ -981,6 +896,10 @@ T& AsNonConst(const T& rhs) {
 // Test that creating shared texture memory without the required features is an error.
 // Using the memory thereafter produces errors.
 TEST_P(SharedTextureMemoryNoFeatureTests, CreationWithoutFeature) {
+    // TODO(crbug.com/555876250): "Failed to create GBM buffer object" crashes the tests.
+    DAWN_SUPPRESS_TEST_IF(IsLinux() && IsVulkan() && IsNvidia() &&
+                          GetParam().mBackend->Name().find("dma buf") != std::string::npos);
+
     // Create external texture memories with an error filter.
     // We should see a message that the feature is not enabled.
     device.PushErrorScope(wgpu::ErrorFilter::Validation);
@@ -1127,7 +1046,7 @@ TEST_P(SharedTextureMemoryTests, ImportSharedFenceDeviceDestroyed) {
     // Import the shared fence to the destroyed device.
     std::vector<wgpu::SharedFence> sharedFences(endState.fenceCount);
     for (size_t i = 0; i < endState.fenceCount; ++i) {
-        sharedFences[i] = GetParam().mBackend->ImportFenceTo(device, endState.fences[i]);
+        sharedFences[i] = utils::ImportFenceTo(device, endState.fences[i]);
     }
     beginDesc.fenceCount = endState.fenceCount;
     beginDesc.fences = sharedFences.data();
@@ -2025,9 +1944,6 @@ TEST_P(SharedTextureMemoryTests, CopyToTextureThenSample) {
     // crbug.com/475503907
     DAWN_SUPPRESS_TEST_IF(IsOpenGLES() && IsImgTec());
 
-    // TODO(crbug.com/468228359): Flaky on Snapdragon X Elite w/ D3D11.
-    DAWN_SUPPRESS_TEST_IF(IsWindows() && IsQualcomm() && IsD3D11());
-
     std::vector<wgpu::Device> devices = {device, CreateDevice()};
 
     for (const auto& memories :
@@ -2074,7 +1990,7 @@ TEST_P(SharedTextureMemoryTests, CopyToTextureThenSample) {
 
         std::vector<wgpu::SharedFence> sharedFences(endState.fenceCount);
         for (size_t i = 0; i < endState.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(devices[1], endState.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(devices[1], endState.fences[i]);
         }
         beginDesc.fenceCount = endState.fenceCount;
         beginDesc.fences = sharedFences.data();
@@ -2185,7 +2101,7 @@ TEST_P(SharedTextureMemoryTests, BeginEndWithoutUse) {
         // Import fences and texture to the other device.
         std::vector<wgpu::SharedFence> sharedFences(endState.fenceCount);
         for (size_t i = 0; i < endState.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(devices[1], endState.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(devices[1], endState.fences[i]);
         }
         beginDesc.fenceCount = endState.fenceCount;
         beginDesc.fences = sharedFences.data();
@@ -2281,7 +2197,7 @@ TEST_P(SharedTextureMemoryTests, CopyToTextureThenSample2DArray) {
 
         std::vector<wgpu::SharedFence> sharedFences(endState.fenceCount);
         for (size_t i = 0; i < endState.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(devices[1], endState.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(devices[1], endState.fences[i]);
         }
         beginDesc.fenceCount = endState.fenceCount;
         beginDesc.fences = sharedFences.data();
@@ -2343,7 +2259,7 @@ TEST_P(SharedTextureMemoryTests, RenderThenSampleEncodeAfterBeginAccess) {
 
         std::vector<wgpu::SharedFence> sharedFences(endState.fenceCount);
         for (size_t i = 0; i < endState.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(devices[1], endState.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(devices[1], endState.fences[i]);
         }
         beginDesc.fenceCount = endState.fenceCount;
         beginDesc.fences = sharedFences.data();
@@ -2407,7 +2323,7 @@ TEST_P(SharedTextureMemoryTests, RenderThenSampleEncodeBeforeBeginAccess) {
 
         std::vector<wgpu::SharedFence> sharedFences(endState.fenceCount);
         for (size_t i = 0; i < endState.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(devices[1], endState.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(devices[1], endState.fences[i]);
         }
         beginDesc.fenceCount = endState.fenceCount;
         beginDesc.fences = sharedFences.data();
@@ -2470,7 +2386,7 @@ TEST_P(SharedTextureMemoryTests, RenderThenTextureDestroyBeforeEndAccessThenSamp
 
         std::vector<wgpu::SharedFence> sharedFences(endState.fenceCount);
         for (size_t i = 0; i < endState.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(devices[1], endState.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(devices[1], endState.fences[i]);
         }
         beginDesc.fenceCount = endState.fenceCount;
         beginDesc.fences = sharedFences.data();
@@ -2530,7 +2446,7 @@ TEST_P(SharedTextureMemoryTests, RenderThenDropAllMemoriesThenSample) {
 
         std::vector<wgpu::SharedFence> sharedFences(endState.fenceCount);
         for (size_t i = 0; i < endState.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(devices[1], endState.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(devices[1], endState.fences[i]);
         }
         beginDesc.fenceCount = endState.fenceCount;
         beginDesc.fences = sharedFences.data();
@@ -2610,7 +2526,7 @@ TEST_P(SharedTextureMemoryTests, RenderThenLoseOrDestroyDeviceBeforeEndAccessThe
 
         std::vector<wgpu::SharedFence> sharedFences(endState.fenceCount);
         for (size_t i = 0; i < endState.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(devices[1], endState.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(devices[1], endState.fences[i]);
         }
         beginDesc.fenceCount = endState.fenceCount;
         beginDesc.fences = sharedFences.data();
@@ -2721,7 +2637,7 @@ TEST_P(SharedTextureMemoryTests, SeparateDevicesWriteThenConcurrentReadThenWrite
         // Import fences to devices[1] and begin access.
         std::vector<wgpu::SharedFence> sharedFences(endState.fenceCount);
         for (size_t i = 0; i < endState.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(devices[1], endState.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(devices[1], endState.fences[i]);
         }
         beginDesc.fenceCount = sharedFences.size();
         beginDesc.fences = sharedFences.data();
@@ -2734,7 +2650,7 @@ TEST_P(SharedTextureMemoryTests, SeparateDevicesWriteThenConcurrentReadThenWrite
 
         // Import fences to devices[2] and begin access.
         for (size_t i = 0; i < endState.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(devices[2], endState.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(devices[2], endState.fences[i]);
         }
         memories[2].BeginAccess(textures[2], &beginDesc);
 
@@ -2761,12 +2677,12 @@ TEST_P(SharedTextureMemoryTests, SeparateDevicesWriteThenConcurrentReadThenWrite
         std::vector<uint64_t> signaledValues(sharedFences.size());
 
         for (size_t i = 0; i < endState1.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(devices[0], endState1.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(devices[0], endState1.fences[i]);
             signaledValues[i] = endState1.signaledValues[i];
         }
         for (size_t i = 0; i < endState2.fenceCount; ++i) {
             sharedFences[i + endState1.fenceCount] =
-                GetParam().mBackend->ImportFenceTo(devices[0], endState2.fences[i]);
+                utils::ImportFenceTo(devices[0], endState2.fences[i]);
             signaledValues[i + endState1.fenceCount] = endState2.signaledValues[i];
         }
 
@@ -2794,9 +2710,6 @@ TEST_P(SharedTextureMemoryTests, SameDeviceWriteThenConcurrentReadThenWrite) {
     DAWN_TEST_UNSUPPORTED_IF(IsVulkan());
 
     DAWN_TEST_UNSUPPORTED_IF(!GetParam().mBackend->SupportsConcurrentRead());
-
-    // TODO(crbug.com/468228359): Flaky on Snapdragon X Elite w/ D3D11.
-    DAWN_SUPPRESS_TEST_IF(IsWindows() && IsQualcomm() && IsD3D11());
 
     for (const auto& memories :
          GetParam().mBackend->CreatePerDeviceSharedTextureMemoriesFilterByUsage(
@@ -2869,7 +2782,7 @@ TEST_P(SharedTextureMemoryTests, SameDeviceWriteThenConcurrentReadThenWrite) {
         // Import fences to device and begin access.
         std::vector<wgpu::SharedFence> sharedFences(endState.fenceCount);
         for (size_t i = 0; i < endState.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(device, endState.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(device, endState.fences[i]);
         }
         beginDesc.fenceCount = sharedFences.size();
         beginDesc.fences = sharedFences.data();
@@ -2882,7 +2795,7 @@ TEST_P(SharedTextureMemoryTests, SameDeviceWriteThenConcurrentReadThenWrite) {
 
         // Import fences to device and begin access.
         for (size_t i = 0; i < endState.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(device, endState.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(device, endState.fences[i]);
         }
         memory.BeginAccess(textures[2], &beginDesc);
 
@@ -2907,12 +2820,12 @@ TEST_P(SharedTextureMemoryTests, SameDeviceWriteThenConcurrentReadThenWrite) {
         std::vector<uint64_t> signaledValues(sharedFences.size());
 
         for (size_t i = 0; i < endState1.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(device, endState1.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(device, endState1.fences[i]);
             signaledValues[i] = endState1.signaledValues[i];
         }
         for (size_t i = 0; i < endState2.fenceCount; ++i) {
             sharedFences[i + endState1.fenceCount] =
-                GetParam().mBackend->ImportFenceTo(device, endState2.fences[i]);
+                utils::ImportFenceTo(device, endState2.fences[i]);
             signaledValues[i + endState1.fenceCount] = endState2.signaledValues[i];
         }
 
@@ -3009,7 +2922,7 @@ TEST_P(SharedTextureMemoryTests, SRGBReinterpretation) {
 
         std::vector<wgpu::SharedFence> sharedFences(endState.fenceCount);
         for (size_t i = 0; i < endState.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(devices[0], endState.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(devices[0], endState.fences[i]);
         }
         beginDesc.fenceCount = endState.fenceCount;
         beginDesc.fences = sharedFences.data();
@@ -3079,7 +2992,7 @@ TEST_P(SharedTextureMemoryTests, WriteStorageThenReadSample) {
         // Import fences to device 1.
         std::vector<wgpu::SharedFence> sharedFences(endState.fenceCount);
         for (size_t i = 0; i < endState.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(devices[1], endState.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(devices[1], endState.fences[i]);
         }
         beginDesc.fenceCount = endState.fenceCount;
         beginDesc.fences = sharedFences.data();
@@ -3147,7 +3060,7 @@ TEST_P(SharedTextureMemoryTests, WriteTextureThenReadSample) {
         // Import fences to device 1.
         std::vector<wgpu::SharedFence> sharedFences(endState.fenceCount);
         for (size_t i = 0; i < endState.fenceCount; ++i) {
-            sharedFences[i] = GetParam().mBackend->ImportFenceTo(devices[1], endState.fences[i]);
+            sharedFences[i] = utils::ImportFenceTo(devices[1], endState.fences[i]);
         }
         beginDesc.fenceCount = endState.fenceCount;
         beginDesc.fences = sharedFences.data();
@@ -3333,8 +3246,7 @@ TEST_P(SharedTextureMemoryTests, InterDeviceRenderAttachmentAndBindlessTexture) 
             // Import fences from renderDevice to sampleDevice.
             std::vector<wgpu::SharedFence> sharedFences(renderEndState.fenceCount);
             for (size_t i = 0; i < renderEndState.fenceCount; ++i) {
-                sharedFences[i] =
-                    GetParam().mBackend->ImportFenceTo(sampleDevice, renderEndState.fences[i]);
+                sharedFences[i] = utils::ImportFenceTo(sampleDevice, renderEndState.fences[i]);
             }
             wgpu::SharedTextureMemoryBeginAccessDescriptor sampleBeginDesc = {};
             sampleBeginDesc.fenceCount = sharedFences.size();
@@ -3375,8 +3287,7 @@ TEST_P(SharedTextureMemoryTests, InterDeviceRenderAttachmentAndBindlessTexture) 
             // Import fences from sampleDevice back to renderDevice.
             std::vector<wgpu::SharedFence> sharedFences(sampleEndState.fenceCount);
             for (size_t i = 0; i < sampleEndState.fenceCount; ++i) {
-                sharedFences[i] =
-                    GetParam().mBackend->ImportFenceTo(renderDevice, sampleEndState.fences[i]);
+                sharedFences[i] = utils::ImportFenceTo(renderDevice, sampleEndState.fences[i]);
             }
             wgpu::SharedTextureMemoryBeginAccessDescriptor beginDesc = {};
             beginDesc.fenceCount = sharedFences.size();

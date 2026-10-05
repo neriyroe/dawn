@@ -165,9 +165,7 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "This setting is used to test bindgroup encoding.",
       "https://crbug.com/dawn/155", ToggleStage::Device}},
     {Toggle::UseDXC,
-     {"use_dxc",
-      "Use DXC instead of FXC for compiling HLSL when both dxcompiler.dll and dxil.dll is "
-      "available.",
+     {"use_dxc", "Use DXC instead of FXC for compiling HLSL when dxcompiler.dll is available.",
       "https://crbug.com/dawn/402", ToggleStage::Adapter}},
     {Toggle::DisableRobustness,
      {"disable_robustness", "Disable robust buffer access", "https://crbug.com/dawn/480",
@@ -180,9 +178,6 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "Suppresses validation errors on API entry points or parameter combinations that aren't "
       "considered secure yet.",
       "http://crbug.com/1138528", ToggleStage::Instance}},
-    {Toggle::AllowExperimentalSnorm10_10_10_2,
-     {"allow_experimental_snorm10_10_10_2", "Allow the experimental snorm10_10_10_2 vertex format.",
-      "https://crbug.com/dawn/536160421", ToggleStage::Instance}},
     {Toggle::FlushBeforeClientWaitSync,
      {"flush_before_client_wait_sync",
       "Call glFlush before glClientWaitSync to work around bugs in the latter",
@@ -484,11 +479,6 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "Use a blit instead of a copy command to copy float16 texture to a texture or a buffer."
       "Workaround for OpenGLES.",
       "https://crbug.com/381214487", ToggleStage::Device}},
-    {Toggle::UseBlitForFloat32TextureCopy,
-     {"use_blit_for_float_32_texture_copy",
-      "Use a blit instead of a copy command to copy float32 texture to a texture or a buffer."
-      "Workaround for OpenGLES.",
-      "https://crbug.com/381214487", ToggleStage::Device}},
     {Toggle::UseBlitForT2B,
      {"use_blit_for_t2b",
       "Use a compute based blit instead of a copy command to copy texture with supported format to "
@@ -499,6 +489,26 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "Use a shader based blit instead of a copy command to copy a buffer to a texture with "
       "supported format.",
       "https://crbug.com/dawn/348653642", ToggleStage::Device}},
+    {Toggle::UseBlitForNonRGBAUnormTextureToBufferCopy,
+     {"use_blit_for_non_rgba_unorm_texture_to_buffer_copy",
+      "Use a blit instead of a copy command to copy non-RGBA unorm textures to a buffer. "
+      "Workaround for OpenGLES.",
+      "https://issues.chromium.org/issues/556959073", ToggleStage::Device}},
+    {Toggle::UseBlitForNonRGBAFloatTextureToBufferCopy,
+     {"use_blit_for_non_rgba_float_texture_to_buffer_copy",
+      "Use a blit instead of a copy command to copy non-RGBA float textures to a buffer. "
+      "Workaround for OpenGLES.",
+      "https://issues.chromium.org/issues/556959073", ToggleStage::Device}},
+    {Toggle::UseBlitForUintTextureToBufferCopy,
+     {"use_blit_for_uint_texture_to_buffer_copy",
+      "Use a blit instead of a copy command to copy uint textures to a buffer. "
+      "Workaround for OpenGLES.",
+      "https://issues.chromium.org/issues/556959073", ToggleStage::Device}},
+    {Toggle::UseBlitForSintTextureToBufferCopy,
+     {"use_blit_for_sint_texture_to_buffer_copy",
+      "Use a blit instead of a copy command to copy sint textures to a buffer. "
+      "Workaround for OpenGLES.",
+      "https://issues.chromium.org/issues/556959073", ToggleStage::Device}},
     {Toggle::VulkanSplitBufferTextureCopyForArrayLayers,
      {"vulkan_split_buffer_texture_copy_for_array_layers",
       "Split a multi-layer buffer-to-texture / texture-to-buffer copy into one vkCmdCopy*Image "
@@ -507,10 +517,25 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "drivers mis-stride the buffer between layers when bufferImageHeight is padded, corrupting "
       "every layer after the first.",
       "https://issues.chromium.org/issues/520126486", ToggleStage::Device}},
-    {Toggle::GLUseArrayLengthFromUniform,
-     {"gl_use_array_length_from_uniform",
-      "Use arrayLengthFromUniform transform to replace arrayLength() function calls of dynamic "
-      "storage buffers."
+    {Toggle::VulkanForceAlphaWriteForAlphaToCoverage,
+     {"vulkan_force_alpha_write_for_alpha_to_coverage",
+      "When alpha-to-coverage is enabled and the alpha channel of color attachment 0 is masked "
+      "off, force the alpha write bit on and set the alpha blend to (src * ZERO + dst * ONE) so "
+      "the value stored is the destination alpha. Workaround for Huawei Maleoon GPUs, whose "
+      "drivers drop the alpha-to-coverage computation when the fragment alpha is not written, "
+      "counting every sample as covered. The destination-preserving blend leaves the "
+      "attachment's alpha channel unchanged, so the workaround is not observable to the "
+      "application. Skipped for non-blendable formats.",
+      "https://issues.chromium.org/issues/525294804", ToggleStage::Device}},
+    {Toggle::SplitBufferTextureCopyForOversizedRow,
+     {"split_buffer_texture_copy_for_oversized_row",
+      "Split a buffer-to-texture or texture-to-buffer copy into one copy command per row so its "
+      "row pitch (bytes) and row width (texels) never overflow the 18-bit and 14-bit hardware "
+      "register fields. Workaround for an Intel GPU hardware limitation.",
+      "https://crbug.com/481934465", ToggleStage::Device}},
+    {Toggle::GLUseArrayLengthFromImmediate,
+     {"gl_use_array_length_from_immediate",
+      "Use immediate data to replace arrayLength() function calls of dynamic storage buffers. "
       "This toggle is only used for workarounds on certain devices. It has no impact on backends "
       "which need "
       "this transform universally (metal, d3d12)",
@@ -755,20 +780,26 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
      {"blob_cache_hash_validation",
       "Enable hash validation when loading/storing from/to the blob cache",
       "https://crbug.com/429938352", ToggleStage::Device}},
-    {Toggle::DecomposeUniformBuffers,
-     {"decompose_uniform_buffers",
-      "Decompose uniform buffers into arrays of vec4<u32> on backends for Vulkan and OpenGL.",
-      "https://crbug.com/448452698", ToggleStage::Adapter}},
     {Toggle::D3D12DecomposeWorkgroupAccess,
      {"d3d12_decompose_workgroup_access",
       "Decompose workgroup memory variables into flat scalar arrays and rewrite accesses as "
       "element-wise loads/stores with bitcasts on selected Intel GPUs on D3D12",
       "https://crbug.com/341991439", ToggleStage::Device}},
+    {Toggle::D3D12PolyfillF16CeilFloor,
+     {"d3d12_polyfill_f16_ceil_floor",
+      "Polyfill f16 ceil and floor operations on selected Intel GPUs using DXC to avoid incorrect "
+      "results for values that underflow to zero.",
+      "", ToggleStage::Device}},
     {Toggle::CollapseSubgroupMinMax,
      {"collapse_subgroup_min_max",
       "Collapse redundant subgroup min and max operations (e.g., subgroupMin(subgroupMin(x))) into "
       "a single operation. This works around a driver crash on some AMD GPUs.",
       "https://crbug.com/508265321", ToggleStage::Device}},
+    {Toggle::D3D12ForceEnableSubgroupMatrixOnBuggyIntelDrivers,
+     {"d3d12_force_enable_subgroup_matrix_on_buggy_intel_drivers",
+      "Force-enable subgroup matrix support on Intel D3D12 drivers through version 101.8992, "
+      "which may produce incorrect results.",
+      "https://crbug.com/558362033", ToggleStage::Adapter}},
     {Toggle::VulkanEnableF16OnNvidia,
      {"vulkan_enable_f16_on_nvidia", "Enables F16 on Nvidia GPUs with Vulkan",
       "https://crbug.com/42251215", ToggleStage::Adapter}},
@@ -846,6 +877,14 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "Disable clamping of subgroupMatrixLoad/Store on storage buffers if "
       "cooperativeMatrixRobustBufferAccess == VK_TRUE",
       "https://crbug.com/548005877", ToggleStage::Device}},
+    {Toggle::MetalEnableTensors,
+     {"metal_enable_tensors", "Enable the use of Metal 4 Tensor Operations for subgroup matrix.",
+      "https://crbug.com/550350271", ToggleStage::Adapter}},
+    {Toggle::AllowAlphaToCoverageNotBlendable,
+     {"allow_alpha_to_coverage_not_blendable",
+      "Killswitch for a fix to the validation where non-blendable formats where allowed for "
+      "alphaToCoverageEnabled",
+      "https://crbug.com/550350271", ToggleStage::Device}},
     {Toggle::WaitIsThreadSafe,
      {"wait_is_thread_safe",
       "WaitFor* functions are thread-safe and can be called without the device-lock if implicit "
@@ -927,11 +966,17 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "Backend will automatically map the buffer when it's not in use by GPU, to allow "
       "front-end's MapAsync and Unmap calls to become cheap without acquiring any lock internally.",
       "https://crbug.com/dawn/481158754", ToggleStage::Device}},
-    {Toggle::MetalPolyfillBoolVecDynamicStore,
-     {"metal_polyfill_bool_vec_dynamic_store",
-      "Workaround a driver bug on some Intel GPUs on macOS where dynamic component stores on "
+    {Toggle::PolyfillBoolVecDynamicStore,
+     {"polyfill_bool_vec_dynamic_store",
+      "Workaround a driver bug on some Intel GPUs where dynamic component stores on "
       "boolean vectors fail.",
       "https://crbug.com/540789158", ToggleStage::Device}},
+    {Toggle::VulkanRelaxMaxInterStageShaderVariables,
+     {"vulkan_relax_max_inter_stage_shader_variables",
+      "Relax the maxInterStageShaderVariables floor for ImgTec (PowerVR) devices on Vulkan. "
+      "Some ImgTec drivers only report 64, which is below the WebGPU requirement. Enabling this "
+      "toggle accepts the limit of 64 instead of rejecting the adapter entirely.",
+      "https://g-issues.chromium.org/issues/559589664", ToggleStage::Instance}},
 
     // Comment to separate the }} so it is clearer what to copy-paste to add a toggle.
 }};

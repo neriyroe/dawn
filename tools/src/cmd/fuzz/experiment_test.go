@@ -32,6 +32,7 @@ import (
 	"testing"
 
 	"dawn.googlesource.com/dawn/tools/src/execwrapper"
+	"dawn.googlesource.com/dawn/tools/src/fileutils"
 	"dawn.googlesource.com/dawn/tools/src/oswrapper"
 	"github.com/stretchr/testify/require"
 )
@@ -140,7 +141,7 @@ func TestGenerateTasksForFuzzer(t *testing.T) {
 		},
 	}
 
-	tasks, err := calculateTasksForFuzzer("tint_wgsl_fuzzer", corpus, "/root/corpora", "/root/results/default", settings)
+	tasks, err := calculateExperimentTasksForFuzzer("tint_wgsl_fuzzer", corpus, "/root/corpora", "/root/results/default", settings)
 
 	require.NoError(t, err)
 	require.Len(t, tasks, 7)
@@ -177,7 +178,7 @@ func TestLoadExperimentSettings(t *testing.T) {
 					"name": "test_exp",
 					"hash": "abcdef",
 					"fuzzers": ["tint_wgsl_fuzzer"],
-					"wgsl_benchmark_corpus": "bench",
+					"wgsl_normalization_corpus": "bench",
 					"wgsl_corpora": [
 						{"name": "corp1", "path": "test_corp"}
 					],
@@ -190,7 +191,7 @@ func TestLoadExperimentSettings(t *testing.T) {
 			},
 			wantErr: false,
 			validate: func(t *testing.T, settings ExperimentSettings) {
-				require.Nil(t, settings.BenchmarkDuration)
+				require.Nil(t, settings.NormalizationDuration)
 			},
 		},
 		{
@@ -202,7 +203,7 @@ func TestLoadExperimentSettings(t *testing.T) {
 					"name": "test_exp",
 					"hash": "abcdef",
 					"fuzzers": ["tint_wgsl_fuzzer"],
-					"wgsl_benchmark_corpus": "bench",
+					"wgsl_normalization_corpus": "bench",
 					"wgsl_corpora": [
 						{"name": "corp1", "path": "test_corp"}
 					],
@@ -211,13 +212,13 @@ func TestLoadExperimentSettings(t *testing.T) {
 						{"seconds": 10},
 						{"runs": 1000}
 					],
-					"benchmark_duration": 45
+					"normalization_duration": 45
 				}`), 0644)
 			},
 			wantErr: false,
 			validate: func(t *testing.T, settings ExperimentSettings) {
-				require.NotNil(t, settings.BenchmarkDuration)
-				require.Equal(t, 45, *settings.BenchmarkDuration)
+				require.NotNil(t, settings.NormalizationDuration)
+				require.Equal(t, 45, *settings.NormalizationDuration)
 			},
 		},
 		{
@@ -229,7 +230,7 @@ func TestLoadExperimentSettings(t *testing.T) {
 					"name": "test_exp",
 					"hash": "abcdef",
 					"fuzzers": ["tint_wgsl_fuzzer"],
-					"wgsl_benchmark_corpus": "bench",
+					"wgsl_normalization_corpus": "bench",
 					"wgsl_corpora": [
 						{"name": "corp1", "path": "test_corp"}
 					],
@@ -258,7 +259,7 @@ func TestLoadExperimentSettings(t *testing.T) {
 					"name": "test_exp",
 					"hash": "abcdef",
 					"fuzzers": ["tint_wgsl_fuzzer"],
-					"wgsl_benchmark_corpus": "bench",
+					"wgsl_normalization_corpus": "bench",
 					"wgsl_corpora": [
 						{"name": "corp1", "path": "test_corp"}
 					],
@@ -280,7 +281,7 @@ func TestLoadExperimentSettings(t *testing.T) {
 					"name": "test_exp",
 					"hash": "abcdef",
 					"fuzzers": ["tint_wgsl_fuzzer"],
-					"wgsl_benchmark_corpus": "bench",
+					"wgsl_normalization_corpus": "bench",
 					"wgsl_corpora": [
 						{"name": "corp1", "path": "test_corp"}
 					],
@@ -353,7 +354,7 @@ func TestLoadExperimentSettings(t *testing.T) {
 				}`), 0644)
 			},
 			wantErr:     true,
-			errContains: "wgsl_benchmark_corpus is required in experiment.json because WGSL fuzzers are specified",
+			errContains: "wgsl_normalization_corpus is required in experiment.json because WGSL fuzzers are specified",
 		},
 		{
 			name: "Missing WGSL corpora",
@@ -363,7 +364,7 @@ func TestLoadExperimentSettings(t *testing.T) {
 					"name": "test_exp",
 					"hash": "abcdef",
 					"fuzzers": ["tint_wgsl_fuzzer"],
-					"wgsl_benchmark_corpus": "bench",
+					"wgsl_normalization_corpus": "bench",
 					"wgsl_corpora": [],
 					"default_iterations": 2,
 					"durations": [
@@ -382,7 +383,7 @@ func TestLoadExperimentSettings(t *testing.T) {
 					"name": "test_exp",
 					"hash": "abcdef",
 					"fuzzers": ["tint_wgsl_fuzzer"],
-					"wgsl_benchmark_corpus": "bench",
+					"wgsl_normalization_corpus": "bench",
 					"wgsl_corpora": [
 						{"name": "corp1", "path": "test_corp"}
 					],
@@ -393,7 +394,7 @@ func TestLoadExperimentSettings(t *testing.T) {
 				}`), 0644)
 			},
 			wantErr:     true,
-			errContains: "wgsl benchmark corpus directory 'bench' not found under corpora root",
+			errContains: "wgsl normalization corpus directory 'bench' not found under corpora root",
 		},
 		{
 			name: "WGSL corpus directory missing",
@@ -403,7 +404,7 @@ func TestLoadExperimentSettings(t *testing.T) {
 					"name": "test_exp",
 					"hash": "abcdef",
 					"fuzzers": ["tint_wgsl_fuzzer"],
-					"wgsl_benchmark_corpus": "bench",
+					"wgsl_normalization_corpus": "bench",
 					"wgsl_corpora": [
 						{"name": "corp1", "path": "test_corp"}
 					],
@@ -442,4 +443,159 @@ func TestLoadExperimentSettings(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPrepareBinariesWithRuntimeDeps(t *testing.T) {
+	fs := oswrapper.CreateFSTestOSWrapper()
+
+	// Create a test build directory and the fuzzer binary
+	_ = fs.MkdirAll("/build", 0755)
+	_ = fs.WriteFile("/build/tint_wgsl_fuzzer", []byte("fuzzer-binary"), 0755)
+
+	// Create mock LLVM tools
+	_ = fs.MkdirAll("third_party/llvm-build/Release+Asserts/bin", 0755)
+	_ = fs.WriteFile("third_party/llvm-build/Release+Asserts/bin/llvm-profdata", []byte("mock-profdata"), 0755)
+	_ = fs.WriteFile("third_party/llvm-build/Release+Asserts/bin/llvm-cov", []byte("mock-cov"), 0755)
+
+	// Create runtime_deps file
+	depsContent := "tint_wgsl_fuzzer\nlib/libswiftshader.so\nlibvulkan.so.1\nsrc/some_other_dep.dat\nlvp_icd.json\n"
+	_ = fs.WriteFile("/build/tint_wgsl_fuzzer.runtime_deps", []byte(depsContent), 0644)
+
+	// Create test runtime dependencies to copy
+	_ = fs.MkdirAll("/build/lib", 0755)
+	_ = fs.WriteFile("/build/lib/libswiftshader.so", []byte("swiftshader-binary"), 0755)
+	_ = fs.WriteFile("/build/libvulkan.so.1", []byte("vulkan-binary"), 0755)
+	_ = fs.WriteFile("/build/lvp_icd.json", []byte("icd-json"), 0644)
+	_ = fs.MkdirAll("/build/src", 0755)
+	_ = fs.WriteFile("/build/src/some_other_dep.dat", []byte("some-data"), 0644)
+
+	ew := execwrapper.NewTestExecWrapperForSuccess([]byte("main\n"), nil)
+
+	cfg := &taskConfig{
+		mainConfig: mainConfig{
+			build:       "/build",
+			osWrapper:   fs,
+			execWrapper: ew,
+		},
+	}
+
+	settings := &ExperimentSettings{
+		Hash: "mock-hash",
+	}
+
+	binDir := "/experiment/bin"
+	err := prepareBinaries(cfg, settings, binDir, []string{"tint_wgsl_fuzzer"})
+	require.NoError(t, err)
+
+	// Verify binary was copied
+	require.True(t, fileutils.IsFile("/experiment/bin/tint_wgsl_fuzzer", fs))
+	contentBin, _ := fs.ReadFile("/experiment/bin/tint_wgsl_fuzzer")
+	require.Equal(t, "fuzzer-binary", string(contentBin))
+
+	// Verify runtime dependencies were copied
+	require.True(t, fileutils.IsFile("/experiment/bin/lib/libswiftshader.so", fs))
+	contentLib, _ := fs.ReadFile("/experiment/bin/lib/libswiftshader.so")
+	require.Equal(t, "swiftshader-binary", string(contentLib))
+
+	// Verify versioned runtime dependencies were copied
+	require.True(t, fileutils.IsFile("/experiment/bin/libvulkan.so.1", fs))
+	contentVul, _ := fs.ReadFile("/experiment/bin/libvulkan.so.1")
+	require.Equal(t, "vulkan-binary", string(contentVul))
+
+	// Verify lvp_icd.json was copied
+	require.True(t, fileutils.IsFile("/experiment/bin/lvp_icd.json", fs))
+	contentIcd, _ := fs.ReadFile("/experiment/bin/lvp_icd.json")
+	require.Equal(t, "icd-json", string(contentIcd))
+
+	// Verify non-library dependencies were NOT copied
+	require.False(t, fileutils.IsFile("/experiment/bin/src/some_other_dep.dat", fs))
+
+	// Verify LLVM tools were copied
+	require.True(t, fileutils.IsFile("/experiment/bin/llvm-profdata", fs))
+	contentProfdata, _ := fs.ReadFile("/experiment/bin/llvm-profdata")
+	require.Equal(t, "mock-profdata", string(contentProfdata))
+
+	require.True(t, fileutils.IsFile("/experiment/bin/llvm-cov", fs))
+	contentCov, _ := fs.ReadFile("/experiment/bin/llvm-cov")
+	require.Equal(t, "mock-cov", string(contentCov))
+}
+
+func TestPrepareBinariesNoRuntimeDeps(t *testing.T) {
+	fs := oswrapper.CreateFSTestOSWrapper()
+
+	// Create a test build directory and the fuzzer binary
+	_ = fs.MkdirAll("/build", 0755)
+	_ = fs.WriteFile("/build/tint_wgsl_fuzzer", []byte("fuzzer-binary"), 0755)
+
+	// Create mock LLVM tools
+	_ = fs.MkdirAll("third_party/llvm-build/Release+Asserts/bin", 0755)
+	_ = fs.WriteFile("third_party/llvm-build/Release+Asserts/bin/llvm-profdata", []byte("mock-profdata"), 0755)
+	_ = fs.WriteFile("third_party/llvm-build/Release+Asserts/bin/llvm-cov", []byte("mock-cov"), 0755)
+
+	ew := execwrapper.NewTestExecWrapperForSuccess([]byte("main\n"), nil)
+
+	cfg := &taskConfig{
+		mainConfig: mainConfig{
+			build:       "/build",
+			osWrapper:   fs,
+			execWrapper: ew,
+		},
+	}
+
+	settings := &ExperimentSettings{
+		Hash: "mock-hash",
+	}
+
+	binDir := "/experiment/bin"
+	err := prepareBinaries(cfg, settings, binDir, []string{"tint_wgsl_fuzzer"})
+	require.NoError(t, err)
+
+	// Verify fuzzer binary was copied
+	require.True(t, fileutils.IsFile("/experiment/bin/tint_wgsl_fuzzer", fs))
+	contentBin, _ := fs.ReadFile("/experiment/bin/tint_wgsl_fuzzer")
+	require.Equal(t, "fuzzer-binary", string(contentBin))
+
+	// Verify LLVM tools were copied
+	require.True(t, fileutils.IsFile("/experiment/bin/llvm-profdata", fs))
+	contentProfdata, _ := fs.ReadFile("/experiment/bin/llvm-profdata")
+	require.Equal(t, "mock-profdata", string(contentProfdata))
+
+	require.True(t, fileutils.IsFile("/experiment/bin/llvm-cov", fs))
+	contentCov, _ := fs.ReadFile("/experiment/bin/llvm-cov")
+	require.Equal(t, "mock-cov", string(contentCov))
+}
+
+func TestAppendLibraryArgs(t *testing.T) {
+	fs := oswrapper.CreateFSTestOSWrapper()
+
+	// 1. Empty bin directory
+	_ = fs.MkdirAll("/experiment/bin", 0755)
+	args := []string{"arg1", "arg2"}
+	args = appendLibraryArgs(args, "/experiment/bin", fs)
+	require.Equal(t, []string{"arg1", "arg2"}, args)
+
+	// 2. With DXC and ICD files in bin root
+	_ = fs.WriteFile("/experiment/bin/libdxcompiler.so", []byte("dxc"), 0755)
+	_ = fs.WriteFile("/experiment/bin/lvp_icd.json", []byte("icd"), 0644)
+	_ = fs.WriteFile("/experiment/bin/vk_swiftshader_icd.json", []byte("swiftshader-icd"), 0644)
+
+	args = []string{"arg1", "arg2"}
+	args = appendLibraryArgs(args, "/experiment/bin", fs)
+	require.Contains(t, args, "--dxc=/experiment/bin/libdxcompiler.so")
+	require.Contains(t, args, "--vk_icd=/experiment/bin/lvp_icd.json")
+	require.NotContains(t, args, "--vk_icd=/experiment/bin/vk_swiftshader_icd.json")
+
+	// 3. With DXC and ICD files in subdirectories (nested)
+	fs2 := oswrapper.CreateFSTestOSWrapper()
+	_ = fs2.MkdirAll("/experiment/bin/lib", 0755)
+	_ = fs2.MkdirAll("/experiment/bin/config", 0755)
+	_ = fs2.WriteFile("/experiment/bin/lib/libdxcompiler.so", []byte("dxc"), 0755)
+	_ = fs2.WriteFile("/experiment/bin/config/lvp_icd.json", []byte("icd"), 0644)
+	_ = fs2.WriteFile("/experiment/bin/config/vk_swiftshader_icd.json", []byte("swiftshader-icd"), 0644)
+
+	args2 := []string{"arg1", "arg2"}
+	args2 = appendLibraryArgs(args2, "/experiment/bin", fs2)
+	require.Contains(t, args2, "--dxc=/experiment/bin/lib/libdxcompiler.so")
+	require.Contains(t, args2, "--vk_icd=/experiment/bin/config/lvp_icd.json")
+	require.NotContains(t, args2, "--vk_icd=/experiment/bin/config/vk_swiftshader_icd.json")
 }

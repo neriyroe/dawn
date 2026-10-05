@@ -66,6 +66,7 @@ targets.mixin(
         # TODO(crbug.com/454365243): Remove this filter when including these
         # tests does not contribute to OOM issues.
         "--gtest_filter=-*WebGPU_WebGPU_backend_on*",
+        "--assert-developer-mode",
     ],
 )
 
@@ -125,7 +126,6 @@ targets.mixin(
 targets.mixin(
     name = "tint_fuzzer_corpus_generate_args",
     args = [
-        "-generate",
         "-out",
         "${ISOLATED_OUTDIR}/clusterfuzz",
     ],
@@ -143,6 +143,17 @@ targets.mixin(
 )
 
 targets.mixin(
+    name = "tint_ir_mesa_merge",
+    merge = targets.merge(
+        script = "//scripts/merge_scripts/generate_tint_fuzz_corpora.py",
+        args = [
+            "--fuzzer-name",
+            "tint_ir_mesa_fuzzer",
+        ],
+    ),
+)
+
+targets.mixin(
     name = "tint_wgsl_merge",
     merge = targets.merge(
         script = "//scripts/merge_scripts/generate_tint_fuzz_corpora.py",
@@ -154,9 +165,27 @@ targets.mixin(
 )
 
 targets.mixin(
+    name = "tint_wgsl_mesa_merge",
+    merge = targets.merge(
+        script = "//scripts/merge_scripts/generate_tint_fuzz_corpora.py",
+        args = [
+            "--fuzzer-name",
+            "tint_wgsl_mesa_fuzzer",
+        ],
+    ),
+)
+
+targets.mixin(
     name = "true_noop_merge",
     merge = targets.merge(
         script = "//scripts/merge_scripts/true_noop_merge.py",
+    ),
+)
+
+targets.mixin(
+    name = "dawn_perf_tests_merge",
+    merge = targets.merge(
+        script = "//scripts/merge_scripts/merge_dawn_perf_tests_results.py",
     ),
 )
 

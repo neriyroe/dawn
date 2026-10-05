@@ -30,7 +30,7 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/referenced_module_vars.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/utils/containers/reverse.h"
 
 #if TINT_BUILD_IS_MSVC
@@ -62,7 +62,7 @@ struct State {
     /// The mapping from functions to their transitively referenced workgroup variables.
     ReferencedModuleVars<Module> referenced_module_vars_{
         ir, [](const Var* var) {
-            auto* view = var->Result()->Type()->As<type::MemoryView>();
+            auto* view = var->Result()->Type()->As<core::type::MemoryView>();
             return view && view->AddressSpace() == AddressSpace::kWorkgroup;
         }};
 
@@ -81,7 +81,7 @@ struct State {
         /// The workgroup variable.
         Var* var = nullptr;
         /// The store type of the element.
-        const type::Type* store_type = nullptr;
+        const core::type::Type* store_type = nullptr;
         /// The list of index operands to get to the element.
         Vector<Index, 4> indices;
         /// The bufferView call (nullptr unless var's type is a buffer).
@@ -157,7 +157,8 @@ struct State {
                         auto* arr_ty = ty.array(ele_ty, count);
                         store.buffer_view =
                             b.CallExplicit(ty.ptr(workgroup, arr_ty), core::BuiltinFn::kBufferView,
-                                           Vector<TemplateParameter, 1>{arr_ty}, store.var, 0_u);
+                                           Vector<TemplateParameter, 1>{arr_ty}, store.var, 0_u)
+                                ->AsInstruction<CoreBuiltinCall>();
                     }
                 }
 
@@ -192,7 +193,7 @@ struct State {
     /// @param indices the access indices needed to get to this element
     /// @param stores the map of stores to populate
     void PrepareStores(Var* var,
-                       const type::Type* type,
+                       const core::type::Type* type,
                        uint32_t iteration_count,
                        Vector<Index, 4> indices,
                        StoreMap& stores) {
@@ -204,7 +205,7 @@ struct State {
 
         tint::Switch(
             type,
-            [&](const type::Array* arr) {
+            [&](const core::type::Array* arr) {
                 // Add an array index to the list and recurse into the element type.
                 TINT_IR_ASSERT(ir, arr->ConstantCount());
                 auto count = arr->ConstantCount().value();
@@ -216,10 +217,10 @@ struct State {
                 }
                 PrepareStores(var, arr->ElemType(), iteration_count * count, new_indices, stores);
             },
-            [&](const type::Atomic*) {
+            [&](const core::type::Atomic*) {
                 stores.GetOrAddZero(iteration_count).Push(Store{var, type, indices});
             },
-            [&](const type::Struct* str) {
+            [&](const core::type::Struct* str) {
                 for (auto* member : str->Members()) {
                     // Add the member index to the index list and recurse into its type.
                     auto new_indices = indices;
@@ -227,7 +228,7 @@ struct State {
                     PrepareStores(var, member->Type(), iteration_count, new_indices, stores);
                 }
             },
-            [&](const type::Buffer* buf) {
+            [&](const core::type::Buffer* buf) {
                 // TODO(crbug.com/tint/495142520): This could be more efficient than just choosing
                 // between an array of one type. Instead we could pick a size a larger size and add
                 // a small tail as a separate set of stores.
@@ -258,13 +259,15 @@ struct State {
     Value* GetLocalInvocationIndex(Function* func) {
         // Look for an existing local_invocation_index builtin parameter.
         for (auto* param : func->Params()) {
-            if (auto* str = param->Type()->As<type::Struct>()) {
+            if (auto* str = param->Type()->As<core::type::Struct>()) {
                 // Check each member for the local invocation index builtin attribute.
                 for (auto* member : str->Members()) {
                     if (member->Attributes().builtin == BuiltinValue::kLocalInvocationIndex) {
-                        auto* access = b.Access(ty.u32(), param, u32(member->Index()));
-                        access->InsertBefore(func->Block()->Front());
-                        return access->Result();
+                        Value* access = nullptr;
+                        b.InsertBefore(func->Block()->Front(), [&] {
+                            access = b.Access(ty.u32(), param, u32(member->Index()));
+                        });
+                        return access;
                     }
                 }
             } else {
@@ -288,7 +291,7 @@ struct State {
     /// @param linear_index the linear index of the single element that will be zeroed
     void GenerateStore(const Store& store, uint32_t total_count, Value* linear_index) {
         // If a bufferView call exists for `store`, use it over the var.
-        auto* to = store.buffer_view ? store.buffer_view->Result() : store.var->Result();
+        Value* to = store.buffer_view ? store.buffer_view->Result() : store.var->Result();
         if (!store.indices.IsEmpty()) {
             // Build the access indices to get to the target element.
             // We walk backwards along the index list so that adjacent invocation store to
@@ -315,11 +318,11 @@ struct State {
                 }
             }
             indices.Reverse();
-            to = b.Access(ty.ptr(workgroup, store.store_type), to, indices)->Result();
+            to = b.Access(ty.ptr(workgroup, store.store_type), to, indices);
         }
 
         // Generate the store instruction.
-        if (auto* atomic = store.store_type->As<type::Atomic>()) {
+        if (auto* atomic = store.store_type->As<core::type::Atomic>()) {
             auto* zero = b.Constant(ir.constant_values.Zero(atomic->Type()));
             b.Call(ty.void_(), core::BuiltinFn::kAtomicStore, to, zero);
         } else {

@@ -32,7 +32,7 @@
 
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/matrix.h"
 #include "src/tint/lang/spirv/type/explicit_layout_array.h"
 
@@ -194,8 +194,7 @@ struct State {
                         member_type,
                         [&](const core::type::Matrix*) {
                             new_operands.Push(b.Call(new_struct_ty->Members()[i]->Type(),
-                                                     core::BuiltinFn::kTranspose, operand)
-                                                  ->Result());
+                                                     core::BuiltinFn::kTranspose, operand));
                         },
                         [&](const core::type::Array*) {
                             // TODO(437140112): Add support for arrays of matrices
@@ -213,17 +212,15 @@ struct State {
     // This is a store vector element that is going to a matrix which we've transposed the size of.
     // So, we need to swap the index on this store with the last index of the source access.
     void ReplaceStoreVectorElement(core::ir::StoreVectorElement* sve) {
-        auto* src_to = sve->To()->As<core::ir::InstructionResult>();
-        TINT_ASSERT(src_to);
-
-        auto* src_inst = src_to->Instruction();
+        auto* src_inst = sve->To()->AsInstruction();
+        TINT_ASSERT(src_inst);
 
         auto access_idx = access_to_vector_index.Get(sve->To());
         TINT_ASSERT(access_idx);
 
-        core::ir::Access* new_access = nullptr;
+        core::ir::Value* new_access = nullptr;
         b.InsertAfter(src_inst, [&] {
-            auto* src_ty = src_to->Type()->As<core::type::Pointer>();
+            auto* src_ty = src_inst->Result()->Type()->As<core::type::Pointer>();
             TINT_ASSERT(src_ty);
 
             auto* src_mat = src_ty->StoreType()->As<core::type::Matrix>();
@@ -231,7 +228,7 @@ struct State {
 
             auto* new_ptr =
                 ty.ptr(src_ty->AddressSpace(), ty.vec(src_mat->Type(), src_mat->Rows()));
-            new_access = b.Access(new_ptr, src_to, Vector{sve->Index()});
+            new_access = b.Access(new_ptr, src_inst, Vector{sve->Index()});
 
             b.InsertAfter(sve,
                           [&] { b.StoreVectorElement(new_access, *access_idx, sve->Value()); });
@@ -244,17 +241,15 @@ struct State {
     // This is a load vector element that is coming from a matrix which we've transposed the size
     // of. So, we need to swap the index on this load with the last index of the source access.
     void ReplaceLoadVectorElement(core::ir::LoadVectorElement* lve) {
-        auto* src_result = lve->From()->As<core::ir::InstructionResult>();
-        TINT_ASSERT(src_result);
-
-        auto* src_inst = src_result->Instruction();
+        auto* src_inst = lve->From()->AsInstruction();
+        TINT_ASSERT(src_inst);
 
         auto access_idx = access_to_vector_index.Get(lve->From());
         TINT_ASSERT(access_idx);
 
-        core::ir::Access* new_access = nullptr;
+        core::ir::Value* new_access = nullptr;
         b.InsertAfter(src_inst, [&] {
-            auto* src_ty = src_result->Type()->As<core::type::Pointer>();
+            auto* src_ty = src_inst->Result()->Type()->As<core::type::Pointer>();
             TINT_ASSERT(src_ty);
 
             auto* src_mat = src_ty->StoreType()->As<core::type::Matrix>();
@@ -262,7 +257,7 @@ struct State {
 
             auto* new_ptr =
                 ty.ptr(src_ty->AddressSpace(), ty.vec(src_mat->Type(), src_mat->Rows()));
-            new_access = b.Access(new_ptr, src_result, Vector{lve->Index()});
+            new_access = b.Access(new_ptr, src_inst, Vector{lve->Index()});
 
             b.InsertAfter(lve, [&] {
                 b.LoadVectorElementWithResult(lve->DetachResult(), new_access, *access_idx);
@@ -353,12 +348,12 @@ struct State {
 
         b.InsertBefore(access, [&] {
             auto* m = b.Access(mat_ty, access->Object(), mat_indices);
-            auto* t = b.Call(RewriteType(mat_ty, true), core::BuiltinFn::kTranspose, m)->Result();
+            auto* t = b.Call(RewriteType(mat_ty, true), core::BuiltinFn::kTranspose, m);
 
             if (static_cast<uint32_t>(matrix_index) != indices.size() - 1) {
                 auto access_indices = Vector<core::ir::Value*, 4>{
                     indices.subspan(static_cast<size_t>(matrix_index) + 1)};
-                b.AccessWithResult(access->DetachResult(), t, access_indices)->Result();
+                b.AccessReplaceResult(access->DetachResult(), t, access_indices);
             } else {
                 access->Result()->ReplaceAllUsesWith(t);
             }
@@ -425,7 +420,7 @@ struct State {
                     // We're replacing the load, which means the source must have been a transposed
                     // matrix, so we need to get the load result as if it was row-major decorated.
                     auto* new_res = b.InstructionResult(RewriteType(ld->Result()->Type(), true));
-                    b.CallWithResult(ld->DetachResult(), core::BuiltinFn::kTranspose, new_res);
+                    b.CallReplaceResult(ld->DetachResult(), core::BuiltinFn::kTranspose, new_res);
                     ld->SetResult(new_res);
                 });
             },
@@ -440,7 +435,7 @@ struct State {
                     b.InsertAfter(ld, [&] {
                         auto* v = *idx;
                         if (v->Type()->Is<core::type::I32>()) {
-                            v = b.Convert(ty.u32(), v)->Result();
+                            v = b.Convert(ty.u32(), v);
                         }
                         b.CallWithResult(ld->DetachResult(), load_fn, ld->From(), v);
                     });
@@ -483,7 +478,7 @@ struct State {
                     // Storing the full matrix
                     b.InsertBefore(store, [&] {
                         auto* from = b.Call(to_ty, core::BuiltinFn::kTranspose, store->From());
-                        store->SetFrom(from->Result());
+                        store->SetFrom(from);
                     });
                 },
                 [&](const core::type::Array*) {
@@ -508,7 +503,7 @@ struct State {
         b.InsertAfter(store, [&] {
             auto* v = *vec_idx;
             if (v->Type()->Is<core::type::I32>()) {
-                v = b.Convert(ty.u32(), v)->Result();
+                v = b.Convert(ty.u32(), v);
             }
 
             b.Call(ty.void_(), store_fn, store->To(), v, store->From());
@@ -610,8 +605,7 @@ struct State {
                         auto* inner_fn = TransposeArrayHelper(nested);
                         transposed = b.Call(to_ty->ElemType(), inner_fn, cur)->Result();
                     } else {
-                        transposed =
-                            b.Call(to_ty->ElemType(), core::BuiltinFn::kTranspose, cur)->Result();
+                        transposed = b.Call(to_ty->ElemType(), core::BuiltinFn::kTranspose, cur);
                     }
 
                     auto* slot = b.Access(ty.ptr(function, to_ty->ElemType()), res, idx);

@@ -69,9 +69,12 @@ TEST_F(IR_ValueTest, Destroy) {
 }
 
 TEST_F(IR_ValueTest, Usages) {
-    auto* i1 = b.Construct(ty.i32(), 1_i);
-    auto* i2 = b.Construct(ty.i32(), 2_i);
-    auto* i3 = b.Construct(ty.i32(), 3_i);
+    auto* i1 =
+        mod.CreateInstruction<Construct>(b.InstructionResult(ty.i32()), Vector{b.Constant(1_i)});
+    auto* i2 =
+        mod.CreateInstruction<Construct>(b.InstructionResult(ty.i32()), Vector{b.Constant(2_i)});
+    auto* i3 =
+        mod.CreateInstruction<Construct>(b.InstructionResult(ty.i32()), Vector{b.Constant(3_i)});
 
     auto* target = b.Let(ty.i32())->Result();
 
@@ -97,15 +100,17 @@ TEST_F(IR_ValueDeathTest, Destroy_HasSource) {
         {
             Module mod;
             Builder b{mod};
-            auto* val = b.Add(1_i, 2_i);
+            auto* val = b.Let("l", u32(0))->Result();
             val->Destroy();
         },
         "internal compiler error");
 }
 
 TEST_F(IR_ValueTest, UsageComparison) {
-    auto* i1 = b.Construct(ty.i32(), 1_i);
-    auto* i2 = b.Construct(ty.i32(), 2_i);
+    auto* i1 =
+        mod.CreateInstruction<Construct>(b.InstructionResult(ty.i32()), Vector{b.Constant(1_i)});
+    auto* i2 =
+        mod.CreateInstruction<Construct>(b.InstructionResult(ty.i32()), Vector{b.Constant(2_i)});
 
     Usage r{nullptr, 0};
     Usage s{nullptr, 0};

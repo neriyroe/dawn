@@ -150,6 +150,10 @@ struct Options {
         /// comparisons against one.
         bool replace_unsigned_compare_zero = false;
 
+        /// Set to `true` to polyfill dynamic component stores on boolean vectors with a branchless
+        /// select-based whole vector write operation.
+        bool polyfill_bool_vec_dynamic_store = false;
+
         TINT_REFLECT(Workarounds,
                      polyfill_case_switch,
                      scalarize_max_min_clamp,
@@ -167,7 +171,8 @@ struct Options {
                      cooperative_matrix_stride_is_matrix_elements,
                      collapse_subgroup_min_max,
                      replace_workgroup_atomic_store_with_exchange,
-                     replace_unsigned_compare_zero);
+                     replace_unsigned_compare_zero,
+                     polyfill_bool_vec_dynamic_store);
     };
 
     /// Any options which are controlled by the presence/absence of a vulkan extension.
@@ -206,10 +211,6 @@ struct Options {
         /// Set to `true` to generate polyfill for `dot4I8Packed` and `dot4U8Packed` builtins
         bool dot_4x8_packed = false;
 
-        /// Set to `true` to use the uniform buffer directly, `false` to decompose into array<vec4u,
-        /// ...>.
-        bool use_uniform_buffers = false;
-
         /// Set to `true` to add `MaximallyReconvergesKHR` to entry points.
         /// Takes precedence over `use_subgroup_uniform_control_flow`.
         bool use_maximal_reconvergence = false;
@@ -227,7 +228,6 @@ struct Options {
                      disable_runtime_sized_array_index_clamping,
                      disable_storage_subgroup_matrix_clamping,
                      dot_4x8_packed,
-                     use_uniform_buffers,
                      use_maximal_reconvergence,
                      use_subgroup_uniform_control_flow);
     };

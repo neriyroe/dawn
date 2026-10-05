@@ -1,17 +1,51 @@
-SKIP: FAILED
+#include <metal_stdlib>
+using namespace metal;
 
-$B1: {  # root
-  %t:ptr<handle, texture_2d<f32>, read> = var undef @binding_point(0, 0)
-}
+struct tint_resource_table_metadata_struct {
+  /* 0x0000 */ uint array_length;
+  /* 0x0004 */ array<uint, 1> bindings;
+};
 
-%fs = @fragment func():vec4<f32> [@location(0)] {
-  $B2: {
-    %3:sampler = getResource<sampler> 0i
-    %4:texture_2d<f32> = load %t
-    %5:vec4<f32> = textureSample %4, %3, vec2<f32>(0.0f)
-    ret %5
+struct tint_module_vars_struct {
+  texture2d<float, access::sample> t;
+  const constant ulong* tint_resource_table;
+  const device tint_resource_table_metadata_struct* tint_resource_table_metadata;
+};
+
+struct tint_resource_table_struct_sampler {
+  sampler resource;
+};
+
+struct fs_outputs {
+  float4 tint_symbol [[color(0)]];
+};
+
+float4 fs_inner(tint_module_vars_struct tint_module_vars) {
+  bool v = false;
+  if ((0u < (*tint_module_vars.tint_resource_table_metadata).array_length)) {
+    v = any((uint2((*tint_module_vars.tint_resource_table_metadata).bindings[0u]) == uint2(40u, 41u)));
+  } else {
+    v = false;
   }
+  bool const has_resource = v;
+  uint v_1 = 0u;
+  if (has_resource) {
+    v_1 = (*tint_module_vars.tint_resource_table_metadata).bindings[0u];
+  } else {
+    v_1 = 41u;
+  }
+  uint v_2 = 0u;
+  if (has_resource) {
+    v_2 = 0u;
+  } else {
+    v_2 = (4u + (*tint_module_vars.tint_resource_table_metadata).array_length);
+  }
+  return tint_module_vars.t.sample(reinterpret_cast<const constant tint_resource_table_struct_sampler*>(tint_module_vars.tint_resource_table)[v_2].resource, float2(0.0f));
 }
-Failed to generate: resource tables not supported by the MSL backend
 
-tint executable returned error: exit status 1
+fragment fs_outputs fs(texture2d<float, access::sample> t [[texture(0)]], const constant ulong* tint_resource_table [[buffer(28)]], const device tint_resource_table_metadata_struct* tint_resource_table_metadata [[buffer(29)]]) {
+  tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.t=t, .tint_resource_table=tint_resource_table, .tint_resource_table_metadata=tint_resource_table_metadata};
+  fs_outputs tint_wrapper_result = {};
+  tint_wrapper_result.tint_symbol = fs_inner(tint_module_vars);
+  return tint_wrapper_result;
+}

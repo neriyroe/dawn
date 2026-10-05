@@ -1,19 +1,147 @@
-SKIP: FAILED
+#include <metal_stdlib>
+using namespace metal;
 
-%fs = @fragment func():void {
-  $B1: {
-    %2:texture_1d<f32> = getResource<texture_1d<f32>> 0u
-    %3:vec4<f32> = textureLoad %2, 0i, 0i
-    %t1d:vec4<f32> = let %3
-    %5:texture_2d<i32> = getResource<texture_2d<i32>> 1i
-    %6:vec4<i32> = textureLoad %5, vec2<i32>(0i, 1i), 0i
-    %t2d:vec4<i32> = let %6
-    %8:texture_3d<u32> = getResource<texture_3d<u32>> 2i
-    %9:vec4<u32> = textureLoad %8, vec3<i32>(2i, 1i, 0i), 0i
-    %tcube:vec4<u32> = let %9
-    ret
+struct tint_resource_table_metadata_struct {
+  /* 0x0000 */ uint array_length;
+  /* 0x0004 */ array<uint, 1> bindings;
+};
+
+struct tint_module_vars_struct {
+  const constant ulong* tint_resource_table;
+  const device tint_resource_table_metadata_struct* tint_resource_table_metadata;
+};
+
+struct tint_resource_table_struct_texture_1d_f32 {
+  texture1d<float, access::sample> resource;
+};
+
+struct tint_resource_table_struct_texture_2d_i32 {
+  texture2d<int, access::sample> resource;
+};
+
+struct tint_resource_table_struct_texture_3d_u32 {
+  texture3d<uint, access::sample> resource;
+};
+
+fragment void fs(const constant ulong* tint_resource_table [[buffer(28)]], const device tint_resource_table_metadata_struct* tint_resource_table_metadata [[buffer(29)]]) {
+  tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.tint_resource_table=tint_resource_table, .tint_resource_table_metadata=tint_resource_table_metadata};
+  bool v = false;
+  if ((0u < (*tint_module_vars.tint_resource_table_metadata).array_length)) {
+    v = any((uint2((*tint_module_vars.tint_resource_table_metadata).bindings[0u]) == uint2(1u, 2u)));
+  } else {
+    v = false;
   }
+  uint v_1 = 0u;
+  if (v) {
+    v_1 = 0u;
+  } else {
+    v_1 = (0u + (*tint_module_vars.tint_resource_table_metadata).array_length);
+  }
+  texture1d<float, access::sample> const v_2 = reinterpret_cast<const constant tint_resource_table_struct_texture_1d_f32*>(tint_module_vars.tint_resource_table)[v_1].resource;
+  bool v_3 = false;
+  if ((0u < (*tint_module_vars.tint_resource_table_metadata).array_length)) {
+    v_3 = any((uint2((*tint_module_vars.tint_resource_table_metadata).bindings[0u]) == uint2(1u, 2u)));
+  } else {
+    v_3 = false;
+  }
+  uint v_4 = 0u;
+  if (v_3) {
+    v_4 = 0u;
+  } else {
+    v_4 = (0u + (*tint_module_vars.tint_resource_table_metadata).array_length);
+  }
+  bool v_5 = false;
+  if ((0u < (*tint_module_vars.tint_resource_table_metadata).array_length)) {
+    v_5 = any((uint2((*tint_module_vars.tint_resource_table_metadata).bindings[0u]) == uint2(1u, 2u)));
+  } else {
+    v_5 = false;
+  }
+  uint v_6 = 0u;
+  if (v_5) {
+    v_6 = 0u;
+  } else {
+    v_6 = (0u + (*tint_module_vars.tint_resource_table_metadata).array_length);
+  }
+  (min(0u, (reinterpret_cast<const constant tint_resource_table_struct_texture_1d_f32*>(tint_module_vars.tint_resource_table)[v_4].resource.get_num_mip_levels() - 1u)));
+  float4 const t1d = v_2.read(min(0u, (uint(reinterpret_cast<const constant tint_resource_table_struct_texture_1d_f32*>(tint_module_vars.tint_resource_table)[v_6].resource.get_width()) - 1u)));
+  bool v_7 = false;
+  if ((1u < (*tint_module_vars.tint_resource_table_metadata).array_length)) {
+    v_7 = ((*tint_module_vars.tint_resource_table_metadata).bindings[1u] == 9u);
+  } else {
+    v_7 = false;
+  }
+  uint v_8 = 0u;
+  if (v_7) {
+    v_8 = 1u;
+  } else {
+    v_8 = (2u + (*tint_module_vars.tint_resource_table_metadata).array_length);
+  }
+  texture2d<int, access::sample> const v_9 = reinterpret_cast<const constant tint_resource_table_struct_texture_2d_i32*>(tint_module_vars.tint_resource_table)[v_8].resource;
+  bool v_10 = false;
+  if ((1u < (*tint_module_vars.tint_resource_table_metadata).array_length)) {
+    v_10 = ((*tint_module_vars.tint_resource_table_metadata).bindings[1u] == 9u);
+  } else {
+    v_10 = false;
+  }
+  uint v_11 = 0u;
+  if (v_10) {
+    v_11 = 1u;
+  } else {
+    v_11 = (2u + (*tint_module_vars.tint_resource_table_metadata).array_length);
+  }
+  bool v_12 = false;
+  if ((1u < (*tint_module_vars.tint_resource_table_metadata).array_length)) {
+    v_12 = ((*tint_module_vars.tint_resource_table_metadata).bindings[1u] == 9u);
+  } else {
+    v_12 = false;
+  }
+  uint v_13 = 0u;
+  if (v_12) {
+    v_13 = 1u;
+  } else {
+    v_13 = (2u + (*tint_module_vars.tint_resource_table_metadata).array_length);
+  }
+  texture2d<int, access::sample> const v_14 = reinterpret_cast<const constant tint_resource_table_struct_texture_2d_i32*>(tint_module_vars.tint_resource_table)[v_13].resource;
+  uint const v_15 = min(0u, (reinterpret_cast<const constant tint_resource_table_struct_texture_2d_i32*>(tint_module_vars.tint_resource_table)[v_11].resource.get_num_mip_levels() - 1u));
+  int4 const t2d = v_9.read(min(uint2(0u, 1u), (uint2(v_14.get_width(v_15), v_14.get_height(v_15)) - uint2(1u))), v_15);
+  bool v_16 = false;
+  if ((2u < (*tint_module_vars.tint_resource_table_metadata).array_length)) {
+    v_16 = ((*tint_module_vars.tint_resource_table_metadata).bindings[2u] == 20u);
+  } else {
+    v_16 = false;
+  }
+  uint v_17 = 0u;
+  if (v_16) {
+    v_17 = 2u;
+  } else {
+    v_17 = (3u + (*tint_module_vars.tint_resource_table_metadata).array_length);
+  }
+  texture3d<uint, access::sample> const v_18 = reinterpret_cast<const constant tint_resource_table_struct_texture_3d_u32*>(tint_module_vars.tint_resource_table)[v_17].resource;
+  bool v_19 = false;
+  if ((2u < (*tint_module_vars.tint_resource_table_metadata).array_length)) {
+    v_19 = ((*tint_module_vars.tint_resource_table_metadata).bindings[2u] == 20u);
+  } else {
+    v_19 = false;
+  }
+  uint v_20 = 0u;
+  if (v_19) {
+    v_20 = 2u;
+  } else {
+    v_20 = (3u + (*tint_module_vars.tint_resource_table_metadata).array_length);
+  }
+  bool v_21 = false;
+  if ((2u < (*tint_module_vars.tint_resource_table_metadata).array_length)) {
+    v_21 = ((*tint_module_vars.tint_resource_table_metadata).bindings[2u] == 20u);
+  } else {
+    v_21 = false;
+  }
+  uint v_22 = 0u;
+  if (v_21) {
+    v_22 = 2u;
+  } else {
+    v_22 = (3u + (*tint_module_vars.tint_resource_table_metadata).array_length);
+  }
+  texture3d<uint, access::sample> const v_23 = reinterpret_cast<const constant tint_resource_table_struct_texture_3d_u32*>(tint_module_vars.tint_resource_table)[v_22].resource;
+  uint const v_24 = min(0u, (reinterpret_cast<const constant tint_resource_table_struct_texture_3d_u32*>(tint_module_vars.tint_resource_table)[v_20].resource.get_num_mip_levels() - 1u));
+  uint4 const tcube = v_18.read(min(uint3(2u, 1u, 0u), (uint3(v_23.get_width(v_24), v_23.get_height(v_24), v_23.get_depth(v_24)) - uint3(1u))), v_24);
 }
-Failed to generate: resource tables not supported by the MSL backend
-
-tint executable returned error: exit status 1

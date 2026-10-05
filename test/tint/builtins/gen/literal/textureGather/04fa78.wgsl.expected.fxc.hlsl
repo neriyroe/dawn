@@ -6,7 +6,7 @@ RWByteAddressBuffer prevent_dce : register(u0);
 TextureCubeArray<int4> arg_1 : register(t1, space1);
 SamplerState arg_2 : register(s2, space1);
 int4 textureGather_04fa78() {
-  int4 res = arg_1.GatherGreen(arg_2, float4((1.0f).xxx, float(1u)));
+  int4 res = arg_1.GatherGreen(arg_2, (1.0f).xxxx);
   return res;
 }
 
@@ -22,7 +22,7 @@ RWByteAddressBuffer prevent_dce : register(u0);
 TextureCubeArray<int4> arg_1 : register(t1, space1);
 SamplerState arg_2 : register(s2, space1);
 int4 textureGather_04fa78() {
-  int4 res = arg_1.GatherGreen(arg_2, float4((1.0f).xxx, float(1u)));
+  int4 res = arg_1.GatherGreen(arg_2, (1.0f).xxxx);
   return res;
 }
 
@@ -48,7 +48,7 @@ struct vertex_main_outputs {
 TextureCubeArray<int4> arg_1 : register(t1, space1);
 SamplerState arg_2 : register(s2, space1);
 int4 textureGather_04fa78() {
-  int4 res = arg_1.GatherGreen(arg_2, float4((1.0f).xxx, float(1u)));
+  int4 res = arg_1.GatherGreen(arg_2, (1.0f).xxxx);
   return res;
 }
 

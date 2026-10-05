@@ -56,24 +56,22 @@ class WorkDoneEvent : public TrackedEvent {
 
     EventType GetType() override { return kType; }
 
-    WireResult ReadyHook(FutureID futureID,
-                         WGPUQueueWorkDoneStatus status,
-                         WGPUStringView message) {
+    WireResult ReadyHook(FutureID futureID, wgpu::QueueWorkDoneStatus status, StringView message) {
         mStatus = status;
-        mMessage = ToString(message);
+        mMessage = message;
         return WireResult::Success;
     }
 
   private:
     void CompleteImpl(FutureID futureID, EventCompletionType completionType) override {
         if (completionType == EventCompletionType::Shutdown) {
-            mStatus = WGPUQueueWorkDoneStatus_CallbackCancelled;
+            mStatus = wgpu::QueueWorkDoneStatus::CallbackCancelled;
             mMessage = "A valid external Instance reference no longer exists.";
         }
         void* userdata1 = mUserdata1.ExtractAsDangling();
         void* userdata2 = mUserdata2.ExtractAsDangling();
         if (mCallback) {
-            mCallback(mStatus, ToOutputStringView(mMessage), userdata1, userdata2);
+            mCallback(ToAPI(mStatus), ToOutputStringView(mMessage), userdata1, userdata2);
         }
     }
 
@@ -81,11 +79,13 @@ class WorkDoneEvent : public TrackedEvent {
     raw_ptr<void> mUserdata1;
     raw_ptr<void> mUserdata2;
 
-    WGPUQueueWorkDoneStatus mStatus = WGPUQueueWorkDoneStatus_Success;
+    wgpu::QueueWorkDoneStatus mStatus = wgpu::QueueWorkDoneStatus::Success;
     std::string mMessage;
 };
 
 }  // anonymous namespace
+
+using MemoryHandleUse = MemoryTransferService::MemoryHandleUse;
 
 Queue::~Queue() = default;
 
@@ -108,7 +108,7 @@ void Queue::APISubmit(Span<CommandBuffer* const> commands) {
     QueueSubmitCmd cmd;
     cmd.self = ToAPI(this);
     cmd.commands = ToAPI(commands);
-    GetClient()->SerializeCommand(cmd);
+    GetClient()->SerializeCommand(std::move(cmd));
 
     // Immediately request a callback for OnSubmittedWorkDone to update mCompletedSubmitIndex before
     // any OnSubmittedWorkDone callbacks from the application.
@@ -136,9 +136,9 @@ void Queue::APISubmit(Span<CommandBuffer* const> commands) {
 }
 
 WireResult Client::DoQueueWorkDoneCallback(ObjectId instanceId,
-                                           WGPUFuture future,
-                                           WGPUQueueWorkDoneStatus status,
-                                           WGPUStringView message) {
+                                           Future future,
+                                           wgpu::QueueWorkDoneStatus status,
+                                           StringView message) {
     return SetFutureReady<WorkDoneEvent>(instanceId, future.id, status, message);
 }
 
@@ -159,7 +159,7 @@ Future Queue::APIOnSubmittedWorkDone(const WGPUQueueWorkDoneCallbackInfo& callba
     cmd.instanceId = GetInstance()->GetWireHandle(client).id;
     cmd.future = {futureIDInternal};
 
-    client->SerializeCommand(cmd);
+    client->SerializeCommand(std::move(cmd));
     return {futureIDInternal};
 }
 
@@ -175,14 +175,15 @@ void Queue::APIWriteBuffer(Buffer* buffer, uint64_t bufferOffset, Span<const std
     cmd.bufferOffset = bufferOffset;
     cmd.data = data;
 
-    GetClient()->SerializeCommand(cmd);
+    GetClient()->SerializeCommand(std::move(cmd));
 }
 
 void Queue::WriteBufferXL(Buffer* buffer, uint64_t bufferOffset, Span<const std::byte> data) {
     Client* client = GetClient();
 
     // Create the MemoryHandle.
-    auto memoryHandle = client->GetMemoryTransferService()->CreateMemoryHandle(data.size());
+    auto memoryHandle = client->GetMemoryTransferService()->CreateMemoryHandle(
+        data.size(), MemoryHandleUse::BulkData);
     if (memoryHandle == nullptr) {
         // There was an OOM that we cannot handle in WriteBuffer: trigger a device loss.
         client->Disconnect();
@@ -192,36 +193,25 @@ void Queue::WriteBufferXL(Buffer* buffer, uint64_t bufferOffset, Span<const std:
     // Write the data to the allocated memory.
     Span<std::byte>(memoryHandle->GetData()).CopyFrom(data);
 
-    // Prepare to serialize the handle and the data update command.
-    size_t memoryHandleCreateInfoLength = memoryHandle->GetSerializeCreateSize();
-    size_t memoryDataUpdateInfoLength = memoryHandle->GetSerializeDataUpdateSize(0u, data.size());
-
     QueueWriteBufferXlCmd cmd;
     cmd.queueId = GetWireHandle(client).id;
     cmd.bufferId = buffer->GetWireHandle(client).id;
     cmd.bufferOffset = bufferOffset;
     cmd.size = data.size();
 
-    // SAFETY: These Spans are NEVER supposed to be read/serialized, so nullptr is fine.
-    // The members are not serialized because skip_serialize, but are Spans so that on
-    // the deserialization side we have well-formed members.
-    // TODO(https://crbug.com/542275488): Clean these up if when we update command extension
-    // serialization to serialize into this span directly.
-    cmd.memoryHandleCreateInfo = DAWN_UNSAFE_BUFFERS(Span<const std::byte>(
-        static_cast<const std::byte*>(nullptr), memoryHandleCreateInfoLength));
-    cmd.memoryDataUpdateInfo = DAWN_UNSAFE_BUFFERS(
-        Span<const std::byte>(static_cast<const std::byte*>(nullptr), memoryDataUpdateInfoLength));
-
-    client->SerializeCommand(
-        cmd,
-        // Extensions to replace fields skipped by skip_serialize.
-        CommandExtension{memoryHandleCreateInfoLength,
-                         [&](Span<volatile std::byte> serializeBuffer) {
-                             memoryHandle->SerializeCreate(serializeBuffer);
-                         }},
-        CommandExtension{memoryDataUpdateInfoLength, [&](Span<volatile std::byte> serializeBuffer) {
-                             memoryHandle->SerializeDataUpdate(serializeBuffer, 0u, data.size());
-                         }});
+    client->SerializeCommand(std::move(cmd),
+                             // Extensions to replace fields skipped by skip_serialize.
+                             CommandExtension<&QueueWriteBufferXlCmd::memoryHandleCreateInfo>{
+                                 memoryHandle->GetSerializeCreateSize(),
+                                 [&](Span<volatile std::byte> serializeBuffer) {
+                                     memoryHandle->SerializeCreate(serializeBuffer);
+                                 }},
+                             CommandExtension<&QueueWriteBufferXlCmd::memoryDataUpdateInfo>{
+                                 memoryHandle->GetSerializeDataUpdateSize(0u, data.size()),
+                                 [&](Span<volatile std::byte> serializeBuffer) {
+                                     memoryHandle->SerializeDataUpdate(serializeBuffer, 0u,
+                                                                       data.size());
+                                 }});
 }
 
 void Queue::APIWriteTexture(const TexelCopyTextureInfo* destination,
@@ -235,12 +225,12 @@ void Queue::APIWriteTexture(const TexelCopyTextureInfo* destination,
 
     QueueWriteTextureCmd cmd;
     cmd.queueId = GetWireHandle(GetClient()).id;
-    cmd.destination = ToAPI(destination);
+    cmd.destination = ToWireCmd(destination);
     cmd.data = data;
-    cmd.dataLayout = ToAPI(dataLayout);
-    cmd.writeSize = ToAPI(writeSize);
+    cmd.dataLayout = ToWireCmd(dataLayout);
+    cmd.writeSize = ToWireCmd(writeSize);
 
-    GetClient()->SerializeCommand(cmd);
+    GetClient()->SerializeCommand(std::move(cmd));
 }
 
 void Queue::WriteTextureXL(const TexelCopyTextureInfo* destination,
@@ -250,7 +240,8 @@ void Queue::WriteTextureXL(const TexelCopyTextureInfo* destination,
     Client* client = GetClient();
 
     // Create the MemoryHandle.
-    auto memoryHandle = client->GetMemoryTransferService()->CreateMemoryHandle(data.size());
+    auto memoryHandle = client->GetMemoryTransferService()->CreateMemoryHandle(
+        data.size(), MemoryHandleUse::BulkData);
     if (memoryHandle == nullptr) {
         // There was an OOM that we cannot handle in WriteBuffer: trigger a device loss.
         client->Disconnect();
@@ -260,34 +251,26 @@ void Queue::WriteTextureXL(const TexelCopyTextureInfo* destination,
     // Write the data to the allocated memory.
     Span<std::byte>(memoryHandle->GetData()).CopyFrom(data);
 
-    // Prepare to serialize the handle and the data update command.
-    size_t memoryHandleCreateInfoLength = memoryHandle->GetSerializeCreateSize();
-    size_t memoryDataUpdateInfoLength = memoryHandle->GetSerializeDataUpdateSize(0u, data.size());
-
     QueueWriteTextureXlCmd cmd;
     cmd.queueId = GetWireHandle(GetClient()).id;
-    cmd.destination = ToAPI(destination);
+    cmd.destination = ToWireCmd(destination);
     cmd.dataSize = data.size();
-    cmd.dataLayout = ToAPI(dataLayout);
-    cmd.writeSize = ToAPI(writeSize);
-    // SAFETY: These Spans are NEVER supposed to be read/serialized, so nullptr is fine.
-    // The members are not serialized because skip_serialize, but are Spans so that on
-    // the deserialization side we have well-formed members.
-    cmd.memoryHandleCreateInfo = DAWN_UNSAFE_BUFFERS(Span<const std::byte>(
-        static_cast<const std::byte*>(nullptr), memoryHandleCreateInfoLength));
-    cmd.memoryDataUpdateInfo = DAWN_UNSAFE_BUFFERS(
-        Span<const std::byte>(static_cast<const std::byte*>(nullptr), memoryDataUpdateInfoLength));
+    cmd.dataLayout = ToWireCmd(dataLayout);
+    cmd.writeSize = ToWireCmd(writeSize);
 
-    client->SerializeCommand(
-        cmd,
-        // Extensions to replace fields skipped by skip_serialize.
-        CommandExtension{memoryHandleCreateInfoLength,
-                         [&](Span<volatile std::byte> serializeBuffer) {
-                             memoryHandle->SerializeCreate(serializeBuffer);
-                         }},
-        CommandExtension{memoryDataUpdateInfoLength, [&](Span<volatile std::byte> serializeBuffer) {
-                             memoryHandle->SerializeDataUpdate(serializeBuffer, 0u, data.size());
-                         }});
+    client->SerializeCommand(std::move(cmd),
+                             // Extensions to replace fields skipped by skip_serialize.
+                             CommandExtension<&QueueWriteTextureXlCmd::memoryHandleCreateInfo>{
+                                 memoryHandle->GetSerializeCreateSize(),
+                                 [&](Span<volatile std::byte> serializeBuffer) {
+                                     memoryHandle->SerializeCreate(serializeBuffer);
+                                 }},
+                             CommandExtension<&QueueWriteTextureXlCmd::memoryDataUpdateInfo>{
+                                 memoryHandle->GetSerializeDataUpdateSize(0u, data.size()),
+                                 [&](Span<volatile std::byte> serializeBuffer) {
+                                     memoryHandle->SerializeDataUpdate(serializeBuffer, 0u,
+                                                                       data.size());
+                                 }});
 }
 
 }  // namespace dawn::wire::client

@@ -34,7 +34,7 @@
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/traverse.h"
 #include "src/tint/lang/core/ir/user_call.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/matrix.h"
 #include "src/tint/lang/spirv/type/explicit_layout_array.h"
 
@@ -474,7 +474,7 @@ struct State {
             if (auto* constant = src->As<core::ir::Constant>()) {
                 el = b.Constant(constant->Value()->Index(i));
             } else {
-                el = b.Access(src_elements.type, src, u32(i))->Result();
+                el = b.Access(src_elements.type, src, u32(i));
             }
 
             // Recurse to convert strided matrices nested in arrays if needed.
@@ -484,7 +484,7 @@ struct State {
 
             elements.Push(el);
         }
-        return b.Construct(dst, std::move(elements))->Result();
+        return b.Construct(dst, std::move(elements));
     }
 };
 

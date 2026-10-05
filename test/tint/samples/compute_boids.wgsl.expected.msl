@@ -60,25 +60,13 @@ struct SimParams {
   /* 0x0018 */ float rule3Scale;
 };
 
-template<typename T, size_t N>
-struct tint_array {
-  const constant T& operator[](size_t i) const constant { return elements[i]; }
-  device T& operator[](size_t i) device { return elements[i]; }
-  const device T& operator[](size_t i) const device { return elements[i]; }
-  thread T& operator[](size_t i) thread { return elements[i]; }
-  const thread T& operator[](size_t i) const thread { return elements[i]; }
-  threadgroup T& operator[](size_t i) threadgroup { return elements[i]; }
-  const threadgroup T& operator[](size_t i) const threadgroup { return elements[i]; }
-  T elements[N];
-};
-
 struct Particle {
   /* 0x0000 */ float2 pos;
   /* 0x0008 */ float2 vel;
 };
 
 struct Particles {
-  /* 0x0000 */ tint_array<Particle, 5> particles;
+  /* 0x0000 */ array<Particle, 5> particles;
 };
 
 struct tint_module_vars_struct {
@@ -118,14 +106,14 @@ void comp_main_inner(uint3 gl_GlobalInvocationID, tint_module_vars_struct tint_m
       vel = (*tint_module_vars.particlesA).particles[i].vel.xy;
       if ((distance(pos, vPos) < (*tint_module_vars.params).rule1Distance)) {
         cMass = (cMass + pos);
-        cMassCount = as_type<int>((as_type<uint>(cMassCount) + as_type<uint>(1)));
+        cMassCount = as_type<int>((as_type<uint>(cMassCount) + 1u));
       }
       if ((distance(pos, vPos) < (*tint_module_vars.params).rule2Distance)) {
         colVel = (colVel - (pos - vPos));
       }
       if ((distance(pos, vPos) < (*tint_module_vars.params).rule3Distance)) {
         cVel = (cVel + vel);
-        cVelCount = as_type<int>((as_type<uint>(cVelCount) + as_type<uint>(1)));
+        cVelCount = as_type<int>((as_type<uint>(cVelCount) + 1u));
       }
       {
         i = (i + 1u);

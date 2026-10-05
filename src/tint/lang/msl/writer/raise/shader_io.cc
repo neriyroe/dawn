@@ -32,7 +32,7 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/transform/shader_io.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 
 using namespace tint::core::fluent_types;     // NOLINT
 using namespace tint::core::number_suffixes;  // NOLINT
@@ -218,7 +218,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         auto index = input_indices[idx];
         auto* param = input_params[index.param_index];
         if (param->Type()->Is<core::type::Struct>()) {
-            return builder.Access(inputs[idx].type, param, u32(index.member_index))->Result();
+            return builder.Access(inputs[idx].type, param, u32(index.member_index));
         } else {
             return param;
         }
@@ -311,7 +311,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
             config.immediate_data_layout.GetValue(builder, core::InternalImmediate::kFragDepthMin);
         auto* max =
             config.immediate_data_layout.GetValue(builder, core::InternalImmediate::kFragDepthMax);
-        return builder.Clamp(frag_depth, min, max)->Result();
+        return builder.Clamp(frag_depth, min, max);
     }
 };
 

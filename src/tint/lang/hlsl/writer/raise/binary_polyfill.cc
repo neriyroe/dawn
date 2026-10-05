@@ -32,7 +32,7 @@
 #include "src/tint/lang/core/fluent_types.h"  // IWYU pragma: export
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/manager.h"
 #include "src/tint/lang/hlsl/ir/builtin_call.h"
 
@@ -117,7 +117,7 @@ struct State {
 
             auto* trunc = b.Call(type, core::BuiltinFn::kTrunc, d);
             auto* mul = b.Multiply(trunc, binary->RHS());
-            b.SubtractWithResult(binary->DetachResult(), binary->LHS(), mul);
+            b.SubtractReplaceResult(binary->DetachResult(), binary->LHS(), mul);
         });
         binary->Destroy();
     }

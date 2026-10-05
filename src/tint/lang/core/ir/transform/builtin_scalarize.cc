@@ -33,7 +33,7 @@
 #include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/sampled_texture.h"
 #include "src/tint/lang/core/type/texture.h"
 
@@ -109,7 +109,7 @@ struct State {
                         // It would be an error to scalarize over different sized vectors.
                         TINT_IR_ASSERT(ir, common_vec_width == vec->Width());
                         auto* access_arg = b.Access(vec->DeepestElement(), e, u32(i));
-                        scalar_args.Push(access_arg->Result());
+                        scalar_args.Push(access_arg);
                     } else {
                         TINT_IR_ASSERT(ir, e->Type()->IsScalar());
                         // This code generalizes for vector functions that additionally take scalar
@@ -121,10 +121,10 @@ struct State {
 
                 auto* scalar_call =
                     b.Call(scalar_return_type, builtin->Func(), std::move(scalar_args));
-                args.Push(scalar_call->Result());
+                args.Push(scalar_call);
             }
             // Places result back into a vector.
-            b.ConstructWithResult(builtin->DetachResult(), std::move(args));
+            b.ConstructReplaceResult(builtin->DetachResult(), std::move(args));
         });
         builtin->Destroy();
     }

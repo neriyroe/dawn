@@ -39,12 +39,14 @@ class Module;
 namespace tint::spirv::writer::raise {
 
 struct PolyfillConfig {
+    bool disable_robustness = false;
     bool use_vulkan_memory_model = false;
     SpvVersion version = SpvVersion::kSpv13;
     bool texture_sample_compare_depth_cube_array = false;
     bool texture_sample_compare_2d_polyfill = false;
     bool cooperative_matrix_stride_is_matrix_elements = false;
     bool replace_workgroup_atomic_store_with_exchange = false;
+    bool rerun = false;
 };
 
 /// BuiltinPolyfill is a transform that replaces calls to builtins with polyfills and calls to

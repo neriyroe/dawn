@@ -31,22 +31,14 @@
 #include <limits>
 #include <utility>
 
-#include "src/utils/compiler.h"
 #include "src/utils/platform.h"
 
 #if DAWN_PLATFORM_IS(WINDOWS)
 #include "src/utils/windows_with_undefs.h"
-#elif DAWN_PLATFORM_IS(FUCHSIA)
-#include <poll.h>
-#include <unistd.h>
-#elif DAWN_PLATFORM_IS(POSIX)
-#include <sys/poll.h>
-#include <unistd.h>
 #endif
 
-#include "absl/container/inlined_vector.h"
 #include "src/dawn/native/SystemEvent.h"
-#include "src/utils/log.h"
+#include "src/utils/span.h"
 
 namespace dawn::native {
 
@@ -69,75 +61,10 @@ T ToMillisecondsGeneric(Nanoseconds timeout) {
 #define ToMilliseconds ToMillisecondsGeneric<int, -1>
 #endif
 
-// WaitAnySystemEvent on an iterator range converts those iterators to the
-// platform-specific wait handles, and then waits on them.
-template <typename It>
-[[nodiscard]] bool WaitAnySystemEvent(It begin, It end, Nanoseconds timeout) {
-    static_assert(std::is_same_v<typename std::iterator_traits<It>::value_type,
-                                 std::pair<const SystemEventReceiver&, bool*>>);
-    size_t count = sign_cast(std::distance(begin, end));
-    if (count == 0) {
-        return false;
-    }
-#if DAWN_PLATFORM_IS(WINDOWS)
-    absl::InlinedVector<HANDLE, 4 /* avoid heap allocation for small waits */> handles;
-    handles.reserve(count);
-    for (auto it = begin; it != end; DAWN_UNSAFE_TODO(++it)) {
-        handles.push_back((*it).first.mPrimitive.Get());
-    }
-    DAWN_ASSERT(handles.size() <= MAXIMUM_WAIT_OBJECTS);
-    DWORD status = WaitForMultipleObjects(DWORD(handles.size()), handles.data(),
-                                          /*bWaitAll=*/false, ToMilliseconds(timeout));
-    if (status == WAIT_TIMEOUT) {
-        return false;
-    }
-    DAWN_CHECK(WAIT_OBJECT_0 <= status && status < WAIT_OBJECT_0 + count);
-    const ptrdiff_t completedIndex = sign_cast(status - WAIT_OBJECT_0);
-
-    *(*(DAWN_UNSAFE_TODO(begin + completedIndex))).second = true;
-    return true;
-#elif DAWN_PLATFORM_IS(POSIX)
-    absl::InlinedVector<pollfd, 4 /* avoid heap allocation for small waits */> pollfds;
-    pollfds.reserve(count);
-    for (auto it = begin; it != end; DAWN_UNSAFE_TODO(++it)) {
-        pollfds.push_back(pollfd{static_cast<int>((*it).first.mPrimitive.Get()), POLLIN, 0});
-    }
-    int status = 0;
-    bool retry = false;
-    do {
-        retry = false;
-        status =
-            poll(pollfds.data(), checked_cast<nfds_t>(pollfds.size()), ToMilliseconds(timeout));
-        if (status < 0) {
-            int lErrno = errno;
-            if (EAGAIN == lErrno || EINTR == lErrno) {
-                retry = true;
-            } else {
-                dawn::ErrorLog() << "poll errno=" << lErrno;
-            }
-        }
-    } while (retry);
-
-    DAWN_CHECK(status >= 0);
-    if (status == 0) {
-        return false;
-    }
-
-    size_t i = 0;
-    for (auto it = begin; it != end; DAWN_UNSAFE_TODO(++it), ++i) {
-        int revents = pollfds[i].revents;
-        static constexpr int kAllowedEvents = POLLIN | POLLHUP;
-        DAWN_CHECK((revents & kAllowedEvents) == revents);
-
-        bool ready = (pollfds[i].revents & POLLIN) != 0;
-        *(*it).second = ready;
-    }
-
-    return true;
-#else
-    DAWN_UNREACHABLE();  // Not implemented.
-#endif
-}
+// WaitAnySystemEvent on an iterator range converts those iterators to the platform-specific wait
+// handles, and then waits on them.
+[[nodiscard]] bool WaitAnySystemEvent(Span<std::pair<const SystemEventReceiver&, bool*>> events,
+                                      Nanoseconds timeout);
 
 }  // namespace dawn::native
 

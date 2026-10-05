@@ -37,7 +37,7 @@
 #include "src/dawn/native/Instance.h"
 #include "src/dawn/native/SwapChain.h"
 #include "src/dawn/native/Texture.h"
-#include "src/dawn/native/utils/WGPUHelpers.h"
+#include "src/dawn/native/utils/NativeHelpers.h"
 #include "src/utils/platform.h"
 
 #if DAWN_PLATFORM_IS(WINDOWS)
@@ -96,7 +96,7 @@ absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConv
 bool InheritsFromCAMetalLayer(void* obj);
 #endif  // defined(DAWN_ENABLE_BACKEND_METAL)
 
-ResultOrError<UnpackedPtr<SurfaceDescriptor>> ValidateSurfaceDescriptor(
+ResultOrValError<UnpackedPtr<SurfaceDescriptor>> ValidateSurfaceDescriptor(
     InstanceBase* instance,
     const SurfaceDescriptor* rawDescriptor) {
     DAWN_INVALID_IF(rawDescriptor->nextInChain == nullptr,
@@ -220,10 +220,10 @@ ResultOrError<UnpackedPtr<SurfaceDescriptor>> ValidateSurfaceDescriptor(
     }
 }
 
-MaybeError ValidateSurfaceConfiguration(DeviceBase* device,
-                                        const PhysicalDeviceSurfaceCapabilities& capabilities,
-                                        const SurfaceConfiguration* config,
-                                        const Surface* surface) {
+MaybeValError ValidateSurfaceConfiguration(DeviceBase* device,
+                                           const PhysicalDeviceSurfaceCapabilities& capabilities,
+                                           const SurfaceConfiguration* config,
+                                           const Surface* surface) {
     UnpackedPtr<SurfaceConfiguration> unpacked;
     DAWN_TRY_ASSIGN(unpacked, ValidateAndUnpack(config));
 
@@ -373,7 +373,7 @@ Surface::Surface(InstanceBase* instance, const UnpackedPtr<SurfaceDescriptor>& d
 
 Surface::~Surface() {
     if (mSwapChain != nullptr) {
-        [[maybe_unused]] bool error = mInstance->ConsumedError(Unconfigure());
+        std::ignore = mInstance->ConsumedError(Unconfigure());
     }
 }
 
@@ -508,14 +508,34 @@ MaybeError Surface::Configure(const SurfaceConfiguration* configIn) {
     return {};
 }
 
+void Surface::DetachSwapChain(SwapChainBase* swapChain) {
+    DAWN_ASSERT(swapChain != nullptr);
+    DAWN_ASSERT(swapChain->GetSurface() == this);
+
+    if (mSwapChain.Get() == swapChain) {
+        swapChain->DetachFromSurface();
+        mSwapChain = nullptr;
+        // A failed Configure() with another device leaves the previous swapchain attached, in
+        // which case the surface stays configured with that other device.
+        if (mCurrentDevice.Get() == swapChain->GetDevice()) {
+            mCurrentDevice = nullptr;
+        }
+    } else {
+        DAWN_UNREACHABLE();
+    }
+}
+
 MaybeError Surface::Unconfigure() {
     if (IsError()) {
         DAWN_CHECK(mSwapChain == nullptr);
         DAWN_CHECK(mCurrentDevice == nullptr);
         return DAWN_VALIDATION_ERROR("%s is invalid.", this);
     }
+    // Unconfiguring an unconfigured surface is a no-op.
     mCurrentDevice = nullptr;
-    DAWN_INVALID_IF(!mSwapChain.Get(), "%s is not configured.", this);
+    if (mSwapChain == nullptr) {
+        return {};
+    }
 
     // Detach synchronously instead of keeping the swapchain around for a later Configure, so the
     // window is handed back to the application by the time Unconfigure() returns.
@@ -538,7 +558,8 @@ MaybeError Surface::Unconfigure() {
     return result;
 }
 
-MaybeError Surface::GetCapabilities(AdapterBase* adapter, SurfaceCapabilities* capabilities) const {
+MaybeValError Surface::GetCapabilities(AdapterBase* adapter,
+                                       SurfaceCapabilities* capabilities) const {
     DAWN_INVALID_IF(IsError(), "%s is invalid.", this);
 
     PhysicalDeviceSurfaceCapabilities caps;
@@ -546,17 +567,17 @@ MaybeError Surface::GetCapabilities(AdapterBase* adapter, SurfaceCapabilities* c
         caps, adapter->GetPhysicalDevice()->GetSurfaceCapabilities(adapter->GetInstance(), this));
     capabilities->nextInChain = nullptr;
     capabilities->usages = caps.usages;
-    capabilities->formats = utils::AllocateApiSeqFromStdVector(caps.formats);
-    capabilities->presentModes = utils::AllocateApiSeqFromStdVector(caps.presentModes);
-    capabilities->alphaModes = utils::AllocateApiSeqFromStdVector(caps.alphaModes);
+    capabilities->formats = HeapArrayFrom(caps.formats).MoveToSpan();
+    capabilities->presentModes = HeapArrayFrom(caps.presentModes).MoveToSpan();
+    capabilities->alphaModes = HeapArrayFrom(caps.alphaModes).MoveToSpan();
 
     return {};
 }
 
 void APISurfaceCapabilitiesFreeMembers(WGPUSurfaceCapabilities capabilities) {
-    utils::FreeApiSeq(&capabilities.formats, &capabilities.formatCount);
-    utils::FreeApiSeq(&capabilities.presentModes, &capabilities.presentModeCount);
-    utils::FreeApiSeq(&capabilities.alphaModes, &capabilities.alphaModeCount);
+    delete[] capabilities.formats;
+    delete[] capabilities.presentModes;
+    delete[] capabilities.alphaModes;
 }
 
 MaybeError Surface::GetCurrentTexture(SurfaceTexture* surfaceTexture) const {
@@ -589,16 +610,16 @@ const std::string& Surface::GetLabel() const {
 void Surface::APIConfigure(const SurfaceConfiguration* config) {
     MaybeError maybeError = Configure(config);
     if (!GetCurrentDevice()) {
-        [[maybe_unused]] bool error = mInstance->ConsumedError(std::move(maybeError));
+        std::ignore = mInstance->ConsumedError(std::move(maybeError));
     } else {
-        [[maybe_unused]] bool error = GetCurrentDevice()->ConsumedError(
-            std::move(maybeError), "calling %s.Configure().", this);
+        std::ignore = GetCurrentDevice()->ConsumedError(std::move(maybeError),
+                                                        "calling %s.Configure().", this);
     }
 }
 
 wgpu::Status Surface::APIGetCapabilities(AdapterBase* adapter,
                                          SurfaceCapabilities* capabilities) const {
-    MaybeError maybeError = GetCapabilities(adapter, capabilities);
+    MaybeValError maybeError = GetCapabilities(adapter, capabilities);
     if (!GetCurrentDevice()) {
         return mInstance->ConsumedError(std::move(maybeError)) ? wgpu::Status::Error
                                                                : wgpu::Status::Success;
@@ -614,9 +635,9 @@ void Surface::APIGetCurrentTexture(SurfaceTexture* surfaceTexture) const {
     MaybeError maybeError = GetCurrentTexture(surfaceTexture);
 
     if (!GetCurrentDevice()) {
-        [[maybe_unused]] bool error = mInstance->ConsumedError(std::move(maybeError));
+        std::ignore = mInstance->ConsumedError(std::move(maybeError));
     } else {
-        [[maybe_unused]] bool error = GetCurrentDevice()->ConsumedError(std::move(maybeError));
+        std::ignore = GetCurrentDevice()->ConsumedError(std::move(maybeError));
     }
 }
 
@@ -624,12 +645,12 @@ wgpu::Status Surface::APIPresent() {
     // Validation that the surface is configured. Note this is synchronous
     // validation so it can't be skipped even if the surface is an error.
     if (!GetCurrentDevice()) {
-        [[maybe_unused]] bool error = mInstance->ConsumedError(
-            DAWN_VALIDATION_ERROR("%s is in the unconfigured state.", this));
+        mInstance->ConsumeError(
+            DAWN_VALIDATION_ERROR("%s is in the unconfigured state.", this).AsVal());
         return wgpu::Status::Error;
     }
 
-    [[maybe_unused]] bool error = GetCurrentDevice()->ConsumedError([&]() -> MaybeError {
+    std::ignore = GetCurrentDevice()->ConsumedError([&]() -> MaybeValError {
         DAWN_INVALID_IF(IsError(), "%s is invalid.", this);
         DAWN_INVALID_IF(!mSwapChain.Get(), "%s is not successfully configured.", this);
         {
@@ -644,9 +665,9 @@ wgpu::Status Surface::APIPresent() {
 void Surface::APIUnconfigure() {
     MaybeError maybeError = Unconfigure();
     if (!GetCurrentDevice()) {
-        [[maybe_unused]] bool error = mInstance->ConsumedError(std::move(maybeError));
+        std::ignore = mInstance->ConsumedError(std::move(maybeError));
     } else {
-        [[maybe_unused]] bool error = GetCurrentDevice()->ConsumedError(std::move(maybeError));
+        std::ignore = GetCurrentDevice()->ConsumedError(std::move(maybeError));
     }
 }
 

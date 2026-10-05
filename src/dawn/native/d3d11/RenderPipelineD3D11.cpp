@@ -48,6 +48,7 @@
 #include "src/dawn/native/d3d11/UtilsD3D11.h"
 #include "src/dawn/platform/tracing/TraceEvent.h"
 #include "src/utils/compiler.h"
+#include "src/utils/span.h"
 
 namespace dawn::native::d3d11 {
 namespace {
@@ -288,7 +289,7 @@ void RenderPipeline::ApplyNow(PipelineStateTracker* tracker,
 
 void RenderPipeline::ApplyBlendState(PipelineStateTracker* tracker,
                                      const std::array<float, 4>& blendColor) {
-    tracker->OMSetBlendState(mBlendState.Get(), blendColor.data(), GetSampleMask());
+    tracker->OMSetBlendState(mBlendState.Get(), blendColor, GetSampleMask());
 }
 
 void RenderPipeline::ApplyDepthStencilState(PipelineStateTracker* tracker,
@@ -375,10 +376,10 @@ MaybeError RenderPipeline::InitializeBlendState() {
     blendDesc.AlphaToCoverageEnable = IsAlphaToCoverageEnabled();
     blendDesc.IndependentBlendEnable = TRUE;
 
-    static_assert(kMaxColorAttachments == std::size(blendDesc.RenderTarget));
+    Span<D3D11_RENDER_TARGET_BLEND_DESC, kMaxColorAttachments> renderTargets(
+        blendDesc.RenderTarget);
     for (auto i : Range(kMaxColorAttachmentsTyped)) {
-        D3D11_RENDER_TARGET_BLEND_DESC& rtBlendDesc =
-            DAWN_UNSAFE_TODO(blendDesc.RenderTarget[static_cast<uint8_t>(i)]);
+        D3D11_RENDER_TARGET_BLEND_DESC& rtBlendDesc = renderTargets[static_cast<size_t>(i)];
         const ColorTargetState* descriptor = GetColorTargetState(i);
         rtBlendDesc.BlendEnable = descriptor->blend != nullptr;
         if (rtBlendDesc.BlendEnable) {

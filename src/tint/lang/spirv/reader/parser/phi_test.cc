@@ -467,8 +467,7 @@ TEST_F(SpirvParserTest, Phi_Switch_FromIf_BothJumpToMerge_InDefault) {
   $B1: {
     %2:f32 = switch 0u [c: (default, $B2)] {  # switch_1
       $B2: {  # case
-        %3:bool = or true, true
-        if %3 [t: $B3, f: $B4] {  # if_1
+        if true [t: $B3, f: $B4] {  # if_1
           $B3: {  # true
             exit_switch 7.0f  # switch_1
           }
@@ -479,7 +478,7 @@ TEST_F(SpirvParserTest, Phi_Switch_FromIf_BothJumpToMerge_InDefault) {
         exit_switch 8.0f  # switch_1
       }
     }
-    %4:f32 = add %2, %2
+    %3:f32 = add %2, %2
     ret
   }
 }
@@ -1210,15 +1209,13 @@ $B1: {  # root
           $B7: {  # continuing
             %9:u32 = spirv.add<u32> %7, %8
             %10:u32 = let %6
-            %11:bool = not true
-            break_if %11 next_iteration: [ %7, %9 ]  # -> [t: exit_loop loop_2, f: $B6]
+            break_if false next_iteration: [ %7, %9 ]  # -> [t: exit_loop loop_2, f: $B6]
           }
         }
         continue  # -> $B4
       }
       $B4: {  # continuing
-        %12:bool = not true
-        break_if %12  # -> [t: exit_loop loop_1, f: $B3]
+        break_if false  # -> [t: exit_loop loop_1, f: $B3]
       }
     }
     ret
@@ -1438,17 +1435,15 @@ TEST_F(SpirvParserTest, Phi_UseInPhiCountsAsUse) {
         R"(
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
-    %2:bool = and true, true
-    %3:bool = not %2
-    %4:bool = if true [t: $B2, f: $B3] {  # if_1
+    %2:bool = if true [t: $B2, f: $B3] {  # if_1
       $B2: {  # true
-        exit_if %3  # if_1
+        exit_if false  # if_1
       }
       $B3: {  # false
-        exit_if %2  # if_1
+        exit_if true  # if_1
       }
     }
-    %5:bool = let %4
+    %3:bool = let %2
     ret
   }
 }
@@ -1960,8 +1955,10 @@ TEST_F(SpirvParserTest, Phi_InLoopBody) {
       %float = OpTypeFloat 32
     %float_1 = OpConstant %float 1
     %float_0 = OpConstant %float 0
+        %ptr = OpTypePointer Function %float
        %main = OpFunction %void None %7
          %29 = OpLabel
+          %v = OpVariable %ptr Function
                OpBranch %31
          %31 = OpLabel
                OpLoopMerge %35 %34 None
@@ -1969,6 +1966,7 @@ TEST_F(SpirvParserTest, Phi_InLoopBody) {
          %36 = OpLabel
          %33 = OpPhi %float %float_1 %31 %float_0 %37
          %99 = OpFAdd %float %33 %33
+               OpStore %v %99
                OpReturn
          %37 = OpLabel
                OpBranch %36
@@ -1981,9 +1979,10 @@ TEST_F(SpirvParserTest, Phi_InLoopBody) {
               R"(
 %main = @fragment func():void {
   $B1: {
+    %2:ptr<function, f32, read_write> = var undef
     loop [b: $B2, c: $B3] {  # loop_1
       $B2: {  # body
-        %2:f32 = add 1.0f, 1.0f
+        store %2, 2.0f
         ret
       }
       $B3: {  # continuing
@@ -2337,15 +2336,14 @@ TEST_F(SpirvParserTest, Phi_Propagated_BreakIf) {
         continue  # -> $B4
       }
       $B4: {  # continuing
-        %4:bool = not true
-        break_if %4 next_iteration: [ %3 ] exit_loop: [ %3 ]  # -> [t: exit_loop loop_1, f: $B3]
+        break_if false next_iteration: [ %3 ] exit_loop: [ %3 ]  # -> [t: exit_loop loop_1, f: $B3]
       }
     }
     loop [i: $B7, b: $B8, c: $B9] {  # loop_2
       $B7: {  # initializer
         next_iteration %2  # -> $B8
       }
-      $B8 (%5:bool): {  # body
+      $B8 (%4:bool): {  # body
         continue  # -> $B9
       }
       $B9: {  # continuing

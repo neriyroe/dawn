@@ -366,7 +366,7 @@ MaybeError VulkanInstance::Initialize(const InstanceBase* instance, ICD icd) {
         if (mVulkanLib.Open(libName, searchPaths, &error)) {
             return {};
         }
-        return DAWN_FORMAT_INTERNAL_ERROR("Couldn't load Vulkan: %s", error.c_str());
+        return DAWN_FORMAT_UNRECOVERABLE_ERROR("Couldn't load Vulkan: %s", error.c_str());
     };
 
     switch (icd) {
@@ -395,7 +395,7 @@ MaybeError VulkanInstance::Initialize(const InstanceBase* instance, ICD icd) {
         auto execDir = GetExecutableDirectory();
         std::string vkDataDir = execDir.value_or("") + DAWN_VK_DATA_DIR;
         if (!vkLayerPath.Set("VK_LAYER_PATH", vkDataDir.c_str())) {
-            return DAWN_INTERNAL_ERROR("Couldn't set VK_LAYER_PATH");
+            return DAWN_UNRECOVERABLE_ERROR("Couldn't set VK_LAYER_PATH");
         }
 #else
         dawn::WarningLog() << "Backend validation enabled but Dawn was not built with "
@@ -412,7 +412,7 @@ MaybeError VulkanInstance::Initialize(const InstanceBase* instance, ICD icd) {
         versionError << "Vulkan " << FormatAPIVersion(mGlobalInfo.apiVersion)
                      << " driver is unsupported. At least Vulkan "
                      << FormatAPIVersion(kRequiredVulkanVersion) << " is required.";
-        return DAWN_INTERNAL_ERROR(versionError.str());
+        return DAWN_UNRECOVERABLE_ERROR(versionError.str());
     }
 
     VulkanGlobalKnobs usedGlobalKnobs = {};
@@ -623,12 +623,10 @@ std::vector<Ref<PhysicalDeviceBase>> Backend::DiscoverPhysicalDevices(
             if (!mVulkanInstancesCreated[icd]) {
                 mVulkanInstancesCreated.set(icd);
 
-                [[maybe_unused]] bool hadError =
-                    instance->ConsumedErrorAndWarnOnce([&]() -> MaybeError {
-                        DAWN_TRY_ASSIGN(mVulkanInstances[icd],
-                                        VulkanInstance::Create(instance, icd));
-                        return {};
-                    }());
+                std::ignore = instance->ConsumedErrorAndWarnOnce([&]() -> MaybeError {
+                    DAWN_TRY_ASSIGN(mVulkanInstances[icd], VulkanInstance::Create(instance, icd));
+                    return {};
+                }());
             }
 
             if (mVulkanInstances[icd] == nullptr) {
@@ -639,8 +637,8 @@ std::vector<Ref<PhysicalDeviceBase>> Backend::DiscoverPhysicalDevices(
             const std::vector<VkPhysicalDevice>& vkPhysicalDevices =
                 mVulkanInstances[icd]->GetVkPhysicalDevices();
             for (VkPhysicalDevice vkPhysicalDevice : vkPhysicalDevices) {
-                Ref<PhysicalDevice> physicalDevice =
-                    AcquireRef(new PhysicalDevice(mVulkanInstances[icd].Get(), vkPhysicalDevice));
+                Ref<PhysicalDevice> physicalDevice = AcquireRef(
+                    new PhysicalDevice(instance, mVulkanInstances[icd].Get(), vkPhysicalDevice));
                 if (instance->ConsumedErrorAndWarnOnce(physicalDevice->Initialize())) {
                     continue;
                 }

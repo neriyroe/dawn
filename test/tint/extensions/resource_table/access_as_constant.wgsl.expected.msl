@@ -1,13 +1,59 @@
-SKIP: FAILED
+#include <metal_stdlib>
+using namespace metal;
 
-%fs = @fragment func():void {
-  $B1: {
-    %2:texture_1d<f32> = getResource<texture_1d<f32>> 2u
-    %3:vec4<f32> = textureLoad %2, 0i, 0i
-    %texture_load:vec4<f32> = let %3
-    ret
+struct tint_resource_table_metadata_struct {
+  /* 0x0000 */ uint array_length;
+  /* 0x0004 */ array<uint, 1> bindings;
+};
+
+struct tint_module_vars_struct {
+  const constant ulong* tint_resource_table;
+  const device tint_resource_table_metadata_struct* tint_resource_table_metadata;
+};
+
+struct tint_resource_table_struct_texture_1d_f32 {
+  texture1d<float, access::sample> resource;
+};
+
+fragment void fs(const constant ulong* tint_resource_table [[buffer(28)]], const device tint_resource_table_metadata_struct* tint_resource_table_metadata [[buffer(29)]]) {
+  tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.tint_resource_table=tint_resource_table, .tint_resource_table_metadata=tint_resource_table_metadata};
+  bool v = false;
+  if ((2u < (*tint_module_vars.tint_resource_table_metadata).array_length)) {
+    v = any((uint2((*tint_module_vars.tint_resource_table_metadata).bindings[2u]) == uint2(1u, 2u)));
+  } else {
+    v = false;
   }
+  uint v_1 = 0u;
+  if (v) {
+    v_1 = 2u;
+  } else {
+    v_1 = (0u + (*tint_module_vars.tint_resource_table_metadata).array_length);
+  }
+  texture1d<float, access::sample> const v_2 = reinterpret_cast<const constant tint_resource_table_struct_texture_1d_f32*>(tint_module_vars.tint_resource_table)[v_1].resource;
+  bool v_3 = false;
+  if ((2u < (*tint_module_vars.tint_resource_table_metadata).array_length)) {
+    v_3 = any((uint2((*tint_module_vars.tint_resource_table_metadata).bindings[2u]) == uint2(1u, 2u)));
+  } else {
+    v_3 = false;
+  }
+  uint v_4 = 0u;
+  if (v_3) {
+    v_4 = 2u;
+  } else {
+    v_4 = (0u + (*tint_module_vars.tint_resource_table_metadata).array_length);
+  }
+  bool v_5 = false;
+  if ((2u < (*tint_module_vars.tint_resource_table_metadata).array_length)) {
+    v_5 = any((uint2((*tint_module_vars.tint_resource_table_metadata).bindings[2u]) == uint2(1u, 2u)));
+  } else {
+    v_5 = false;
+  }
+  uint v_6 = 0u;
+  if (v_5) {
+    v_6 = 2u;
+  } else {
+    v_6 = (0u + (*tint_module_vars.tint_resource_table_metadata).array_length);
+  }
+  (min(0u, (reinterpret_cast<const constant tint_resource_table_struct_texture_1d_f32*>(tint_module_vars.tint_resource_table)[v_4].resource.get_num_mip_levels() - 1u)));
+  float4 const texture_load = v_2.read(min(0u, (uint(reinterpret_cast<const constant tint_resource_table_struct_texture_1d_f32*>(tint_module_vars.tint_resource_table)[v_6].resource.get_width()) - 1u)));
 }
-Failed to generate: resource tables not supported by the MSL backend
-
-tint executable returned error: exit status 1

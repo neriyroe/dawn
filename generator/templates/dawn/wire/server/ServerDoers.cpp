@@ -26,7 +26,10 @@
 //* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "src/dawn/wire/server/Server.h"
+#include "dawn/wire/dawn_platform.h"
 #include "src/utils/assert.h"
+
+{% from 'dawn/cpp_macros.tmpl' import as_annotated_dawnType, as_dawnType with context %}
 
 namespace dawn::wire::server {
     //* Implementation of the command doers
@@ -46,21 +49,10 @@ namespace dawn::wire::server {
                             {%- if member.handle_type -%}
                                 {{as_cType(member.handle_type.name)}}* {{as_varName(member.name)}}
                             {%- else -%}
-                                {{as_cType(member.type.name)}}* {{as_varName(member.name)}}
+                                {{as_dawnType(member.type)}}* {{as_varName(member.name)}}
                             {%- endif -%}
-                        {%- elif member.length and member.constant_length != 1 -%}
-                            {% set length = "dawn::detail::DynamicExtent<size_t>" %}
-                            {% if member.length == "constant" %}
-                                {% set length = member.constant_length %}
-                            {% endif %}
-                            {% set element_type = "std::remove_pointer_t<" + decorate(as_cType(member.type.name, True), member) + ">" %}
-                            {% if is_wire_data_only(member) %}
-                                //* If the member is data only, we do not copy the data, so it will be volatile.
-                                {% set element_type = "volatile " + element_type %}
-                            {% endif %}
-                            ityp::span<size_t, {{element_type}}, {{length}}> {{as_varName(member.name)}}
                         {%- else -%}
-                            {{as_annotated_cType(member)}}
+                            {{as_annotated_dawnType(member, is_volatile=is_wire_data_only(member))}}
                         {%- endif -%}
                     {%- endfor -%}
                 ) {
@@ -87,10 +79,10 @@ namespace dawn::wire::server {
                                     //* is fine since the data is not sensitive to TOCTOU attacks.
                                     const_cast<const std::byte*>({{as_varName(member.name)}}.data())
                                 {%- else -%}
-                                    {{as_varName(member.name)}}.data()
+                                    ToAPI({{as_varName(member.name)}}.data())
                                 {%- endif -%}
                             {%- else -%}
-                                {{as_varName(member.name)}}
+                                ToAPI({{as_varName(member.name)}})
                             {%- endif -%}
                         {%- endfor -%}
                     );
@@ -119,20 +111,29 @@ namespace dawn::wire::server {
             {% for type in by_category["object"] %}
                 {% set cType = as_cType(type.name) %}
                 case ObjectType::{{type.name.CamelCase()}}: {
-                    ObjectData<{{cType}}> data;
-                    WIRE_TRY(Free<{{cType}}>(objectId, &data));
-
-                    //* Handle actually releasing the object after untracking it.
-                    if (data.state == AllocationState::Allocated) {
-                        DAWN_ASSERT(data.handle != nullptr);
+                    {{cType}} handle = nullptr;
+                    AllocationState state = AllocationState::Free;
+                    {
+                        //* Make `data` always released at the end of the scope, and the `handle`
+                        //* always released after the scope as the release of `data` may need a valid
+                        //* `handle`.
+                        ObjectData<{{cType}}> data;
+                        WIRE_TRY(Free<{{cType}}>(objectId, &data));
+                        handle = data.handle;
+                        state = data.state;
                         {% if type.name.get() == "device" %}
-                            //* Destroy the device to ensure that the spontaneous callbacks, i.e.
-                            //* the uncaptured error and logging callbacks, are cleared, and the
-                            //* device lost callback is fired. This is important because once we
-                            //* deallocate the ObjectData, those callbacks reference freed memory.
-                            mProcs->deviceDestroy(data.handle);
+                            if (state == AllocationState::Allocated) {
+                                //* Destroy the device to ensure that the spontaneous callbacks, i.e.
+                                //* the uncaptured error and logging callbacks, are cleared, and the
+                                //* device lost callback is fired. This is important because once we
+                                //* deallocate the ObjectData, those callbacks reference freed memory.
+                                mProcs->deviceDestroy(handle);
+                            }
                         {% endif %}
-                        Release(data.handle);
+                    }
+                    if (state == AllocationState::Allocated) {
+                        DAWN_ASSERT(handle != nullptr);
+                        Release(handle);
                     }
                     return WireResult::Success;
                 }

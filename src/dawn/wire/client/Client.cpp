@@ -31,6 +31,7 @@
 
 #include "src/dawn/common/Compiler.h"
 #include "src/dawn/common/StringViewUtils.h"
+#include "src/dawn/wire/client/ClientInlineMemoryTransferService.h"
 #include "src/dawn/wire/client/Device.h"
 
 namespace dawn::wire::client {
@@ -169,8 +170,8 @@ void Client::Disconnect() {
 
     for (auto object : mObjects[ObjectType::Device].GetAllObjects()) {
         if (object != nullptr) {
-            static_cast<Device*>(object)->HandleDeviceLost(
-                WGPUDeviceLostReason_Unknown, ToOutputStringView("GPU connection lost"));
+            static_cast<Device*>(object)->HandleDeviceLost(wgpu::DeviceLostReason::Unknown,
+                                                           "GPU connection lost");
         }
     }
 }
@@ -183,7 +184,7 @@ void Client::Unregister(ObjectBase* obj, ObjectType type) {
     UnregisterObjectCmd cmd;
     cmd.objectType = type;
     cmd.objectId = obj->GetWireHandle(this).id;
-    SerializeCommand(cmd);
+    SerializeCommand(std::move(cmd));
 
     ReclaimReservation(obj, type);
 }

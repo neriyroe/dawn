@@ -29,7 +29,7 @@
 
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 
 namespace tint::core::ir::transform {
 
@@ -42,8 +42,7 @@ bool IsCollapsibleSubgroupOp(core::BuiltinFn func) {
 // Helper to check if a value is the result of a collapsible subgroup operation,
 // possibly through "let" instructions.
 bool IsCollapsibleSubgroupValue(core::ir::Value* value) {
-    while (auto* res = value->As<core::ir::InstructionResult>()) {
-        auto* inst = res->Instruction();
+    while (auto* inst = value->AsInstruction()) {
         if (auto* let = inst->As<core::ir::Let>()) {
             value = let->Value();
             continue;

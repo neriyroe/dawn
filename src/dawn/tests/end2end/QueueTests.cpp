@@ -25,13 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/utils/span.h"
-
-#ifdef UNSAFE_BUFFERS_BUILD
-// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
-#pragma allow_unsafe_buffers
-#endif
-
+#include <array>
 #include <vector>
 
 #include "src/dawn/common/Math.h"
@@ -39,6 +33,7 @@
 #include "src/dawn/utils/TestUtils.h"
 #include "src/dawn/utils/TextureUtils.h"
 #include "src/dawn/utils/WGPUHelpers.h"
+#include "src/utils/span.h"
 
 namespace dawn {
 namespace {
@@ -196,6 +191,26 @@ TEST_P(QueueWriteBufferTests, SuperLargeWriteBuffer) {
     EXPECT_BUFFER_U32_RANGE_EQ(expectedData.data(), buffer, 0, kElements);
 }
 
+// Test using WriteBuffer for large data where size > 4MiB and is not a multiple of 8.
+// Regression test for issue where DynamicUploader's large allocation path did not trim mappedData.
+TEST_P(QueueWriteBufferTests, LargeWriteBufferNonMultipleOf8) {
+    constexpr uint64_t kSize = 4ULL * 1024 * 1024 + 4;
+    constexpr uint64_t kElements = kSize / sizeof(uint32_t);
+    wgpu::BufferDescriptor descriptor;
+    descriptor.size = kSize;
+    descriptor.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst;
+    wgpu::Buffer buffer = device.CreateBuffer(&descriptor);
+
+    std::vector<uint32_t> expectedData(kElements);
+    for (uint32_t i = 0; i < kElements; ++i) {
+        expectedData[i] = i;
+    }
+
+    queue.WriteBuffer(buffer, 0, expectedData.data(), kSize);
+
+    EXPECT_BUFFER_U32_RANGE_EQ(expectedData.data(), buffer, 0, kElements);
+}
+
 // Test using the max buffer size. Regression test for dawn:1985. We don't bother validating the
 // results for this case since that would take a lot longer, just that there are no errors.
 TEST_P(QueueWriteBufferTests, MaxBufferSizeWriteBuffer) {
@@ -234,17 +249,18 @@ TEST_P(QueueWriteBufferTests, WriteUniformBufferWithVariousOffsetAndSizeAlignmen
     wgpu::Buffer buffer = device.CreateBuffer(&descriptor);
 
     constexpr size_t kElementCount = 16;
-    uint32_t data[kElementCount] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+    std::array<uint32_t, kElementCount> data = {1, 2,  3,  4,  5,  6,  7,  8,
+                                                9, 10, 11, 12, 13, 14, 15, 16};
     constexpr size_t kElementBytes = sizeof(data[0]);
-    queue.WriteBuffer(buffer, 0, data, sizeof(data));
-    EXPECT_BUFFER_U32_RANGE_EQ(data, buffer, 0, kElementCount);
+    queue.WriteBuffer(buffer, 0, data.data(), sizeof(data));
+    EXPECT_BUFFER_U32_RANGE_EQ(data.data(), buffer, 0, kElementCount);
 
     // Alignments: offset -- 4, size -- 4
     size_t offset = 1;
     data[offset] = 100;
     size_t size = kElementBytes;
     queue.WriteBuffer(buffer, offset * kElementBytes, &data[offset], size);
-    EXPECT_BUFFER_U32_RANGE_EQ(data, buffer, 0, kElementCount);
+    EXPECT_BUFFER_U32_RANGE_EQ(data.data(), buffer, 0, kElementCount);
 
     // Alignments: offset -- 16, size -- 16
     offset = 4;
@@ -254,7 +270,7 @@ TEST_P(QueueWriteBufferTests, WriteUniformBufferWithVariousOffsetAndSizeAlignmen
     data[offset + 3] = 104;
     size = 4 * kElementBytes;
     queue.WriteBuffer(buffer, offset * kElementBytes, &data[offset], size);
-    EXPECT_BUFFER_U32_RANGE_EQ(data, buffer, 0, kElementCount);
+    EXPECT_BUFFER_U32_RANGE_EQ(data.data(), buffer, 0, kElementCount);
 
     // Alignments: offset -- 4, size -- 16
     offset = 10;
@@ -263,14 +279,14 @@ TEST_P(QueueWriteBufferTests, WriteUniformBufferWithVariousOffsetAndSizeAlignmen
     data[offset + 2] = 107;
     data[offset + 3] = 108;
     queue.WriteBuffer(buffer, offset * kElementBytes, &data[offset], size);
-    EXPECT_BUFFER_U32_RANGE_EQ(data, buffer, 0, kElementCount);
+    EXPECT_BUFFER_U32_RANGE_EQ(data.data(), buffer, 0, kElementCount);
 
     // Alignments: offset -- 16, size -- 4
     offset = 12;
     data[offset] = 109;
     size = kElementBytes;
     queue.WriteBuffer(buffer, offset * kElementBytes, &data[offset], size);
-    EXPECT_BUFFER_U32_RANGE_EQ(data, buffer, 0, kElementCount);
+    EXPECT_BUFFER_U32_RANGE_EQ(data.data(), buffer, 0, kElementCount);
 }
 
 DAWN_INSTANTIATE_TEST(QueueWriteBufferTests,
@@ -303,11 +319,11 @@ struct DataSpec {
     uint32_t rowsPerImage;
 };
 
-void PackTextureData(const uint8_t* srcData,
+void PackTextureData(dawn::Span<const uint8_t> srcData,
                      uint32_t width,
                      uint32_t height,
                      uint32_t srcBytesPerRow,
-                     uint8_t* dstData,
+                     dawn::Span<uint8_t> dstData,
                      uint32_t dstBytesPerRow,
                      uint32_t bytesPerTexel) {
     for (uint64_t y = 0; y < height; ++y) {
@@ -405,9 +421,11 @@ class QueueWriteTextureTests : public DawnTestWithParams<WriteTextureFormatParam
             // Pack the data in the specified copy region to have the same
             // format as the expected texture data.
             std::vector<uint8_t> expected(byteSizeLastLayer, 0);
-            PackTextureData(data.data() + dataOffset, copySize.width, copySize.height,
-                            dataSpec.bytesPerRow, expected.data(), copySize.width * bytesPerTexel,
-                            bytesPerTexel);
+            if (copySize.width > 0 && copySize.height > 0) {
+                PackTextureData(dawn::Span<const uint8_t>(data).subspan(dataOffset), copySize.width,
+                                copySize.height, dataSpec.bytesPerRow, expected,
+                                copySize.width * bytesPerTexel, bytesPerTexel);
+            }
 
             EXPECT_TEXTURE_EQ(expected.data(), texture,
                               {textureSpec.copyOrigin.x, textureSpec.copyOrigin.y, slice},
@@ -893,7 +911,7 @@ TEST_P(QueueWriteTextureSimpleTests, WriteStencilAspectWithSourceOffsetUnaligned
     wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
 
     constexpr wgpu::Extent3D kWriteSize = {1, 1, 1};
-    constexpr uint8_t kData[] = {1, 2};
+    constexpr std::array<uint8_t, 2> kData = {1, 2};
     constexpr uint32_t kBytesPerRowForWriteTexture = 1u;
 
     std::vector<uint8_t> expectedData(8, 0);
@@ -906,8 +924,8 @@ TEST_P(QueueWriteTextureSimpleTests, WriteStencilAspectWithSourceOffsetUnaligned
             utils::CreateTexelCopyBufferLayout(kDataOffset1, kBytesPerRowForWriteTexture);
         wgpu::TexelCopyTextureInfo texelCopyTextureInfo = utils::CreateTexelCopyTextureInfo(
             dstTexture1, 0, {0, 0, 0}, wgpu::TextureAspect::StencilOnly);
-        queue.WriteTexture(&texelCopyTextureInfo, kData, sizeof(kData), &texelCopyBufferLayout,
-                           &kWriteSize);
+        queue.WriteTexture(&texelCopyTextureInfo, kData.data(), kData.size(),
+                           &texelCopyBufferLayout, &kWriteSize);
 
         constexpr uint32_t kOutputBufferOffset1 = 0u;
         wgpu::TexelCopyBufferInfo texelCopyBufferInfo = utils::CreateTexelCopyBufferInfo(
@@ -927,8 +945,8 @@ TEST_P(QueueWriteTextureSimpleTests, WriteStencilAspectWithSourceOffsetUnaligned
             utils::CreateTexelCopyBufferLayout(kDataOffset2, kBytesPerRowForWriteTexture);
         wgpu::TexelCopyTextureInfo texelCopyTextureInfo = utils::CreateTexelCopyTextureInfo(
             dstTexture2, 0, {0, 0, 0}, wgpu::TextureAspect::StencilOnly);
-        queue.WriteTexture(&texelCopyTextureInfo, kData, sizeof(kData), &texelCopyBufferLayout,
-                           &kWriteSize);
+        queue.WriteTexture(&texelCopyTextureInfo, kData.data(), kData.size(),
+                           &texelCopyBufferLayout, &kWriteSize);
 
         constexpr uint32_t kOutputBufferOffset2 = 4u;
         wgpu::TexelCopyBufferInfo texelCopyBufferInfo = utils::CreateTexelCopyBufferInfo(
