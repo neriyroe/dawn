@@ -84,26 +84,19 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
     // TODO(dawn:2320): Check that this behaves as expected by the spec
     [*mLayer setOpaque:(GetAlphaMode() != wgpu::CompositeAlphaMode::Premultiplied)];
 
-    // Extended range. Both properties are set either way rather than only on the way in: the layer belongs
-    // to the window and outlives this swapchain, so a configure back to standard has to put it back.
-    if (GetToneMappingMode() == wgpu::ToneMappingMode::Extended) {
-        CFStringRef named = kCGColorSpaceExtendedSRGB;
-        if (GetColorSpace() == wgpu::PredefinedColorSpace::SRGBLinear) {
-            named = kCGColorSpaceExtendedLinearSRGB;
-        } else if (GetColorSpace() == wgpu::PredefinedColorSpace::DisplayP3) {
-            named = kCGColorSpaceExtendedDisplayP3;
-        }
-        CGColorSpaceRef space = CGColorSpaceCreateWithName(named);
-        [*mLayer setColorspace:space];
-        CGColorSpaceRelease(space);
-        if (@available(macOS 10.11, iOS 16.0, *)) {
-            [*mLayer setWantsExtendedDynamicRangeContent:YES];
-        }
-    } else {
-        [*mLayer setColorspace:nil];
-        if (@available(macOS 10.11, iOS 16.0, *)) {
-            [*mLayer setWantsExtendedDynamicRangeContent:NO];
-        }
+    // A nil colorspace disables color matching, including for SDR content on wide-gamut displays.
+    const bool extended = GetToneMappingMode() == wgpu::ToneMappingMode::Extended;
+    CFStringRef named = extended ? kCGColorSpaceExtendedSRGB : kCGColorSpaceSRGB;
+    if (GetColorSpace() == wgpu::PredefinedColorSpace::SRGBLinear) {
+        named = extended ? kCGColorSpaceExtendedLinearSRGB : kCGColorSpaceLinearSRGB;
+    } else if (GetColorSpace() == wgpu::PredefinedColorSpace::DisplayP3) {
+        named = extended ? kCGColorSpaceExtendedDisplayP3 : kCGColorSpaceDisplayP3;
+    }
+    CGColorSpaceRef space = CGColorSpaceCreateWithName(named);
+    [*mLayer setColorspace:space];
+    CGColorSpaceRelease(space);
+    if (@available(macOS 10.11, iOS 16.0, *)) {
+        [*mLayer setWantsExtendedDynamicRangeContent:extended];
     }
 
 #if DAWN_PLATFORM_IS(MACOS)

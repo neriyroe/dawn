@@ -47,6 +47,19 @@ id<MTLDevice> GetMTLDevice(WGPUDevice device) {
     return backendDevice->GetMTLDevice();
 }
 
+id<MTLTexture> GetMTLTexture(WGPUTexture texture) {
+    if (!texture) {
+        return nil;
+    }
+    Texture* backendTexture = ToBackend(FromAPI(texture));
+    auto deviceGuard = backendTexture->GetDevice()->GetGuard();
+    if (backendTexture->IsError() || backendTexture->IsDestroyed() ||
+        backendTexture->GetDevice()->IsLost() || backendTexture->GetFormat().IsMultiPlanar()) {
+        return nil;
+    }
+    return backendTexture->GetMTLTexture(backendTexture->GetFormat().aspects);
+}
+
 id<MTLCommandQueue> GetMTLCommandQueue(WGPUDevice device) {
     Device* backendDevice = ToBackend(FromAPI(device));
     return ToBackend(backendDevice->GetQueue())->GetMTLCommandQueue();
@@ -55,8 +68,14 @@ id<MTLCommandQueue> GetMTLCommandQueue(WGPUDevice device) {
 id<MTLCommandBuffer> GetPendingMTLCommandBuffer(WGPUDevice device) {
     Device* backendDevice = ToBackend(FromAPI(device));
     auto deviceGuard = backendDevice->GetGuard();
+    if (backendDevice->IsLost()) {
+        return nil;
+    }
     CommandRecordingContext* commandContext =
         ToBackend(backendDevice->GetQueue())->GetPendingCommandContext();
+    if (!commandContext->GetCommands()) {
+        return nil;
+    }
     commandContext->EndBlit();
     return commandContext->GetCommands();
 }

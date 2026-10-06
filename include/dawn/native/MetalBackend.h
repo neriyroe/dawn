@@ -50,12 +50,16 @@ DAWN_NATIVE_EXPORT void WaitForCommandsToBeScheduled(WGPUDevice device);
 // Return the MTLDevice corresponding to the WGPUDevice.
 DAWN_NATIVE_EXPORT id<MTLDevice> GetMTLDevice(WGPUDevice device);
 
+// Return the exact tracked Metal resource for a live, non-multiplanar texture, or nil.
+// The caller must retain the WGPUTexture and honor any shared-memory access boundaries.
+DAWN_NATIVE_EXPORT id<MTLTexture> GetMTLTexture(WGPUTexture texture);
+
 // Return the MTLCommandQueue the WGPUDevice's default queue submits on, so that work submitted
 // alongside Dawn's is ordered by submission rather than by a cross-queue fence.
 DAWN_NATIVE_EXPORT id<MTLCommandQueue> GetMTLCommandQueue(WGPUDevice device);
 
 // Return Dawn's open command buffer with any open encoder closed, so interop work can be encoded
-// into it and ride the next submit instead of splitting the frame into more command buffers.
+// into it and ride the next submit. Returns nil when device loss prevents further encoding.
 DAWN_NATIVE_EXPORT id<MTLCommandBuffer> GetPendingMTLCommandBuffer(WGPUDevice device);
 #endif
 

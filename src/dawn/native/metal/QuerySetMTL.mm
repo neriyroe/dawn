@@ -29,6 +29,7 @@
 
 #include "src/dawn/common/Math.h"
 #include "src/dawn/native/metal/DeviceMTL.h"
+#include "src/dawn/native/metal/QueueMTL.h"
 #include "src/dawn/native/metal/UtilsMetal.h"
 #include "src/utils/platform.h"
 
@@ -78,11 +79,14 @@ ResultOrError<id<MTLCounterSampleBuffer>> CreateCounterSampleBuffer(Device* devi
 CounterSampleBufferAllocator::CounterSampleBufferAllocator(Device* device) : mDevice(device) {}
 
 CounterSampleBufferAllocator::~CounterSampleBufferAllocator() {
+    // Device teardown disconnects the GPU timeline before releasing this pool.
+    mRetired.Clear();
     mPool.clear();
 }
 
 ResultOrError<CounterSampleBufferAllocator::Allocation> CounterSampleBufferAllocator::Allocate(
     uint32_t count) {
+    Tick(mDevice->GetQueue()->GetCompletedCommandSerial());
     // Try to find an existing pool buffer with a contiguous block of 'count' free elements.
     // poolBuffer.occupied acts as a bitmap tracker for the allocated query slots.
     for (auto& poolBuffer : mPool) {
@@ -129,6 +133,21 @@ ResultOrError<CounterSampleBufferAllocator::Allocation> CounterSampleBufferAlloc
 }
 
 void CounterSampleBufferAllocator::Deallocate(const Allocation& allocation, uint32_t count) {
+    DAWN_ASSERT(mDevice->IsLockedByCurrentThreadIfNeeded());
+    // Metal retains the sample buffer, but its occupied subrange must survive the GPU work too.
+    mRetired.Enqueue({allocation, count}, mDevice->GetQueue()->GetScheduledWorkDoneSerial());
+    Tick(mDevice->GetQueue()->GetCompletedCommandSerial());
+}
+
+void CounterSampleBufferAllocator::Tick(ExecutionSerial completedSerial) {
+    DAWN_ASSERT(mDevice->IsLockedByCurrentThreadIfNeeded());
+    for (const RetiredAllocation& retired : mRetired.IterateUpTo(completedSerial)) {
+        Free(retired.allocation, retired.count);
+    }
+    mRetired.ClearUpTo(completedSerial);
+}
+
+void CounterSampleBufferAllocator::Free(const Allocation& allocation, uint32_t count) {
     for (auto it = mPool.begin(); it != mPool.end(); ++it) {
         if (it->buffer.Get() == allocation.buffer) {
             for (uint32_t i = 0; i < count; ++i) {

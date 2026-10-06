@@ -302,6 +302,7 @@ ResultOrError<Ref<SharedFenceBase>> Device::ImportSharedFenceImpl(
 
 MaybeError Device::TickImpl() {
     DAWN_TRY(ToBackend(GetQueue())->SubmitPendingCommandBuffer());
+    mCounterSampleBufferAllocator->Tick(GetQueue()->GetCompletedCommandSerial());
 
     // Just run timestamp period estimation when timestamp feature is enabled and timestamp
     // conversion is not disabled and the estimation is not disabled.

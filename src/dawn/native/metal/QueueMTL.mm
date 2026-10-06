@@ -275,13 +275,13 @@ MaybeError Queue::SubmitPendingCommandBuffer() {
         DeviceBase* device = queue->GetDevice();  // Thread-safe (immutable data).
 
         {
-            // Make sure we didn't disconnect the device before it finished executing.
-            // This is just a safety check to make sure we didn't mess up the state of the device
-            // somehow while it was still executing. It doesn't need to be in the same critical
-            // section with the SetDisconnectingIfAlive and UpdateCompletedSerialTo.
+            // Disconnected timelines can receive late notifications for retired submissions.
             auto deviceState = device->GetState();  // Thread-safe.
             DAWN_CHECK(deviceState == DeviceBase::State::Alive ||
-                       deviceState == DeviceBase::State::Disconnecting);
+                       deviceState == DeviceBase::State::Disconnecting ||
+                       ((deviceState == DeviceBase::State::Disconnected ||
+                         deviceState == DeviceBase::State::Destroyed) &&
+                        pendingSerial <= queue->GetCompletedCommandSerial()));
         }
 
         MTLCommandBufferStatus status =

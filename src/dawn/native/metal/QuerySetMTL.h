@@ -34,6 +34,7 @@
 
 #include "partition_alloc/pointers/raw_ptr.h"
 #include "src/dawn/common/NSRef.h"
+#include "src/dawn/common/SerialQueue.h"
 #include "src/dawn/native/QuerySet.h"
 
 namespace dawn::native::metal {
@@ -59,6 +60,7 @@ class CounterSampleBufferAllocator {
 
     ResultOrError<Allocation> Allocate(uint32_t count);
     void Deallocate(const Allocation& allocation, uint32_t count);
+    void Tick(ExecutionSerial completedSerial);
 
   private:
     struct PoolBuffer {
@@ -66,9 +68,16 @@ class CounterSampleBufferAllocator {
         std::vector<bool> occupied;
         uint32_t occupiedCount = 0;
     };
+    struct RetiredAllocation {
+        Allocation allocation;
+        uint32_t count;
+    };
+
+    void Free(const Allocation& allocation, uint32_t count);
 
     raw_ptr<Device> mDevice;
     std::vector<PoolBuffer> mPool;
+    SerialQueue<ExecutionSerial, RetiredAllocation> mRetired;
 };
 
 class QuerySet final : public QuerySetBase {

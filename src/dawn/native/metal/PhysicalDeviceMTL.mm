@@ -540,7 +540,7 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
     // maximum clock. Disable timestamp sampling to avoid overheating user's devices.
     // See https://crbug.com/342701242 for more details.
     if (@available(macos 15.0, *)) {
-        if (gpu_info::IsIntel(deviceId)) {
+        if (gpu_info::IsIntel(vendorId)) {
             deviceToggles->Default(Toggle::MetalDisableTimestampPeriodEstimation, true);
         }
     }
