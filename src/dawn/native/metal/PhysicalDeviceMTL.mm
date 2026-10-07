@@ -665,9 +665,9 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
 
     if ([*mDevice supportsFamily:MTLGPUFamilyApple2]) {
         EnableFeature(Feature::TextureCompressionETC2);
+        EnableFeature(Feature::TextureCompressionASTC);
     }
     if ([*mDevice supportsFamily:MTLGPUFamilyApple3]) {
-        EnableFeature(Feature::TextureCompressionASTC);
         EnableFeature(Feature::TextureCompressionASTCSliced3D);
     }
 
