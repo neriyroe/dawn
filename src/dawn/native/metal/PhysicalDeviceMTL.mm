@@ -373,9 +373,11 @@ ResultOrError<PhysicalDeviceSurfaceCapabilities> PhysicalDevice::GetSurfaceCapab
         wgpu::CompositeAlphaMode::Premultiplied,
     };
 
+#if !DAWN_PLATFORM_IS(TVOS)
     // EDR: a CAMetalLayer in an extended colour space hands the compositor values past white, and the
     // display shows as much of them as its own headroom allows.
     capabilities.extendedToneMapping = true;
+#endif
 
     return capabilities;
 }

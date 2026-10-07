@@ -95,9 +95,11 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
     CGColorSpaceRef space = CGColorSpaceCreateWithName(named);
     [*mLayer setColorspace:space];
     CGColorSpaceRelease(space);
+#if !DAWN_PLATFORM_IS(TVOS)
     if (@available(macOS 10.11, iOS 16.0, *)) {
         [*mLayer setWantsExtendedDynamicRangeContent:extended];
     }
+#endif
 
 #if DAWN_PLATFORM_IS(MACOS)
     [*mLayer setDisplaySyncEnabled:(GetPresentMode() != wgpu::PresentMode::Immediate)];
