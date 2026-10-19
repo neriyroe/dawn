@@ -1671,17 +1671,8 @@ MaybeError CommandBuffer::SetupRenderPass(CommandRecordingContext* commandContex
             TextureView* view = ToBackend(attachmentInfo.view.Get());
 
             // Set view attachment.
-            CPUDescriptorHeapAllocation rtvAllocation;
-            DAWN_TRY_ASSIGN(
-                rtvAllocation,
-                device->GetRenderTargetViewAllocator()->AllocateTransientCPUDescriptors());
-
-            D3D12_RENDER_TARGET_VIEW_DESC viewDesc =
-                view->GetRTVDescriptor(attachmentInfo.depthSlice);
-            const D3D12_CPU_DESCRIPTOR_HANDLE baseDescriptor = rtvAllocation.GetBaseDescriptor();
-
-            device->GetD3D12Device()->CreateRenderTargetView(
-                ToBackend(view->GetTexture())->GetD3D12Resource(), &viewDesc, baseDescriptor);
+            D3D12_CPU_DESCRIPTOR_HANDLE baseDescriptor;
+            DAWN_TRY_ASSIGN(baseDescriptor, view->GetOrCreateRTV(attachmentInfo.depthSlice));
 
             renderPassBuilder->SetRenderTargetView(i, baseDescriptor, false);
 
@@ -1721,16 +1712,9 @@ MaybeError CommandBuffer::SetupRenderPass(CommandRecordingContext* commandContex
         TextureView* view = ToBackend(renderPass->depthStencilAttachment.view.Get());
 
         // Set depth attachment.
-        CPUDescriptorHeapAllocation dsvAllocation;
-        DAWN_TRY_ASSIGN(dsvAllocation,
-                        device->GetDepthStencilViewAllocator()->AllocateTransientCPUDescriptors());
-
-        const D3D12_DEPTH_STENCIL_VIEW_DESC viewDesc =
-            view->GetDSVDescriptor(attachmentInfo.depthReadOnly, attachmentInfo.stencilReadOnly);
-        const D3D12_CPU_DESCRIPTOR_HANDLE baseDescriptor = dsvAllocation.GetBaseDescriptor();
-
-        device->GetD3D12Device()->CreateDepthStencilView(
-            ToBackend(view->GetTexture())->GetD3D12Resource(), &viewDesc, baseDescriptor);
+        D3D12_CPU_DESCRIPTOR_HANDLE baseDescriptor;
+        DAWN_TRY_ASSIGN(baseDescriptor, view->GetOrCreateDSV(attachmentInfo.depthReadOnly,
+                                                          attachmentInfo.stencilReadOnly));
 
         renderPassBuilder->SetDepthStencilView(baseDescriptor, attachmentInfo.depthReadOnly,
                                                attachmentInfo.stencilReadOnly);

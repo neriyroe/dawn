@@ -28,6 +28,7 @@
 #ifndef SRC_DAWN_NATIVE_D3D12_TEXTURED3D12_H_
 #define SRC_DAWN_NATIVE_D3D12_TEXTURED3D12_H_
 
+#include <array>
 #include <optional>
 #include <vector>
 
@@ -37,6 +38,7 @@
 #include "src/dawn/native/PassResourceUsage.h"
 #include "src/dawn/native/Texture.h"
 #include "src/dawn/native/d3d12/IntegerTypes.h"
+#include "src/dawn/native/d3d12/CPUDescriptorHeapAllocationD3D12.h"
 #include "src/dawn/native/d3d12/ResourceHeapAllocationD3D12.h"
 #include "src/dawn/native/d3d12/d3d12_platform.h"
 
@@ -65,6 +67,7 @@ class Texture final : public TextureBase {
 
     DXGI_FORMAT GetD3D12Format() const;
     ID3D12Resource* GetD3D12Resource() const;
+    MaybeError KeepResident();
     DXGI_FORMAT GetD3D12CopyableSubresourceFormat(Aspect aspect) const;
     D3D12_RESOURCE_FLAGS GetD3D12ResourceFlags() const;
 
@@ -164,6 +167,7 @@ class Texture final : public TextureBase {
     std::vector<FenceAndSignalValue> mWaitFences;
 
     bool mIsExternalSwapChainTexture = false;
+    bool mKeepResident = false;
 
     SubresourceStorage<StateAndDecay> mSubresourceStateAndDecay;
 };
@@ -179,11 +183,17 @@ class TextureView final : public TextureViewBase {
     D3D12_RENDER_TARGET_VIEW_DESC GetRTVDescriptor(uint32_t depthSlice = 0u) const;
     D3D12_DEPTH_STENCIL_VIEW_DESC GetDSVDescriptor(bool depthReadOnly, bool stencilReadOnly) const;
     D3D12_UNORDERED_ACCESS_VIEW_DESC GetUAVDescriptor() const;
+    ResultOrError<D3D12_CPU_DESCRIPTOR_HANDLE> GetOrCreateRTV(uint32_t depthSlice);
+    ResultOrError<D3D12_CPU_DESCRIPTOR_HANDLE> GetOrCreateDSV(bool depthReadOnly,
+                                                           bool stencilReadOnly);
 
   private:
     TextureView(TextureBase* texture, const UnpackedPtr<TextureViewDescriptor>& descriptor);
+    void DestroyImpl(DestroyReason reason) override;
 
     D3D12_SHADER_RESOURCE_VIEW_DESC mSrvDesc{};
+    std::vector<CPUDescriptorHeapAllocation> mRenderTargetViews;
+    std::array<CPUDescriptorHeapAllocation, 4> mDepthStencilViews;
 };
 }  // namespace d3d12
 }  // namespace dawn::native

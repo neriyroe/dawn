@@ -67,6 +67,16 @@ enum MemorySegment {
 
 DAWN_NATIVE_EXPORT Microsoft::WRL::ComPtr<ID3D12Device> GetD3D12Device(WGPUDevice device);
 
+// Native passes append to the renderer's pending list and use its texture state and residency tracking.
+DAWN_NATIVE_EXPORT ID3D12GraphicsCommandList* GetPendingD3D12CommandList(WGPUDevice device);
+DAWN_NATIVE_EXPORT ID3D12Resource* GetD3D12Resource(WGPUTexture texture);
+// Keeps native readers outside Dawn's submission serial resident until the texture is destroyed.
+DAWN_NATIVE_EXPORT bool KeepTextureResident(WGPUTexture texture);
+DAWN_NATIVE_EXPORT void TransitionD3D12TextureState(WGPUTexture texture, D3D12_RESOURCE_STATES state);
+DAWN_NATIVE_EXPORT void SetTextureInitialized(WGPUTexture texture);
+DAWN_NATIVE_EXPORT uint64_t GetPendingCommandSerial(WGPUDevice device);
+DAWN_NATIVE_EXPORT uint64_t GetCompletedCommandSerial(WGPUDevice device);
+
 // Whether GPU upload heaps are enabled and a nonzero allocation size fits the local budget.
 DAWN_NATIVE_EXPORT bool UseGPUUploadHeap(WGPUDevice device, uint64_t allocationSize = 0);
 

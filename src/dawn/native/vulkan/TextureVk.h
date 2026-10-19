@@ -89,7 +89,8 @@ class Texture : public TextureBase {
     void TransitionUsageNow(CommandRecordingContext* recordingContext,
                             wgpu::TextureUsage usage,
                             wgpu::ShaderStage shaderStages,
-                            const SubresourceRange& range);
+                            const SubresourceRange& range,
+                            bool discardContents = false);
     void TransitionUsageForPass(CommandRecordingContext* recordingContext,
                                 const TextureSubresourceSyncInfo& textureSyncInfos,
                                 std::vector<VkImageMemoryBarrier>* imageBarriers,

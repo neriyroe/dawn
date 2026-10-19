@@ -723,6 +723,10 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
 #else
     const bool dxcAvailable = false;
 #endif
+    // FXC needs strict math to preserve special floating-point values.
+    if (!deviceToggles->IsEnabled(Toggle::UseDXC)) {
+        deviceToggles->ForceSet(Toggle::D3DDisableIEEEStrictness, false);
+    }
     const bool useResourceHeapTier2 = (GetDeviceInfo().resourceHeapTier >= 2);
     deviceToggles->Default(Toggle::UseD3D12ResourceHeapTier2, useResourceHeapTier2);
     deviceToggles->Default(Toggle::UseD3D12RenderPass, GetDeviceInfo().supportsRenderPass);

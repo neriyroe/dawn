@@ -246,6 +246,23 @@ VkImageLayout GetVkImageLayoutForUsage(WGPUTexture texture, WGPUTextureUsage usa
     return backendTexture->VulkanImageLayout(static_cast<wgpu::TextureUsage>(usage));
 }
 
+void TransitionVkImageUsage(WGPUTexture texture,
+                            WGPUTextureUsage usage,
+                            WGPUShaderStage shaderStages,
+                            bool discardContents) {
+    Texture* backendTexture = AsVulkan(texture);
+    if (backendTexture == nullptr || backendTexture->GetHandle() == VK_NULL_HANDLE) {
+        return;
+    }
+    Device* device = ToBackend(backendTexture->GetDevice());
+    auto deviceGuard = device->GetGuard();
+    CommandRecordingContext* recordingContext =
+        ToBackend(device->GetQueue())->GetPendingRecordingContext();
+    backendTexture->TransitionUsageNow(recordingContext, static_cast<wgpu::TextureUsage>(usage),
+                                       static_cast<wgpu::ShaderStage>(shaderStages),
+                                       backendTexture->GetAllSubresources(), discardContents);
+}
+
 void SetVkImageLayoutUsage(WGPUTexture texture, WGPUTextureUsage usage) {
     Texture* backendTexture = AsVulkan(texture);
     if (backendTexture == nullptr) {

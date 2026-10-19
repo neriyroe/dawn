@@ -76,6 +76,11 @@ DAWN_NATIVE_EXPORT VkImageLayout GetVkImageLayout(WGPUTexture texture);
 // depends on the whole usage set the texture was created with, not on `usage` alone.
 DAWN_NATIVE_EXPORT VkImageLayout GetVkImageLayoutForUsage(WGPUTexture texture,
                                                           WGPUTextureUsage usage);
+// Records barriers for a native pass in Dawn's pending buffer, retaining access and stage tracking.
+DAWN_NATIVE_EXPORT void TransitionVkImageUsage(WGPUTexture texture,
+                                               WGPUTextureUsage usage,
+                                               WGPUShaderStage shaderStages,
+                                               bool discardContents = false);
 // Tells Dawn about a layout an outside barrier already moved the image to, so its next transition
 // starts from the truth rather than from what it last recorded.
 DAWN_NATIVE_EXPORT void SetVkImageLayoutUsage(WGPUTexture texture, WGPUTextureUsage usage);

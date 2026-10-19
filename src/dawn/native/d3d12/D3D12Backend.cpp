@@ -37,6 +37,7 @@
 #include "src/dawn/native/PhysicalDevice.h"
 #include "src/dawn/native/Surface.h"
 #include "src/dawn/native/d3d12/DeviceD3D12.h"
+#include "src/dawn/native/d3d12/QueueD3D12.h"
 #include "src/dawn/native/d3d12/ResidencyManagerD3D12.h"
 #include "src/dawn/native/d3d12/SwapChainD3D12.h"
 #include "src/dawn/native/d3d12/TextureD3D12.h"
@@ -51,6 +52,13 @@ namespace {
 bool IsD3D12(DeviceBase* device) {
     return device != nullptr &&
            device->GetPhysicalDevice()->GetBackendType() == wgpu::BackendType::D3D12;
+}
+
+Texture* AsD3D12(WGPUTexture texture) {
+    TextureBase* base = FromAPI(texture);
+    return base != nullptr && !base->IsError() && IsD3D12(base->GetDevice())
+               ? ToBackend(base)
+               : nullptr;
 }
 
 }  // namespace
@@ -77,6 +85,60 @@ Microsoft::WRL::ComPtr<ID3D12Device> GetD3D12Device(WGPUDevice device) {
         return nullptr;
     }
     return ToBackend(base)->GetD3D12Device();
+}
+
+ID3D12GraphicsCommandList* GetPendingD3D12CommandList(WGPUDevice device) {
+    DeviceBase* base = FromAPI(device);
+    if (!IsD3D12(base)) {
+        return nullptr;
+    }
+    auto deviceGuard = base->GetGuard();
+    return ToBackend(base->GetQueue())->GetPendingCommandContext()->GetCommandList();
+}
+
+ID3D12Resource* GetD3D12Resource(WGPUTexture texture) {
+    Texture* backendTexture = AsD3D12(texture);
+    return backendTexture != nullptr ? backendTexture->GetD3D12Resource() : nullptr;
+}
+
+bool KeepTextureResident(WGPUTexture texture) {
+    Texture* backendTexture = AsD3D12(texture);
+    if (backendTexture == nullptr || backendTexture->GetD3D12Resource() == nullptr) {
+        return false;
+    }
+    Device* device = ToBackend(backendTexture->GetDevice());
+    auto deviceGuard = device->GetGuard();
+    return !device->ConsumedError(backendTexture->KeepResident());
+}
+
+void TransitionD3D12TextureState(WGPUTexture texture, D3D12_RESOURCE_STATES state) {
+    Texture* backendTexture = AsD3D12(texture);
+    if (backendTexture == nullptr || backendTexture->GetD3D12Resource() == nullptr) {
+        return;
+    }
+    DeviceBase* device = backendTexture->GetDevice();
+    auto deviceGuard = device->GetGuard();
+    auto* context = ToBackend(device->GetQueue())->GetPendingCommandContext();
+    backendTexture->TrackUsageAndTransitionNow(context, state, backendTexture->GetAllSubresources());
+}
+
+void SetTextureInitialized(WGPUTexture texture) {
+    Texture* backendTexture = AsD3D12(texture);
+    if (backendTexture == nullptr) {
+        return;
+    }
+    auto deviceGuard = backendTexture->GetDevice()->GetGuard();
+    backendTexture->SetIsSubresourceContentInitialized(true, backendTexture->GetAllSubresources());
+}
+
+uint64_t GetPendingCommandSerial(WGPUDevice device) {
+    DeviceBase* base = FromAPI(device);
+    return IsD3D12(base) ? static_cast<uint64_t>(base->GetQueue()->GetPendingCommandSerial()) : 0;
+}
+
+uint64_t GetCompletedCommandSerial(WGPUDevice device) {
+    DeviceBase* base = FromAPI(device);
+    return IsD3D12(base) ? static_cast<uint64_t>(base->GetQueue()->GetCompletedCommandSerial()) : 0;
 }
 
 bool UseGPUUploadHeap(WGPUDevice device, uint64_t allocationSize) {

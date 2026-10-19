@@ -30,6 +30,8 @@
 ###############################################################################
 
 set(DAWN_VERSION_FILE "" CACHE FILEPATH "Optional source version file for local compiler changes")
+include(SourceVersion.cmake)
+dawn_source_version()
 set(DAWN_VERSION_PARAMETERS --dawn-dir "${Dawn_SOURCE_DIR}")
 if(DAWN_VERSION_FILE)
     list(APPEND DAWN_VERSION_PARAMETERS --version-file "${DAWN_VERSION_FILE}")
@@ -41,6 +43,12 @@ DawnGenerator(
     OUTPUT_HEADERS DAWN_VERSION_AUTOGEN_HEADERS
     EXTRA_PARAMETERS ${DAWN_VERSION_PARAMETERS}
 )
+if(TARGET dawn_source_version)
+    # The version changes generated contents, never the generator's build graph.
+    get_property(version_dependencies DIRECTORY PROPERTY CMAKE_CONFIGURE_DEPENDS)
+    list(REMOVE_ITEM version_dependencies "${DAWN_VERSION_FILE}")
+    set_property(DIRECTORY PROPERTY CMAKE_CONFIGURE_DEPENDS "${version_dependencies}")
+endif()
 
 dawn_add_library(
     dawn_version

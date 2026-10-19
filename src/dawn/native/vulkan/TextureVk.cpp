@@ -1083,7 +1083,8 @@ void Texture::TransitionUsageForPassImpl(
 void Texture::TransitionUsageNow(CommandRecordingContext* recordingContext,
                                  wgpu::TextureUsage usage,
                                  wgpu::ShaderStage shaderStages,
-                                 const SubresourceRange& range) {
+                                 const SubresourceRange& range,
+                                 bool discardContents) {
     std::vector<VkImageMemoryBarrier> barriers;
 
     VkPipelineStageFlags srcStages = 0;
@@ -1092,6 +1093,14 @@ void Texture::TransitionUsageNow(CommandRecordingContext* recordingContext,
     TransitionUsageAndGetResourceBarrier(usage, shaderStages, range, &barriers, &srcStages,
                                          &dstStages);
 
+    // External passes can access discarded images without updating Dawn's usage tracking.
+    if (discardContents) {
+        srcStages |= VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+        for (auto& barrier : barriers) {
+            barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            barrier.srcAccessMask |= VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+        }
+    }
     TweakTransition(recordingContext, &barriers, 0);
 
     if (!barriers.empty()) {

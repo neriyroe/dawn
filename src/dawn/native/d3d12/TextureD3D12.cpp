@@ -49,6 +49,7 @@
 #include "src/dawn/native/d3d12/Forward.h"
 #include "src/dawn/native/d3d12/HeapD3D12.h"
 #include "src/dawn/native/d3d12/QueueD3D12.h"
+#include "src/dawn/native/d3d12/ResidencyManagerD3D12.h"
 #include "src/dawn/native/d3d12/ResourceAllocatorManagerD3D12.h"
 #include "src/dawn/native/d3d12/SharedFenceD3D12.h"
 #include "src/dawn/native/d3d12/SharedTextureMemoryD3D12.h"
@@ -350,6 +351,12 @@ Texture::~Texture() = default;
 
 void Texture::DestroyImpl(DestroyReason reason) {
     TextureBase::DestroyImpl(reason);
+    if (mKeepResident) {
+        auto deviceGuard = GetDevice()->GetGuard();
+        ToBackend(GetDevice())->GetResidencyManager()->UnlockAllocation(
+            ToBackend(mResourceAllocation.GetResourceHeap()));
+        mKeepResident = false;
+    }
     ToBackend(GetDevice())->DeallocateMemory(mResourceAllocation);
     // Set mIsExternalSwapChainTexture to false to prevent ever calling
     // ID3D12SharingContract::Present again.
@@ -362,6 +369,16 @@ DXGI_FORMAT Texture::GetD3D12Format() const {
 
 ID3D12Resource* Texture::GetD3D12Resource() const {
     return mResourceAllocation.GetD3D12Resource();
+}
+
+MaybeError Texture::KeepResident() {
+    if (mKeepResident || mResourceAllocation.GetInfo().mMethod == AllocationMethod::kExternal) {
+        return {};
+    }
+    DAWN_TRY(ToBackend(GetDevice())->GetResidencyManager()->LockAllocation(
+        ToBackend(mResourceAllocation.GetResourceHeap())));
+    mKeepResident = true;
+    return {};
 }
 
 D3D12_RESOURCE_FLAGS Texture::GetD3D12ResourceFlags() const {
@@ -1064,6 +1081,46 @@ TextureView::TextureView(TextureBase* texture, const UnpackedPtr<TextureViewDesc
 
 DXGI_FORMAT TextureView::GetD3D12Format() const {
     return d3d::DXGITextureFormat(GetDevice(), GetFormat().format);
+}
+
+void TextureView::DestroyImpl(DestroyReason reason) {
+    Device* device = ToBackend(GetDevice());
+    for (auto& allocation : mRenderTargetViews) {
+        if (allocation.IsValid()) device->GetRenderTargetViewAllocator()->Deallocate(&allocation);
+    }
+    mRenderTargetViews.clear();
+    for (auto& allocation : mDepthStencilViews) {
+        if (allocation.IsValid()) device->GetDepthStencilViewAllocator()->Deallocate(&allocation);
+    }
+    TextureViewBase::DestroyImpl(reason);
+}
+
+// Attachment descriptors are immutable and consumed while commands are recorded.
+ResultOrError<D3D12_CPU_DESCRIPTOR_HANDLE> TextureView::GetOrCreateRTV(uint32_t depthSlice) {
+    DAWN_ASSERT(depthSlice < GetSingleSubresourceVirtualSize().depthOrArrayLayers);
+    if (mRenderTargetViews.size() <= depthSlice) mRenderTargetViews.resize(depthSlice + 1);
+    auto& allocation = mRenderTargetViews[depthSlice];
+    if (!allocation.IsValid()) {
+        Device* device = ToBackend(GetDevice());
+        DAWN_TRY_ASSIGN(allocation, device->GetRenderTargetViewAllocator()->AllocateCPUDescriptors());
+        const auto descriptor = GetRTVDescriptor(depthSlice);
+        device->GetD3D12Device()->CreateRenderTargetView(
+            ToBackend(GetTexture())->GetD3D12Resource(), &descriptor, allocation.GetBaseDescriptor());
+    }
+    return allocation.GetBaseDescriptor();
+}
+
+ResultOrError<D3D12_CPU_DESCRIPTOR_HANDLE> TextureView::GetOrCreateDSV(bool depthReadOnly,
+                                                                  bool stencilReadOnly) {
+    auto& allocation = mDepthStencilViews[uint32_t(depthReadOnly) | (uint32_t(stencilReadOnly) << 1)];
+    if (!allocation.IsValid()) {
+        Device* device = ToBackend(GetDevice());
+        DAWN_TRY_ASSIGN(allocation, device->GetDepthStencilViewAllocator()->AllocateCPUDescriptors());
+        const auto descriptor = GetDSVDescriptor(depthReadOnly, stencilReadOnly);
+        device->GetD3D12Device()->CreateDepthStencilView(
+            ToBackend(GetTexture())->GetD3D12Resource(), &descriptor, allocation.GetBaseDescriptor());
+    }
+    return allocation.GetBaseDescriptor();
 }
 
 const D3D12_SHADER_RESOURCE_VIEW_DESC& TextureView::GetSRVDescriptor() const {
