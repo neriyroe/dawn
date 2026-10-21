@@ -25,6 +25,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <vector>
+
 #include "src/dawn/tests/DawnTest.h"
 #include "src/dawn/utils/ComboRenderBundleEncoderDescriptor.h"
 #include "src/dawn/utils/ComboRenderPipelineDescriptor.h"
@@ -583,6 +585,140 @@ DAWN_INSTANTIATE_TEST(RenderBundleIndirectValidationTest,
                       OpenGLESBackend(),
                       VulkanBackend(),
                       WebGPUBackend());
+
+// Indirect builtin conversion keeps per-occurrence metadata even without validation.
+class RenderBundleIndirectBuiltinsTest : public RenderBundleIndirectValidationTest {
+  protected:
+    std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
+        if (SupportsFeatures({wgpu::FeatureName::IndirectFirstInstance})) {
+            return {wgpu::FeatureName::IndirectFirstInstance};
+        }
+        return {};
+    }
+
+    void SetUp() override {
+        RenderBundleIndirectValidationTest::SetUp();
+        DAWN_TEST_UNSUPPORTED_IF(!device.HasFeature(wgpu::FeatureName::IndirectFirstInstance));
+    }
+
+    void CheckIndirectBuiltins(bool mixRawDraws) {
+        auto renderPass = utils::CreateBasicRenderPass(device, kRTSize, kRTSize);
+        wgpu::Buffer indices = CreateIndexBuffer({0, 1, 2});
+        wgpu::Buffer arguments = utils::CreateBufferFromData<uint32_t>(
+            device, wgpu::BufferUsage::Indirect | wgpu::BufferUsage::CopyDst,
+            {3, 1, 4, 2, 3, 1, 0, 4, 2});
+        wgpu::Buffer counter = utils::CreateBufferFromData<uint32_t>(
+            device, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc |
+                        wgpu::BufferUsage::CopyDst,
+            {0});
+        wgpu::BindGroupLayout layout = utils::MakeBindGroupLayout(
+            device, {{0, wgpu::ShaderStage::Fragment, wgpu::BufferBindingType::Storage}});
+        wgpu::BindGroup bindGroup = utils::MakeBindGroup(device, layout, {{0, counter}});
+
+        wgpu::ShaderModule module = utils::CreateShaderModule(device, R"(
+            struct Output {
+                @builtin(position) position: vec4f,
+                @location(0) @interpolate(flat) value: u32,
+            };
+            @vertex fn raw() -> Output {
+                return Output(vec4f(0.0, 0.0, 0.0, 1.0), 1u);
+            }
+            @vertex fn builtins(@builtin(vertex_index) vertex: u32,
+                                @builtin(instance_index) instance: u32) -> Output {
+                return Output(vec4f(0.0, 0.0, 0.0, 1.0), vertex + 16u * instance);
+            }
+            @group(0) @binding(0) var<storage, read_write> counter: atomic<u32>;
+            @fragment fn fragment(input: Output) -> @location(0) vec4f {
+                atomicAdd(&counter, input.value);
+                return vec4f(0.0, 1.0, 0.0, 1.0);
+            }
+        )");
+        utils::ComboRenderPipelineDescriptor pipelineDesc;
+        pipelineDesc.layout = utils::MakeBasicPipelineLayout(device, &layout);
+        pipelineDesc.vertex.module = module;
+        pipelineDesc.vertex.entryPoint = "raw";
+        pipelineDesc.cFragment.module = module;
+        pipelineDesc.cFragment.entryPoint = "fragment";
+        pipelineDesc.primitive.topology = wgpu::PrimitiveTopology::PointList;
+        pipelineDesc.cTargets[0].format = renderPass.colorFormat;
+        wgpu::RenderPipeline raw = device.CreateRenderPipeline(&pipelineDesc);
+        pipelineDesc.vertex.entryPoint = "builtins";
+        wgpu::RenderPipeline builtins = device.CreateRenderPipeline(&pipelineDesc);
+
+        utils::ComboRenderBundleEncoderDescriptor bundleDesc;
+        bundleDesc.colorFormatCount = 1;
+        bundleDesc.cColorFormats[0] = renderPass.colorFormat;
+        wgpu::RenderBundleEncoder bundleEncoder = device.CreateRenderBundleEncoder(&bundleDesc);
+        bundleEncoder.SetBindGroup(0, bindGroup);
+        bundleEncoder.SetIndexBuffer(indices, wgpu::IndexFormat::Uint32);
+        if (mixRawDraws) {
+            bundleEncoder.SetPipeline(raw);
+            bundleEncoder.DrawIndirect(arguments, 0);
+        }
+        bundleEncoder.SetPipeline(builtins);
+        bundleEncoder.DrawIndexedIndirect(arguments, 4 * sizeof(uint32_t));
+        if (mixRawDraws) {
+            bundleEncoder.SetPipeline(raw);
+            bundleEncoder.DrawIndexedIndirect(arguments, 4 * sizeof(uint32_t));
+            bundleEncoder.SetPipeline(builtins);
+        }
+        bundleEncoder.DrawIndirect(arguments, 0);
+        wgpu::RenderBundle bundle = bundleEncoder.Finish();
+
+        for (uint32_t frame = 0; frame < 2; ++frame) {
+            const uint32_t firstVertex = 4 + frame * 3;
+            const uint32_t firstInstance = 2 + frame;
+            const uint32_t values[] = {3, 1, firstVertex, firstInstance,
+                                       3, 1, 0, firstVertex, firstInstance};
+            const uint32_t zero = 0;
+            queue.WriteBuffer(arguments, 0, values, sizeof(values));
+            queue.WriteBuffer(counter, 0, &zero, sizeof(zero));
+
+            // Both command buffers finish before either executes the shared bundle.
+            wgpu::CommandBuffer commands[2];
+            for (uint32_t index = 0; index < 2; ++index) {
+                wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+                wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&renderPass.renderPassInfo);
+                pass.SetPipeline(raw);
+                pass.SetBindGroup(0, bindGroup);
+                pass.DrawIndirect(arguments, 0);
+                pass.ExecuteBundles(1, &bundle);
+                if (index == 0) {
+                    pass.ExecuteBundles(1, &bundle);
+                }
+                pass.SetPipeline(builtins);
+                pass.SetBindGroup(0, bindGroup);
+                pass.SetIndexBuffer(indices, wgpu::IndexFormat::Uint32);
+                pass.DrawIndexedIndirect(arguments, 4 * sizeof(uint32_t));
+                pass.End();
+                commands[index] = encoder.Finish();
+            }
+            queue.Submit(2, commands);
+
+            const uint32_t builtinSum = 3 * (firstVertex + 16 * firstInstance) + 3;
+            const uint32_t bundleSum = 2 * builtinSum + (mixRawDraws ? 6 : 0);
+            EXPECT_BUFFER_U32_EQ(3 * bundleSum + 2 * (3 + builtinSum), counter, 0);
+        }
+    }
+};
+
+TEST_P(RenderBundleIndirectBuiltinsTest, RepeatedBuiltinDraws) {
+    CheckIndirectBuiltins(false);
+}
+
+TEST_P(RenderBundleIndirectBuiltinsTest, MixedRawAndConvertedDraws) {
+    CheckIndirectBuiltins(true);
+}
+
+DAWN_INSTANTIATE_TEST(RenderBundleIndirectBuiltinsTest,
+                      D3D11Backend(),
+                      D3D12Backend(),
+                      D3D12Backend({"skip_validation"}),
+                      MetalBackend(),
+                      OpenGLBackend(),
+                      OpenGLESBackend(),
+                      VulkanBackend(),
+                      VulkanBackend({"skip_validation"}));
 
 }  // anonymous namespace
 }  // namespace dawn

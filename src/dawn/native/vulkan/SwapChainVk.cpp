@@ -26,6 +26,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "src/dawn/native/vulkan/SwapChainVk.h"
+#include "src/dawn/platform/metrics/HistogramMacros.h"
 
 #include <algorithm>
 #include <limits>
@@ -263,6 +264,14 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
         mImages[i].image = vkImages[i];
         DAWN_TRY_ASSIGN(mImages[i].renderingDoneSemaphore, CreateSemaphore(device));
     }
+
+    // Report the selected swapchain after its images and semaphores are ready.
+    DAWN_HISTOGRAM_SPARSE(device->GetPlatform(), "Dawn.Surface.Vulkan.PresentMode",
+                         static_cast<int>(mConfig.presentMode));
+    DAWN_HISTOGRAM_SPARSE(device->GetPlatform(), "Dawn.Surface.Vulkan.ImageCount",
+                         static_cast<int>(count));
+    DAWN_HISTOGRAM_SPARSE(device->GetPlatform(), "Dawn.Surface.Vulkan.NeedsBlit",
+                         static_cast<int>(mConfig.needsBlit));
 
     return {};
 }

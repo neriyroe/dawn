@@ -39,6 +39,7 @@
 #include "src/dawn/native/d3d/DeviceD3D.h"
 #include "src/dawn/native/d3d/Forward.h"
 #include "src/dawn/native/d3d/UtilsD3D.h"
+#include "src/dawn/platform/metrics/HistogramMacros.h"
 
 namespace dawn::native::d3d {
 namespace {
@@ -339,6 +340,8 @@ MaybeError SwapChain::ConfigureColorSpace() {
 }
 
 MaybeError SwapChain::PresentDXGISwapChain() {
+    SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(), "Dawn.Command.PresentDXGIUS");
+
     // Do the actual present. DXGI_STATUS_OCCLUDED is a valid return value that's just a
     // message to the application that it could stop rendering.
 

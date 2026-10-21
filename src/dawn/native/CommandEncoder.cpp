@@ -35,6 +35,7 @@
 #include "dawn/native/ObjectType_autogen.h"
 #include "dawn/native/ValidationUtils_autogen.h"
 #include "dawn/platform/DawnPlatform.h"
+#include "src/dawn/platform/metrics/HistogramMacros.h"
 #include "partition_alloc/pointers/raw_ptr.h"
 #include "src/dawn/common/Enumerator.h"
 #include "src/dawn/common/Math.h"
@@ -2422,6 +2423,7 @@ CommandBufferBase* CommandEncoder::APIFinish(const CommandBufferDescriptor* desc
 ResultOrError<Ref<CommandBufferBase>> CommandEncoder::Finish(
     const CommandBufferDescriptor* descriptor) {
     DeviceBase* device = GetDevice();
+    SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(device->GetPlatform(), "Dawn.Command.EncoderFinishUS");
 
     TRACE_EVENT(DAWN_TRACE_CATEGORY("recording"), "CommandEncoder::Finish");
 

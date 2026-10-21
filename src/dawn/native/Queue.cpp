@@ -39,6 +39,7 @@
 #include "absl/cleanup/cleanup.h"
 #include "dawn/native/ObjectType_autogen.h"
 #include "dawn/platform/DawnPlatform.h"
+#include "src/dawn/platform/metrics/HistogramMacros.h"
 #include "partition_alloc/pointers/raw_ptr.h"
 #include "src/dawn/common/Constants.h"
 #include "src/dawn/common/Enumerator.h"
@@ -592,6 +593,7 @@ MaybeValError QueueBase::ValidateWriteTexture(const TexelCopyTextureInfo* destin
 
 MaybeError QueueBase::SubmitInternal(Span<CommandBufferBase* const> commands) {
     DeviceBase* device = GetDevice();
+    SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(device->GetPlatform(), "Dawn.Command.QueueSubmitUS");
 
     // If device is lost, don't let any commands be submitted
     DAWN_TRY(device->ValidateIsAlive());
@@ -617,7 +619,11 @@ MaybeError QueueBase::SubmitInternal(Span<CommandBufferBase* const> commands) {
     std::move(finishUseBuffers).Invoke();
 
     // Call Tick() to flush pending work.
-    DAWN_TRY(device->Tick());
+    {
+        SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(device->GetPlatform(), "Dawn.Command.SubmitTickUS");
+
+        DAWN_TRY(device->Tick());
+    }
 
     return {};
 }

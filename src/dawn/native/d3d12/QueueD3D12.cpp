@@ -41,6 +41,7 @@
 #include "src/dawn/native/d3d12/SharedFenceD3D12.h"
 #include "src/dawn/native/d3d12/UtilsD3D12.h"
 #include "src/dawn/platform/tracing/TraceEvent.h"
+#include "src/dawn/platform/metrics/HistogramMacros.h"
 #include "src/utils/compiler.h"
 
 namespace dawn::native::d3d12 {
@@ -113,6 +114,8 @@ MaybeError Queue::SubmitImpl(Span<CommandBufferBase* const> commands) {
     [[maybe_unused]] ExecutionSerial pendingSerial = GetPendingCommandSerial();
 
     {
+        SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(), "Dawn.Command.RecordD3D12US");
+
         TRACE_EVENT(DAWN_TRACE_CATEGORY("recording"), "CommandBufferD3D12::RecordCommands",
                     "serial", uint64_t{pendingSerial});
         for (CommandBufferBase* commandBuffer : commands) {
@@ -125,6 +128,8 @@ MaybeError Queue::SubmitImpl(Span<CommandBufferBase* const> commands) {
 
 MaybeError Queue::SubmitPendingCommandsImpl() {
     Device* device = ToBackend(GetDevice());
+    SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(device->GetPlatform(), "Dawn.Command.SubmitD3D12US");
+
     DAWN_ASSERT(device->IsLockedByCurrentThreadIfNeeded());
 
     if (!mPendingCommands.NeedsSubmit()) {
@@ -142,6 +147,8 @@ MaybeError Queue::SubmitPendingCommandsImpl() {
 
 MaybeError Queue::NextSerial() {
     Device* device = ToBackend(GetDevice());
+    SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(device->GetPlatform(), "Dawn.Command.SignalFenceUS");
+
     DAWN_ASSERT(device->IsLockedByCurrentThreadIfNeeded());
     // NextSerial should not ever be called with a command list that needs submission since the
     // underlying command allocator could be recycled after the serial completes on the GPU.
@@ -229,6 +236,8 @@ void Queue::SetEventOnCompletion(ExecutionSerial serial, HANDLE event) {
 }
 
 MaybeError Queue::OpenPendingCommands() {
+    SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(), "Dawn.Command.OpenCommandsUS");
+
     DAWN_ASSERT(mLastAllocatorUsed == kNoCommandAllocator);
 
     // If there are no free allocators, get the oldest serial in flight and wait on it
@@ -277,6 +286,8 @@ void Queue::RecycleLastCommandListAfter(ExecutionSerial serial) {
 }
 
 MaybeError Queue::RecycleUnusedCommandLists() {
+    SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(), "Dawn.Command.RecycleCommandsUS");
+
     ExecutionSerial completedSerial = GetCompletedCommandSerial();
     for (auto index : mInFlightCommandAllocators.IterateUpTo(completedSerial)) {
         DAWN_TRY(CheckHRESULT(mCommandAllocators[index].allocator->Reset(),

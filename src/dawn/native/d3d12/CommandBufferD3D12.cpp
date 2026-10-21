@@ -56,6 +56,7 @@
 #include "src/dawn/native/d3d12/ShaderVisibleDescriptorAllocatorD3D12.h"
 #include "src/dawn/native/d3d12/StagingDescriptorAllocatorD3D12.h"
 #include "src/dawn/native/d3d12/UtilsD3D12.h"
+#include "src/dawn/platform/metrics/HistogramMacros.h"
 #include "src/utils/compiler.h"
 #include "src/utils/numeric.h"
 
@@ -325,7 +326,8 @@ MaybeError TransitionAndClearForSyncScope(CommandRecordingContext* commandContex
         DAWN_TRY(ToBackend(table)->ApplyPendingUpdates(commandContext, writables));
     }
 
-    std::vector<D3D12_RESOURCE_BARRIER> barriers;
+    // This scope consumes the scratch before another synchronization scope can reset it.
+    auto& barriers = commandContext->ResetResourceBarrierScratch();
 
     ID3D12GraphicsCommandList* commandList = commandContext->GetCommandList();
 
@@ -1494,6 +1496,8 @@ MaybeError CommandBuffer::RecordComputePass(CommandRecordingContext* commandCont
                                             BindGroupStateTracker<ComputePipeline>* bindingTracker,
                                             BeginComputePassCmd* computePass,
                                             const ComputePassResourceUsage& resourceUsages) {
+    SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(), "Dawn.Command.RecordComputeUS");
+
     size_t currentDispatch = 0;
     ID3D12GraphicsCommandList* commandList = commandContext->GetCommandList();
 
@@ -1803,6 +1807,8 @@ MaybeError CommandBuffer::RecordRenderPass(CommandRecordingContext* commandConte
                                            BeginRenderPassCmd* renderPass,
                                            PassIndex renderPassIndex,
                                            const bool passHasUAV) {
+    SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(), "Dawn.Command.RecordRenderUS");
+
     Device* device = ToBackend(GetDevice());
     const bool useRenderPass = device->IsToggleEnabled(Toggle::UseD3D12RenderPass);
 
@@ -2176,6 +2182,9 @@ MaybeError CommandBuffer::RecordRenderPass(CommandRecordingContext* commandConte
             }
 
             case Command::ExecuteBundles: {
+                SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(),
+                                                  "Dawn.Command.ReplayBundlesUS");
+
                 ExecuteBundlesCmd* cmd = mCommands.NextCommand<ExecuteBundlesCmd>();
                 auto bundles = mCommands.NextData<Ref<RenderBundleBase>>(cmd->count);
 

@@ -193,6 +193,8 @@ class IndirectDrawMetadata : public NonCopyable {
                          bool duplicateBaseVertexInstance,
                          DrawIndirectCmd* cmd);
 
+    void AddUnvalidatedIndirectDraw();
+
     void AddMultiDrawIndirect(wgpu::PrimitiveTopology topology,
                               bool duplicateBaseVertexInstance,
                               MultiDrawIndirectCmd* cmd);

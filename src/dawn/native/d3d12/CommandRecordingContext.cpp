@@ -40,6 +40,7 @@
 #include "src/dawn/native/d3d12/HeapD3D12.h"
 #include "src/dawn/native/d3d12/ResidencyManagerD3D12.h"
 #include "src/dawn/platform/tracing/TraceEvent.h"
+#include "src/dawn/platform/metrics/HistogramMacros.h"
 #include "src/utils/numeric.h"
 
 namespace dawn::native::d3d12 {
@@ -78,12 +79,17 @@ MaybeError CommandRecordingContext::ExecuteCommandList(Device* device,
         DAWN_TRY(texture->SynchronizeTextureBeforeUse(this));
     }
 
-    MaybeError error =
-        CheckHRESULT(mD3d12CommandList->Close(), "D3D12 closing pending command list");
-    if (error.IsError()) {
-        DAWN_TRY(std::move(error));
+    {
+        SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(device->GetPlatform(), "Dawn.Command.CloseCommandsUS");
+
+        DAWN_TRY(CheckHRESULT(mD3d12CommandList->Close(), "D3D12 closing pending command list"));
     }
-    DAWN_TRY(device->GetResidencyManager()->EnsureHeapsAreResident(mHeapsPendingUsage));
+
+    {
+        SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(device->GetPlatform(), "Dawn.Command.ResidencyUS");
+
+        DAWN_TRY(device->GetResidencyManager()->EnsureHeapsAreResident(mHeapsPendingUsage));
+    }
 
     if (device->IsToggleEnabled(Toggle::RecordDetailedTimingInTraceEvents)) {
         uint64_t gpuTimestamp;
@@ -121,7 +127,11 @@ MaybeError CommandRecordingContext::ExecuteCommandList(Device* device,
     }
 
     ID3D12CommandList* d3d12CommandList = GetCommandList();
-    commandQueue->ExecuteCommandLists(1, &d3d12CommandList);
+    {
+        SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(device->GetPlatform(), "Dawn.Command.ExecuteCommandsUS");
+
+        commandQueue->ExecuteCommandLists(1, &d3d12CommandList);
+    }
 
     return {};
 }
@@ -169,6 +179,7 @@ void CommandRecordingContext::Release() {
     mSharedTextures.clear();
     mHeapsPendingUsage.clear();
     mTempBuffers.clear();
+    mResourceBarrierScratch.clear();
 
     ReleaseKeyedMutexes();
 }
@@ -183,6 +194,11 @@ void CommandRecordingContext::SetNeedsSubmit() {
 
 void CommandRecordingContext::AddToTempBuffers(Ref<Buffer> tempBuffer) {
     mTempBuffers.emplace_back(tempBuffer);
+}
+
+std::vector<D3D12_RESOURCE_BARRIER>& CommandRecordingContext::ResetResourceBarrierScratch() {
+    mResourceBarrierScratch.clear();
+    return mResourceBarrierScratch;
 }
 
 MaybeError CommandRecordingContext::AcquireKeyedMutex(Ref<d3d::KeyedMutex> keyedMutex) {

@@ -219,9 +219,9 @@ IndirectDrawMetadata::ValidatedIndirectDraw IndirectDrawMetadata::GetValidatedIn
 }
 
 void IndirectDrawMetadata::AddBundle(RenderBundleBase* bundle) {
-    IndirectDrawIndex bundleIndirectDrawCount{0u};
+    const IndirectDrawMetadata& bundleMetadata = bundle->GetIndirectDrawMetadata();
     for (const auto& [config, validationInfo] :
-         bundle->GetIndirectDrawMetadata().mIndexedIndirectBufferValidationInfo) {
+         bundleMetadata.mIndexedIndirectBufferValidationInfo) {
         auto it = mIndexedIndirectBufferValidationInfo.lower_bound(config);
         if (it == mIndexedIndirectBufferValidationInfo.end() || it->first != config) {
             it = mIndexedIndirectBufferValidationInfo.emplace_hint(
@@ -233,10 +233,14 @@ void IndirectDrawMetadata::AddBundle(RenderBundleBase* bundle) {
         for (const IndirectValidationBatch& batch : validationInfo.GetBatches()) {
             it->second.AddBatch(mMaxDrawCallsPerBatch, mMaxBatchOffsetRange, batch,
                                 mNextIndirectDrawIndex);
-            bundleIndirectDrawCount += IndirectDrawIndex(batch.draws.size());
         }
     }
-    mNextIndirectDrawIndex += bundleIndirectDrawCount;
+    mNextIndirectDrawIndex += bundleMetadata.mNextIndirectDrawIndex;
+}
+
+// Raw argument commands still occupy an ordinal in backend playback.
+void IndirectDrawMetadata::AddUnvalidatedIndirectDraw() {
+    ++mNextIndirectDrawIndex;
 }
 
 void IndirectDrawMetadata::AddIndexedIndirectDraw(wgpu::IndexFormat indexFormat,

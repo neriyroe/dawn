@@ -286,6 +286,7 @@ void RenderEncoderBase::APIDrawIndirect(BufferBase* indirectBuffer, uint64_t ind
             } else {
                 cmd->indirectBuffer = indirectBuffer;
                 cmd->indirectOffset = indirectOffset;
+                mIndirectDrawMetadata.AddUnvalidatedIndirectDraw();
 
                 mUsageTracker.BufferUsedAs(indirectBuffer,
                                            kIndirectBufferForFrontendValidation |
@@ -352,6 +353,7 @@ void RenderEncoderBase::APIDrawIndexedIndirect(BufferBase* indirectBuffer,
             } else {
                 cmd->indirectBuffer = indirectBuffer;
                 cmd->indirectOffset = indirectOffset;
+                mIndirectDrawMetadata.AddUnvalidatedIndirectDraw();
 
                 mUsageTracker.BufferUsedAs(indirectBuffer,
                                            kIndirectBufferForFrontendValidation |

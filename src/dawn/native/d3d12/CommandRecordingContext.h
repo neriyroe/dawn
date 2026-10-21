@@ -41,6 +41,7 @@ class Device;
 class Heap;
 class Texture;
 
+// Owns one recording's resource lifetimes and reusable command-list scratch.
 class CommandRecordingContext {
   public:
     void AddToSharedTextureList(Texture* texture);
@@ -62,6 +63,9 @@ class CommandRecordingContext {
 
     void AddToTempBuffers(Ref<Buffer> tempBuffer);
 
+    // Clears entries but retains capacity; the caller consumes them before the next reset.
+    std::vector<D3D12_RESOURCE_BARRIER>& ResetResourceBarrierScratch();
+
     MaybeError AcquireKeyedMutex(Ref<d3d::KeyedMutex> keyedMutex);
 
   private:
@@ -77,6 +81,8 @@ class CommandRecordingContext {
     absl::flat_hash_set<Ref<d3d::KeyedMutex>> mAcquiredKeyedMutexes;
     std::vector<Heap*> mHeapsPendingUsage;
     std::vector<Ref<Buffer>> mTempBuffers;
+
+    std::vector<D3D12_RESOURCE_BARRIER> mResourceBarrierScratch;
 };
 }  // namespace dawn::native::d3d12
 

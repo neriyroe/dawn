@@ -41,6 +41,7 @@
 #include "src/dawn/native/d3d12/DeviceD3D12.h"
 #include "src/dawn/native/d3d12/QueueD3D12.h"
 #include "src/dawn/native/d3d12/TextureD3D12.h"
+#include "src/dawn/platform/metrics/HistogramMacros.h"
 
 namespace dawn::native::d3d12 {
 // static
@@ -91,6 +92,8 @@ MaybeError SwapChain::CollectSwapChainBuffers() {
 }
 
 MaybeError SwapChain::PresentImpl() {
+    SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(), "Dawn.Command.PresentD3D12US");
+
     Queue* queue = ToBackend(GetDevice()->GetQueue());
 
     // Transition the texture to the present state as required by IDXGISwapChain1::Present()
@@ -125,7 +128,11 @@ ResultOrError<SwapChainTextureInfo> SwapChain::GetCurrentTextureImpl() {
     mCurrentBuffer = GetDXGISwapChain()->GetCurrentBackBufferIndex();
     const Buffer& buffer = mBuffers[mCurrentBuffer];
 
-    DAWN_TRY(queue->WaitForSerial(std::max(buffer.lastUsed, mEarlierPresent)));
+    {
+        SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(), "Dawn.Command.AcquireWaitUS");
+
+        DAWN_TRY(queue->WaitForSerial(std::max(buffer.lastUsed, mEarlierPresent)));
+    }
 
     // Create the API side objects for this use of the swapchain's buffer.
     TextureDescriptor descriptor = GetSwapChainBaseTextureDescriptor(this);
