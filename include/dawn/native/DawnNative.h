@@ -352,6 +352,11 @@ struct DAWN_NATIVE_EXPORT AllocatorMemoryInfo {
     uint64_t totalAllocatedMemory = 0;
     uint64_t totalLazyAllocatedMemory = 0;
     uint64_t totalLazyUsedMemory = 0;
+    // Upload staging held now, its idle pooled share, and the most of each since ReduceMemoryUsage.
+    uint64_t totalStagingMemory = 0;
+    uint64_t totalIdleStagingMemory = 0;
+    uint64_t peakStagingMemory = 0;
+    uint64_t peakIdleStagingMemory = 0;
 };
 DAWN_NATIVE_EXPORT AllocatorMemoryInfo GetAllocatorMemoryInfo(WGPUDevice device);
 

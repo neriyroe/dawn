@@ -35,6 +35,7 @@
 #include "src/dawn/native/BindGroupLayout.h"
 #include "src/dawn/native/Buffer.h"
 #include "src/dawn/native/Device.h"
+#include "src/dawn/native/DynamicUploader.h"
 #include "src/dawn/native/Instance.h"
 #include "src/dawn/native/Texture.h"
 #include "src/utils/log.h"
@@ -297,7 +298,14 @@ MemoryUsageInfo ComputeEstimatedMemoryUsageInfo(WGPUDevice device) {
 
 AllocatorMemoryInfo GetAllocatorMemoryInfo(WGPUDevice device) {
     auto deviceGuard = FromAPI(device)->GetGuard();
-    return FromAPI(device)->GetAllocatorMemoryInfo();
+    AllocatorMemoryInfo info = FromAPI(device)->GetAllocatorMemoryInfo();
+    const DynamicUploader::StagingMemory staging =
+        FromAPI(device)->GetDynamicUploader()->GetStagingMemory();
+    info.totalStagingMemory = staging.bytes;
+    info.totalIdleStagingMemory = staging.idleBytes;
+    info.peakStagingMemory = staging.peakBytes;
+    info.peakIdleStagingMemory = staging.peakIdleBytes;
+    return info;
 }
 
 bool ReduceMemoryUsage(WGPUDevice device) {

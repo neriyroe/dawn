@@ -27,6 +27,7 @@
 
 #include "src/dawn/native/DynamicUploader.h"
 
+#include <algorithm>
 #include <atomic>
 #include <utility>
 
@@ -40,7 +41,15 @@
 namespace dawn::native {
 
 namespace {
-constexpr uint64_t kRingBufferSize = 4ULL * 1024 * 1024;
+constexpr uint64_t kRingBufferSize = 16ULL * 1024 * 1024;
+// The most idle staging memory kept between load boundaries; a larger buffer is never kept.
+constexpr uint64_t kIdleStagingCap = 64ULL * 1024 * 1024;
+
+// A size the pool can keep rounds up to its power of two, so later uploads of the class reuse it.
+uint64_t StagingSizeFor(uint64_t alignedSize) {
+    const uint64_t pooled = NextPowerOfTwo(alignedSize);
+    return pooled <= kIdleStagingCap ? pooled : alignedSize;
+}
 }  // anonymous namespace
 
 DynamicUploader::DynamicUploader(DeviceBase* device) : mDevice(device) {}
@@ -52,21 +61,16 @@ ResultOrError<UploadReservation> DynamicUploader::Reserve(uint64_t allocationSiz
 
     // Disable further sub-allocation should the request be too large.
     if (allocationSize > kRingBufferSize) {
-        BufferDescriptor bufferDesc = {};
-        bufferDesc.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::MapWrite;
-        bufferDesc.size = alignedAllocationSize;
-        bufferDesc.mappedAtCreation = true;
-        bufferDesc.label = "Dawn_DynamicUploaderStaging";
-
-        IgnoreLazyClearCountScope scope(mDevice);
         Ref<BufferBase> stagingBuffer;
-        DAWN_TRY_ASSIGN(stagingBuffer, mDevice->CreateBuffer(&bufferDesc));
+        DAWN_TRY_ASSIGN(stagingBuffer, AcquireStaging(StagingSizeFor(alignedAllocationSize)));
 
         UploadReservation reservation;
         reservation.mappedData =
             stagingBuffer->GetMappedRange().first(checked_cast<size_t>(allocationSize));
         reservation.offsetInBuffer = 0;
-        reservation.buffer = std::move(stagingBuffer);
+        reservation.buffer = stagingBuffer;
+        mStagingInFlight.Enqueue(std::move(stagingBuffer),
+                                 mDevice->GetQueue()->GetPendingCommandSerial());
         return reservation;
     }
 
@@ -109,16 +113,8 @@ ResultOrError<UploadReservation> DynamicUploader::Reserve(uint64_t allocationSiz
     // Allocate the staging buffer backing the ringbuffer.
     // Note: the first ringbuffer will be lazily created.
     if (targetRingBuffer->mStagingBuffer == nullptr) {
-        BufferDescriptor bufferDesc = {};
-        bufferDesc.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::MapWrite;
-        bufferDesc.size = Align(targetRingBuffer->mAllocator.GetSize(), 4);
-        bufferDesc.mappedAtCreation = true;
-        bufferDesc.label = "Dawn_DynamicUploaderStaging";
-
-        IgnoreLazyClearCountScope scope(mDevice);
-        Ref<BufferBase> stagingBuffer;
-        DAWN_TRY_ASSIGN(stagingBuffer, mDevice->CreateBuffer(&bufferDesc));
-        targetRingBuffer->mStagingBuffer = std::move(stagingBuffer);
+        DAWN_TRY_ASSIGN(targetRingBuffer->mStagingBuffer,
+                        AcquireStaging(Align(targetRingBuffer->mAllocator.GetSize(), 4)));
     }
 
     DAWN_ASSERT(targetRingBuffer->mStagingBuffer != nullptr);
@@ -132,6 +128,45 @@ ResultOrError<UploadReservation> DynamicUploader::Reserve(uint64_t allocationSiz
     reservation.offsetInBuffer = startOffset;
 
     return reservation;
+}
+
+ResultOrError<Ref<BufferBase>> DynamicUploader::AcquireStaging(uint64_t size) {
+    auto idle = mIdleStaging.find(size);
+    if (idle != mIdleStaging.end() && !idle->second.empty()) {
+        Ref<BufferBase> buffer = std::move(idle->second.back());
+        idle->second.pop_back();
+        mIdleStagingBytes -= size;
+        return std::move(buffer);
+    }
+
+    BufferDescriptor bufferDesc = {};
+    bufferDesc.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::MapWrite;
+    bufferDesc.size = size;
+    bufferDesc.mappedAtCreation = true;
+    bufferDesc.label = "Dawn_DynamicUploaderStaging";
+
+    IgnoreLazyClearCountScope scope(mDevice);
+    Ref<BufferBase> buffer;
+    DAWN_TRY_ASSIGN(buffer, mDevice->CreateBuffer(&bufferDesc));
+    mStagingBytes += size;
+    mPeakStagingBytes = std::max(mPeakStagingBytes, mStagingBytes);
+    return std::move(buffer);
+}
+
+void DynamicUploader::Recycle(Ref<BufferBase> buffer) {
+    const uint64_t size = buffer->GetSize();
+    if (mIdleStagingBytes + size > kIdleStagingCap) {
+        mStagingBytes -= size;
+        return;
+    }
+    mIdleStagingBytes += size;
+    mPeakIdleStagingBytes = std::max(mPeakIdleStagingBytes, mIdleStagingBytes);
+    mIdleStaging[size].push_back(std::move(buffer));
+}
+
+DynamicUploader::StagingMemory DynamicUploader::GetStagingMemory() const {
+    DAWN_ASSERT(mDevice->IsLockedByCurrentThreadIfNeeded());
+    return {mStagingBytes, mIdleStagingBytes, mPeakStagingBytes, mPeakIdleStagingBytes};
 }
 
 MaybeError DynamicUploader::OnStagingMemoryFreePendingOnSubmit(uint64_t size) {
@@ -176,10 +211,32 @@ void DynamicUploader::Deallocate(ExecutionSerial lastCompletedSerial, bool freeA
         // again unless explicitly asked to do so. The last buffer is the largest.
         const bool shouldFree = (i < mRingBuffers.size() - 1) || freeAll;
         if (mRingBuffers[i]->mAllocator.Empty() && shouldFree) {
+            if (mRingBuffers[i]->mStagingBuffer != nullptr) {
+                Recycle(std::move(mRingBuffers[i]->mStagingBuffer));
+            }
             mRingBuffers.erase(mRingBuffers.begin() + sign_cast(i));
         } else {
             i++;
         }
+    }
+
+    for (Ref<BufferBase>& buffer : mStagingInFlight.IterateUpTo(lastCompletedSerial)) {
+        Recycle(std::move(buffer));
+    }
+    mStagingInFlight.ClearUpTo(lastCompletedSerial);
+
+    // A load boundary lets every staging buffer go; Dawn defers the memory of one a copy still reads.
+    if (freeAll) {
+        for (const Ref<BufferBase>& buffer : mStagingInFlight.IterateAll()) {
+            mStagingBytes -= buffer->GetSize();
+        }
+        mStagingBytes -= mIdleStagingBytes;
+        mStagingInFlight.Clear();
+        mIdleStaging.clear();
+        mIdleStagingBytes = 0;
+        // The next interval's peaks start from the rings the boundary keeps.
+        mPeakStagingBytes = mStagingBytes;
+        mPeakIdleStagingBytes = 0;
     }
 }
 

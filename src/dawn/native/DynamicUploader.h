@@ -29,11 +29,13 @@
 #define SRC_DAWN_NATIVE_DYNAMICUPLOADER_H_
 
 #include <atomic>
+#include <map>
 #include <memory>
 #include <vector>
 
 #include "partition_alloc/pointers/raw_ptr.h"
 #include "src/dawn/common/Ref.h"
+#include "src/dawn/common/SerialQueue.h"
 #include "src/dawn/native/Error.h"
 #include "src/dawn/native/Forward.h"
 #include "src/dawn/native/IntegerTypes.h"
@@ -79,8 +81,22 @@ class DynamicUploader : NonMovable {
 
     void Deallocate(ExecutionSerial lastCompletedSerial, bool freeAll = false);
 
+    // Staging bytes held now, the idle pooled share of them, and the most of each since the last free-all.
+    struct StagingMemory {
+        uint64_t bytes = 0;
+        uint64_t idleBytes = 0;
+        uint64_t peakBytes = 0;
+        uint64_t peakIdleBytes = 0;
+    };
+    StagingMemory GetStagingMemory() const;
+
   private:
     ResultOrError<UploadReservation> Reserve(uint64_t size, uint64_t offsetAlignment);
+
+    // A mapped staging buffer of exactly `size` bytes: an idle one of that size, else a new one.
+    ResultOrError<Ref<BufferBase>> AcquireStaging(uint64_t size);
+    // Keeps a staging buffer no copy still reads for reuse, while the idle ones stay within their cap.
+    void Recycle(Ref<BufferBase> buffer);
 
     // Checks if a submit happened and resets memory to be freed pending submit if so.
     void UpdateMemoryPendingSubmit();
@@ -90,6 +106,16 @@ class DynamicUploader : NonMovable {
         RingBufferAllocator mAllocator;
     };
     std::vector<std::unique_ptr<RingBuffer>> mRingBuffers;
+
+    // Whole staging buffers of uploads too large for a ring, until the serial of their copy completes.
+    SerialQueue<ExecutionSerial, Ref<BufferBase>> mStagingInFlight;
+    // Idle staging buffers by size, still mapped, until a reuse or a load boundary's ReduceMemoryUsage.
+    std::map<uint64_t, std::vector<Ref<BufferBase>>> mIdleStaging;
+    uint64_t mIdleStagingBytes = 0;
+    // Every staging byte the rings, the copies in flight and the idle pool hold, and the peaks reported.
+    uint64_t mStagingBytes = 0;
+    uint64_t mPeakStagingBytes = 0;
+    uint64_t mPeakIdleStagingBytes = 0;
 
     // Serial used to track when a serial has been scheduled and the corresponding pending memory
     // will be freed in finite time.

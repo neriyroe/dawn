@@ -191,10 +191,10 @@ TEST_P(QueueWriteBufferTests, SuperLargeWriteBuffer) {
     EXPECT_BUFFER_U32_RANGE_EQ(expectedData.data(), buffer, 0, kElements);
 }
 
-// Test using WriteBuffer for large data where size > 4MiB and is not a multiple of 8.
+// Test using WriteBuffer for large data where size > the 16 MiB ring and is not a multiple of 8.
 // Regression test for issue where DynamicUploader's large allocation path did not trim mappedData.
 TEST_P(QueueWriteBufferTests, LargeWriteBufferNonMultipleOf8) {
-    constexpr uint64_t kSize = 4ULL * 1024 * 1024 + 4;
+    constexpr uint64_t kSize = 16ULL * 1024 * 1024 + 4;
     constexpr uint64_t kElements = kSize / sizeof(uint32_t);
     wgpu::BufferDescriptor descriptor;
     descriptor.size = kSize;
@@ -209,6 +209,103 @@ TEST_P(QueueWriteBufferTests, LargeWriteBufferNonMultipleOf8) {
     queue.WriteBuffer(buffer, 0, expectedData.data(), kSize);
 
     EXPECT_BUFFER_U32_RANGE_EQ(expectedData.data(), buffer, 0, kElements);
+}
+
+// Writes too large for a ring share one 32 MiB staging class. The second is back to back with the first,
+// whose staging is still in flight; the third, after both complete, reuses a pooled buffer holding old bytes.
+TEST_P(QueueWriteBufferTests, LargeWritesShareAStagingClass) {
+    constexpr uint64_t kClass = 32ULL * 1024 * 1024;
+    constexpr std::array<uint64_t, 3> kSizes = {20ULL * 1024 * 1024, 24ULL * 1024 * 1024 + 4,
+                                                18ULL * 1024 * 1024 + 8};
+    // Only D3D12 stages every first write of a buffer, so only there the pool's counters are exact.
+    const bool counted = !UsesWire() && IsD3D12();
+    std::array<wgpu::Buffer, kSizes.size()> buffers;
+    std::array<std::vector<uint32_t>, kSizes.size()> data;
+    native::AllocatorMemoryInfo pooled;
+    for (size_t write = 0; write < kSizes.size(); write++) {
+        if (write == 2) {
+            WaitForAllOperations();
+            if (counted) {
+                pooled = native::GetAllocatorMemoryInfo(device.Get());
+                EXPECT_GE(pooled.peakStagingMemory, 2 * kClass);
+                EXPECT_GE(pooled.totalIdleStagingMemory, 2 * kClass);
+            }
+        }
+        wgpu::BufferDescriptor descriptor;
+        descriptor.size = kSizes[write];
+        descriptor.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst;
+        buffers[write] = device.CreateBuffer(&descriptor);
+        data[write].resize(static_cast<size_t>(kSizes[write] / sizeof(uint32_t)));
+        for (size_t i = 0; i < data[write].size(); i++) {
+            data[write][i] = static_cast<uint32_t>(i * 3 + write * 0x10000001u);
+        }
+        queue.WriteBuffer(buffers[write], 0, data[write].data(), static_cast<size_t>(kSizes[write]));
+    }
+    if (counted) {
+        const native::AllocatorMemoryInfo reused = native::GetAllocatorMemoryInfo(device.Get());
+        EXPECT_EQ(reused.totalStagingMemory, pooled.totalStagingMemory);
+        EXPECT_EQ(reused.totalIdleStagingMemory + kClass, pooled.totalIdleStagingMemory);
+    }
+    for (size_t write = 0; write < kSizes.size(); write++) {
+        EXPECT_BUFFER_U32_RANGE_EQ(data[write].data(), buffers[write], 0,
+                                   static_cast<uint32_t>(data[write].size()));
+    }
+    if (counted) {
+        // A load boundary empties the pool, and the next interval's peak starts from what is left.
+        WaitForAllOperations();
+        bool pending = true;
+        for (uint32_t pass = 0; pass < 8 && pending; pass++) {
+            pending = native::ReduceMemoryUsage(device.Get());
+            WaitForAllOperations();
+        }
+        const native::AllocatorMemoryInfo trimmed = native::GetAllocatorMemoryInfo(device.Get());
+        EXPECT_EQ(trimmed.totalIdleStagingMemory, 0u);
+        EXPECT_EQ(trimmed.peakIdleStagingMemory, 0u);
+        EXPECT_EQ(trimmed.peakStagingMemory, trimmed.totalStagingMemory);
+    }
+}
+
+// Five 4 MiB writes fill one ring and start a second. Once they complete, Deallocate pools the emptied first
+// ring; the next round refills the kept ring, then takes the pooled buffer back with the first round's bytes in it.
+TEST_P(QueueWriteBufferTests, RingReusedAfterDeallocate) {
+    constexpr uint64_t kRingSize = 16ULL * 1024 * 1024;
+    constexpr uint64_t kWriteSize = 4ULL * 1024 * 1024;
+    constexpr uint32_t kElements = kWriteSize / sizeof(uint32_t);
+    constexpr uint32_t kWritesPerRound = 5;
+    const bool counted = !UsesWire() && IsD3D12();
+    std::vector<wgpu::Buffer> buffers;
+    std::vector<std::vector<uint32_t>> data;
+    native::AllocatorMemoryInfo pooled;
+    for (uint32_t round = 0; round < 2; round++) {
+        if (round == 1) {
+            WaitForAllOperations();
+            if (counted) {
+                pooled = native::GetAllocatorMemoryInfo(device.Get());
+                EXPECT_GE(pooled.totalStagingMemory, 2 * kRingSize);
+                EXPECT_GE(pooled.totalIdleStagingMemory, kRingSize);
+            }
+        }
+        for (uint32_t write = 0; write < kWritesPerRound; write++) {
+            wgpu::BufferDescriptor descriptor;
+            descriptor.size = kWriteSize;
+            descriptor.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst;
+            buffers.push_back(device.CreateBuffer(&descriptor));
+            std::vector<uint32_t>& values = data.emplace_back(kElements);
+            const uint32_t seed = static_cast<uint32_t>(buffers.size()) * 0x01000193u;
+            for (uint32_t i = 0; i < kElements; i++) {
+                values[i] = i ^ seed;
+            }
+            queue.WriteBuffer(buffers.back(), 0, values.data(), kWriteSize);
+        }
+    }
+    if (counted) {
+        const native::AllocatorMemoryInfo reused = native::GetAllocatorMemoryInfo(device.Get());
+        EXPECT_EQ(reused.totalStagingMemory, pooled.totalStagingMemory);
+        EXPECT_EQ(reused.totalIdleStagingMemory + kRingSize, pooled.totalIdleStagingMemory);
+    }
+    for (size_t i = 0; i < buffers.size(); i++) {
+        EXPECT_BUFFER_U32_RANGE_EQ(data[i].data(), buffers[i], 0, kElements);
+    }
 }
 
 // Test using the max buffer size. Regression test for dawn:1985. We don't bother validating the
