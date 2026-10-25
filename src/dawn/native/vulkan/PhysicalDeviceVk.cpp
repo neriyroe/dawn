@@ -40,6 +40,7 @@
 #include "src/dawn/native/Error.h"
 #include "src/dawn/native/Instance.h"
 #include "src/dawn/native/Limits.h"
+#include "src/dawn/native/Surface.h"
 #include "src/dawn/native/vulkan/BackendVk.h"
 #include "src/dawn/native/vulkan/DeviceVk.h"
 #include "src/dawn/native/vulkan/FramebufferFetchHelper.h"
@@ -132,6 +133,16 @@ constexpr bool SafeLessThan(float a, T b) {
 template <std::integral T, std::integral U>
 constexpr bool SafeGreaterThan(T a, U b) {
     return std::cmp_greater(a, b);
+}
+
+// The VkSurfaceKHR a swapchain on `instance` already holds for `surface`, or null when none is attached.
+VkSurfaceKHR AttachedVkSurface(const VulkanInstance* instance, const Surface* surface) {
+    SwapChainBase* current = surface->GetCurrentSwapChain();
+    if (current == nullptr || current->GetBackendType() != wgpu::BackendType::Vulkan ||
+        ToBackend(current->GetDevice()->GetPhysicalDevice())->GetVulkanInstance() != instance) {
+        return VK_NULL_HANDLE;
+    }
+    return ToBackend(current)->GetVkSurface();
 }
 
 }  // anonymous namespace
@@ -1672,7 +1683,11 @@ ResultOrError<PhysicalDeviceSurfaceCapabilities> PhysicalDevice::GetSurfaceCapab
     const Surface* surface) const {
     // Gather the Vulkan surface capabilities.
     VulkanSurfaceInfo vkCaps;
-    {
+    // Android gives a window one VkSurfaceKHR at a time: a second one fails with NATIVE_WINDOW_IN_USE.
+    VkSurfaceKHR attached = AttachedVkSurface(GetVulkanInstance(), surface);
+    if (attached != VK_NULL_HANDLE) {
+        DAWN_TRY_ASSIGN(vkCaps, GatherSurfaceInfo(*this, attached));
+    } else {
         const VulkanFunctions& fn = GetVulkanInstance()->GetFunctions();
         VkInstance vkInstance = GetVulkanInstance()->GetVkInstance();
 
