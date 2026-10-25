@@ -111,8 +111,8 @@ namespace dawn::wire::server {
         bool IsDeviceKnown(WGPUDevice device) const {
             return std::get<KnownObjects<WGPUDevice>>(mKnown).IsKnown(device);
         }
-        std::vector<WGPUDevice> GetAllDeviceHandles() const {
-            return std::get<KnownObjects<WGPUDevice>>(mKnown).GetAllHandles();
+        std::vector<WGPUDevice> GetAllOwnedDeviceHandles() const {
+            return std::get<KnownObjects<WGPUDevice>>(mKnown).GetAllOwnedHandles();
         }
         std::vector<WGPUInstance> GetAllInstanceHandles() const {
             return std::get<KnownObjects<WGPUInstance>>(mKnown).GetAllHandles();

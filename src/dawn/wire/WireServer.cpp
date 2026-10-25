@@ -35,7 +35,8 @@ WireServer::WireServer(const WireServerDescriptor& descriptor)
     : mImpl(server::Server::Create(*descriptor.procs,
                                    descriptor.serializer,
                                    descriptor.memoryTransferService,
-                                   descriptor.useSpontaneousCallbacks)) {}
+                                   descriptor.useSpontaneousCallbacks,
+                                   descriptor.processEventsAfterCommands)) {}
 
 WireServer::~WireServer() {
     mImpl.reset();
@@ -63,6 +64,20 @@ bool WireServer::InjectSurface(WGPUSurface surface,
 
 bool WireServer::InjectInstance(WGPUInstance instance, const Handle& handle) {
     return mImpl->InjectInstance(instance, handle) == WireResult::Success;
+}
+
+bool WireServer::InjectAdapter(WGPUAdapter adapter,
+                               const Handle& handle,
+                               const Handle& instanceHandle,
+                               WGPUFuture future) {
+    return mImpl->InjectAdapter(adapter, handle, instanceHandle, future) == WireResult::Success;
+}
+
+bool WireServer::InjectDevice(WGPUDevice device,
+                              const Handle& handle,
+                              const Handle& instanceHandle,
+                              WGPUFuture future) {
+    return mImpl->InjectDevice(device, handle, instanceHandle, future) == WireResult::Success;
 }
 
 WGPUDevice WireServer::GetDevice(uint32_t id, uint32_t generation) {

@@ -95,6 +95,17 @@ void Server::OnRequestDeviceCallback(RequestDeviceUserdata* data,
         return;
     }
 
+    Known<WGPUDevice> reservation;
+    if (FulfillDeviceRequest(std::move(cmd), data->device, device, &reservation) ==
+        WireResult::Success) {
+        SetForwardingDeviceCallbacks(reservation);
+    }
+}
+
+WireResult Server::FulfillDeviceRequest(ReturnAdapterRequestDeviceCallbackCmd cmd,
+                                        ObjectHandle handle,
+                                        WGPUDevice device,
+                                        Known<WGPUDevice>* known) {
     // The client should only be able to request supported features, so all enumerated
     // features that were enabled must also be supported by the wire.
     // Note: We fail the callback here, instead of immediately upon receiving
@@ -110,7 +121,7 @@ void Server::OnRequestDeviceCallback(RequestDeviceUserdata* data,
             cmd.status = wgpu::RequestDeviceStatus::Error;
             cmd.message = "Requested feature not supported.";
             SerializeCommand(std::move(cmd));
-            return;
+            return WireResult::FatalError;
         }
     }
     cmd.features = supportedFeatures.features;
@@ -130,18 +141,17 @@ void Server::OnRequestDeviceCallback(RequestDeviceUserdata* data,
     cmd.limits = FromAPI(&limits);
 
     // Assign the handle and allocated status if the device is created successfully.
-    Known<WGPUDevice> reservation;
-    if (FillReservation(data->device, device, &reservation) == WireResult::FatalError) {
+    if (FillReservation(handle, device, known) == WireResult::FatalError) {
         cmd.status = wgpu::RequestDeviceStatus::CallbackCancelled;
         cmd.message = "Destroyed before request was fulfilled.";
         SerializeCommand(std::move(cmd));
-        return;
+        return WireResult::FatalError;
     }
-    DAWN_ASSERT(reservation.data != nullptr);
-    reservation->info->server = this;
-    reservation->info->self = reservation.AsHandle();
-    SetForwardingDeviceCallbacks(reservation);
+    DAWN_ASSERT(known->data != nullptr);
+    (*known)->info->server = this;
+    (*known)->info->self = known->AsHandle();
     SerializeCommand(std::move(cmd));
+    return WireResult::Success;
 }
 
 }  // namespace dawn::wire::server

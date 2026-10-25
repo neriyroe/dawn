@@ -68,6 +68,20 @@ struct ReservedInstance {
     Handle handle;
 };
 
+struct ReservedAdapter {
+    WGPUAdapter adapter = nullptr;
+    Handle handle;
+    Handle instanceHandle;
+    WGPUFuture future = {};
+};
+
+struct ReservedDevice {
+    WGPUDevice device = nullptr;
+    Handle handle;
+    Handle instanceHandle;
+    WGPUFuture future = {};
+};
+
 struct DAWN_WIRE_EXPORT WireClientDescriptor {
     CommandSerializer* serializer = nullptr;
     client::MemoryTransferService* memoryTransferService = nullptr;
@@ -85,6 +99,15 @@ class DAWN_WIRE_EXPORT WireClient : public CommandHandler {
     ReservedSurface ReserveSurface(WGPUInstance instance,
                                    const WGPUSurfaceCapabilities* capabilities);
     ReservedInstance ReserveInstance(const WGPUInstanceDescriptor* descriptor = nullptr);
+
+    // Reserve an adapter or device the server already has. Each tracks its request unsent; the
+    // server's InjectAdapter or InjectDevice answers it through `callbackInfo`. Releasing such a
+    // device's last reference cancels its lost callback instead of destroying it.
+    ReservedAdapter ReserveAdapter(WGPUInstance instance,
+                                   const WGPURequestAdapterCallbackInfo& callbackInfo);
+    ReservedDevice ReserveDevice(WGPUAdapter adapter,
+                                 const WGPUDeviceDescriptor* descriptor,
+                                 const WGPURequestDeviceCallbackInfo& callbackInfo);
 
     void ReclaimBufferReservation(const ReservedBuffer& reservation);
     void ReclaimTextureReservation(const ReservedTexture& reservation);

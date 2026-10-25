@@ -37,8 +37,16 @@
 {% endif %}
 
 {% set PREFIX = "" if not c_namespace else c_namespace.SNAKE_CASE() + "_" %}
-#ifndef {{PREFIX}}{{API}}_CPP_H_
-#define {{PREFIX}}{{API}}_CPP_H_
+{% set SUFFIX = "_CPP_DOMAIN_H_" if shared_cpp_header else "_CPP_H_" %}
+//* A domain render shares the enums, bitmasks, constants, Bool and StringView of shared_cpp_header.
+{% set SharedStructures = ["string view"] if shared_cpp_header else [] %}
+{% set ApiNamespace = "::" + metadata.namespace + ("::" + c_namespace.namespace_case() if c_namespace else "") %}
+{% if shared_cpp_header %}
+    // The wire client's objects and structures in their own namespace, with no aliases in wgpu, so this header
+    // can be included beside {{shared_cpp_header}}, whose enums, bitmasks, constants, Bool and StringView it uses.
+{% endif %}
+#ifndef {{PREFIX}}{{API}}{{SUFFIX}}
+#define {{PREFIX}}{{API}}{{SUFFIX}}
 
 #include <cassert>
 #include <cmath>
@@ -52,6 +60,9 @@
 #include <type_traits>
 #include <utility>
 
+{% if shared_cpp_header %}
+    #include "{{shared_cpp_header}}"
+{% endif %}
 #include "{{c_header}}"
 #include "{{api}}/{{api}}_cpp_chained_struct.h"
 #include "{{api}}/{{api}}_enum_class_bitmasks.h"  // IWYU pragma: export
@@ -59,15 +70,17 @@
 namespace {{metadata.namespace}} {
 
 {% set c_prefix = metadata.c_prefix %}
-{% for constant in by_category["constant"] %}
-    {% set type = as_cppType(constant.type.name) %}
-    {% if constant.cpp_value %}
-        inline constexpr {{type}} k{{constant.name.CamelCase()}} = {{ constant.cpp_value }};
-    {% else %}
-        {% set value = c_prefix + "_" +  constant.name.SNAKE_CASE() %}
-        inline constexpr {{type}} k{{constant.name.CamelCase()}} = {{ value }};
-    {% endif %}
-{% endfor %}
+{% if not shared_cpp_header %}
+    {% for constant in by_category["constant"] %}
+        {% set type = as_cppType(constant.type.name) %}
+        {% if constant.cpp_value %}
+            inline constexpr {{type}} k{{constant.name.CamelCase()}} = {{ constant.cpp_value }};
+        {% else %}
+            {% set value = c_prefix + "_" +  constant.name.SNAKE_CASE() %}
+            inline constexpr {{type}} k{{constant.name.CamelCase()}} = {{ value }};
+        {% endif %}
+    {% endfor %}
+{% endif %}
 
 {%- macro render_c_actual_arg(arg) -%}
     {%- if arg.annotation == "value" -%}
@@ -94,194 +107,196 @@ namespace {{metadata.namespace}} {
     )
 {%- endmacro %}
 
-//* Although 'optional bool' is defined as an enum value, in C++, we manually implement it to
-//* provide conversion utilities.
-{% for type in by_category["enum"] if type.name.get() != "optional bool" %}
-    {% set CppType = as_cppType(type.name) %}
-    {% set CType = as_cType(type.name) %}
-    enum class {{CppType}} : uint32_t {
-        {% for value in type.values %}
-            {{as_cppEnum(value.name)}} = {{as_cEnum(type.name, value.name)}},
-        {% endfor %}
-    };
-    static_assert(sizeof({{CppType}}) == sizeof({{CType}}), "sizeof mismatch for {{CppType}}");
-    static_assert(alignof({{CppType}}) == alignof({{CType}}), "alignof mismatch for {{CppType}}");
+{% if not shared_cpp_header %}
+    //* Although 'optional bool' is defined as an enum value, in C++, we manually implement it to
+    //* provide conversion utilities.
+    {% for type in by_category["enum"] if type.name.get() != "optional bool" %}
+        {% set CppType = as_cppType(type.name) %}
+        {% set CType = as_cType(type.name) %}
+        enum class {{CppType}} : uint32_t {
+            {% for value in type.values %}
+                {{as_cppEnum(value.name)}} = {{as_cEnum(type.name, value.name)}},
+            {% endfor %}
+        };
+        static_assert(sizeof({{CppType}}) == sizeof({{CType}}), "sizeof mismatch for {{CppType}}");
+        static_assert(alignof({{CppType}}) == alignof({{CType}}), "alignof mismatch for {{CppType}}");
 
-{% endfor %}
-
-{% for type in by_category["bitmask"] %}
-    {% set CppType = as_cppType(type.name) %}
-    {% set CType = as_cType(type.name) %}
-    enum class {{CppType}} : uint64_t {
-        {% for value in type.values %}
-            {{as_cppEnum(value.name)}} = {{as_cEnum(type.name, value.name)}},
-        {% endfor %}
-    };
-    static_assert(sizeof({{CppType}}) == sizeof({{CType}}), "sizeof mismatch for {{CppType}}");
-    static_assert(alignof({{CppType}}) == alignof({{CType}}), "alignof mismatch for {{CppType}}");
-
-{% endfor %}
-
-// TODO(crbug.com/42241461): Update these to not be using the C callback types, and instead be
-// defined using C++ types instead. Note that when we remove these, the C++ callback info types
-// should also all be removed as they will no longer be necessary given the C++ templated
-// functions calls and setter utilities.
-{% for type in by_category["function pointer"] %}
-    using {{as_cppType(type.name)}} = {{as_cType(type.name)}};
-{% endfor %}
-
-// Special class for booleans in order to allow implicit conversions.
-{% set BoolCppType = as_cppType(types["bool"].name) %}
-{% set BoolCType = as_cType(types["bool"].name) %}
-class {{BoolCppType}} {
-  public:
-    constexpr {{BoolCppType}}() = default;
-    explicit(false) constexpr {{BoolCppType}}(bool value) : mValue(static_cast<{{BoolCType}}>(value)) {}
-    explicit(false) {{BoolCppType}}({{BoolCType}} value): mValue(value) {}
-
-    // NOLINTNEXTLINE(google-explicit-constructor)
-    constexpr operator bool() const { return static_cast<bool>(mValue); }
-
-  private:
-    friend struct std::hash<{{BoolCppType}}>;
-    // Default to false.
-    {{BoolCType}} mValue = static_cast<{{BoolCType}}>(false);
-};
-
-// Special class for optional booleans in order to allow conversions.
-{% set OptionalBool = types["optional bool"] %}
-{% set OptionalBoolCppType = as_cppType(OptionalBool.name) %}
-{% set OptionalBoolCType = as_cType(OptionalBool.name) %}
-{% set OptionalBoolUndefined = as_cEnum(OptionalBool.name, find_by_name(OptionalBool.values, "undefined").name) %}
-class {{OptionalBoolCppType}} {
-  public:
-    constexpr {{OptionalBoolCppType}}() = default;
-    explicit(false) constexpr {{OptionalBoolCppType}}(bool value) : mValue(static_cast<{{OptionalBoolCType}}>(value)) {}
-    explicit(false) constexpr {{OptionalBoolCppType}}(std::optional<bool> value) :
-        mValue(value ? static_cast<{{OptionalBoolCType}}>(*value) : {{OptionalBoolUndefined}}) {}
-    explicit(false) constexpr {{OptionalBoolCppType}}({{OptionalBoolCType}} value): mValue(value) {}
-
-    // Define the values that are equivalent to the enums.
-    {% for value in OptionalBool.values %}
-        static const {{OptionalBoolCppType}} {{as_cppEnum(value.name)}};
     {% endfor %}
 
-    // Assignment operators.
-    {{OptionalBoolCppType}}& operator=(const bool& value) {
-        mValue = static_cast<{{OptionalBoolCType}}>(value);
-        return *this;
-    }
-    {{OptionalBoolCppType}}& operator=(const std::optional<bool>& value) {
-        mValue = value ? static_cast<{{OptionalBoolCType}}>(*value) : {{OptionalBoolUndefined}};
-        return *this;
-    }
-    {{OptionalBoolCppType}}& operator=(const {{OptionalBoolCType}}& value) {
-        mValue = value;
-        return *this;
-    }
+    {% for type in by_category["bitmask"] %}
+        {% set CppType = as_cppType(type.name) %}
+        {% set CType = as_cType(type.name) %}
+        enum class {{CppType}} : uint64_t {
+            {% for value in type.values %}
+                {{as_cppEnum(value.name)}} = {{as_cEnum(type.name, value.name)}},
+            {% endfor %}
+        };
+        static_assert(sizeof({{CppType}}) == sizeof({{CType}}), "sizeof mismatch for {{CppType}}");
+        static_assert(alignof({{CppType}}) == alignof({{CType}}), "alignof mismatch for {{CppType}}");
 
-    // Conversion functions.
-    // NOLINTNEXTLINE(google-explicit-constructor)
-    operator {{OptionalBoolCType}}() const { return mValue; }
-    // NOLINTNEXTLINE(google-explicit-constructor)
-    operator std::optional<bool>() const {
-        if (mValue == {{OptionalBoolUndefined}}) {
-            return std::nullopt;
+    {% endfor %}
+
+    // TODO(crbug.com/42241461): Update these to not be using the C callback types, and instead be
+    // defined using C++ types instead. Note that when we remove these, the C++ callback info types
+    // should also all be removed as they will no longer be necessary given the C++ templated
+    // functions calls and setter utilities.
+    {% for type in by_category["function pointer"] %}
+        using {{as_cppType(type.name)}} = {{as_cType(type.name)}};
+    {% endfor %}
+
+    // Special class for booleans in order to allow implicit conversions.
+    {% set BoolCppType = as_cppType(types["bool"].name) %}
+    {% set BoolCType = as_cType(types["bool"].name) %}
+    class {{BoolCppType}} {
+      public:
+        constexpr {{BoolCppType}}() = default;
+        explicit(false) constexpr {{BoolCppType}}(bool value) : mValue(static_cast<{{BoolCType}}>(value)) {}
+        explicit(false) {{BoolCppType}}({{BoolCType}} value): mValue(value) {}
+
+        // NOLINTNEXTLINE(google-explicit-constructor)
+        constexpr operator bool() const { return static_cast<bool>(mValue); }
+
+      private:
+        friend struct std::hash<{{BoolCppType}}>;
+        // Default to false.
+        {{BoolCType}} mValue = static_cast<{{BoolCType}}>(false);
+    };
+
+    // Special class for optional booleans in order to allow conversions.
+    {% set OptionalBool = types["optional bool"] %}
+    {% set OptionalBoolCppType = as_cppType(OptionalBool.name) %}
+    {% set OptionalBoolCType = as_cType(OptionalBool.name) %}
+    {% set OptionalBoolUndefined = as_cEnum(OptionalBool.name, find_by_name(OptionalBool.values, "undefined").name) %}
+    class {{OptionalBoolCppType}} {
+      public:
+        constexpr {{OptionalBoolCppType}}() = default;
+        explicit(false) constexpr {{OptionalBoolCppType}}(bool value) : mValue(static_cast<{{OptionalBoolCType}}>(value)) {}
+        explicit(false) constexpr {{OptionalBoolCppType}}(std::optional<bool> value) :
+            mValue(value ? static_cast<{{OptionalBoolCType}}>(*value) : {{OptionalBoolUndefined}}) {}
+        explicit(false) constexpr {{OptionalBoolCppType}}({{OptionalBoolCType}} value): mValue(value) {}
+
+        // Define the values that are equivalent to the enums.
+        {% for value in OptionalBool.values %}
+            static const {{OptionalBoolCppType}} {{as_cppEnum(value.name)}};
+        {% endfor %}
+
+        // Assignment operators.
+        {{OptionalBoolCppType}}& operator=(const bool& value) {
+            mValue = static_cast<{{OptionalBoolCType}}>(value);
+            return *this;
         }
-        return static_cast<bool>(mValue);
-    }
+        {{OptionalBoolCppType}}& operator=(const std::optional<bool>& value) {
+            mValue = value ? static_cast<{{OptionalBoolCType}}>(*value) : {{OptionalBoolUndefined}};
+            return *this;
+        }
+        {{OptionalBoolCppType}}& operator=(const {{OptionalBoolCType}}& value) {
+            mValue = value;
+            return *this;
+        }
 
-    // Comparison functions.
-    friend bool operator==(const {{OptionalBoolCppType}}& lhs, const {{OptionalBoolCppType}}& rhs) {
-        return lhs.mValue == rhs.mValue;
-    }
-    friend bool operator!=(const {{OptionalBoolCppType}}& lhs, const {{OptionalBoolCppType}}& rhs) {
-        return lhs.mValue != rhs.mValue;
-    }
+        // Conversion functions.
+        // NOLINTNEXTLINE(google-explicit-constructor)
+        operator {{OptionalBoolCType}}() const { return mValue; }
+        // NOLINTNEXTLINE(google-explicit-constructor)
+        operator std::optional<bool>() const {
+            if (mValue == {{OptionalBoolUndefined}}) {
+                return std::nullopt;
+            }
+            return static_cast<bool>(mValue);
+        }
 
-  private:
-    friend struct std::hash<{{OptionalBoolCppType}}>;
-    // Default to undefined.
-    {{OptionalBoolCType}} mValue = {{OptionalBoolUndefined}};
-};
-{% for value in OptionalBool.values %}
-    inline const {{OptionalBoolCppType}} {{OptionalBoolCppType}}::{{as_cppEnum(value.name)}} = {{OptionalBoolCppType}}({{as_cEnum(OptionalBool.name, value.name)}});
-{% endfor %}
+        // Comparison functions.
+        friend bool operator==(const {{OptionalBoolCppType}}& lhs, const {{OptionalBoolCppType}}& rhs) {
+            return lhs.mValue == rhs.mValue;
+        }
+        friend bool operator!=(const {{OptionalBoolCppType}}& lhs, const {{OptionalBoolCppType}}& rhs) {
+            return lhs.mValue != rhs.mValue;
+        }
 
-template<typename Derived, typename CType>
-class ObjectBase {
-  public:
-    ObjectBase() = default;
-    explicit(false) ObjectBase(CType handle): mHandle(handle) {
-        if (mHandle) Derived::{{c_prefix}}AddRef(mHandle);
-    }
-    ~ObjectBase() {
-        if (mHandle) Derived::{{c_prefix}}Release(mHandle);
-    }
+      private:
+        friend struct std::hash<{{OptionalBoolCppType}}>;
+        // Default to undefined.
+        {{OptionalBoolCType}} mValue = {{OptionalBoolUndefined}};
+    };
+    {% for value in OptionalBool.values %}
+        inline const {{OptionalBoolCppType}} {{OptionalBoolCppType}}::{{as_cppEnum(value.name)}} = {{OptionalBoolCppType}}({{as_cEnum(OptionalBool.name, value.name)}});
+    {% endfor %}
 
-    ObjectBase(ObjectBase const& other)
-        : ObjectBase(other.Get()) {
-    }
-    Derived& operator=(ObjectBase const& other) {
-        if (&other != this) {
-            if (mHandle) Derived::{{c_prefix}}Release(mHandle);
-            mHandle = other.mHandle;
+    template<typename Derived, typename CType>
+    class ObjectBase {
+      public:
+        ObjectBase() = default;
+        explicit(false) ObjectBase(CType handle): mHandle(handle) {
             if (mHandle) Derived::{{c_prefix}}AddRef(mHandle);
         }
-
-        return static_cast<Derived&>(*this);
-    }
-
-    ObjectBase(ObjectBase&& other) {
-        mHandle = other.mHandle;
-        other.mHandle = nullptr;
-    }
-    Derived& operator=(ObjectBase&& other) {
-        if (&other != this) {
+        ~ObjectBase() {
             if (mHandle) Derived::{{c_prefix}}Release(mHandle);
+        }
+
+        ObjectBase(ObjectBase const& other)
+            : ObjectBase(other.Get()) {
+        }
+        Derived& operator=(ObjectBase const& other) {
+            if (&other != this) {
+                if (mHandle) Derived::{{c_prefix}}Release(mHandle);
+                mHandle = other.mHandle;
+                if (mHandle) Derived::{{c_prefix}}AddRef(mHandle);
+            }
+
+            return static_cast<Derived&>(*this);
+        }
+
+        ObjectBase(ObjectBase&& other) {
             mHandle = other.mHandle;
             other.mHandle = nullptr;
         }
+        Derived& operator=(ObjectBase&& other) {
+            if (&other != this) {
+                if (mHandle) Derived::{{c_prefix}}Release(mHandle);
+                mHandle = other.mHandle;
+                other.mHandle = nullptr;
+            }
 
-        return static_cast<Derived&>(*this);
-    }
-
-    explicit(false) ObjectBase(std::nullptr_t) {}
-    Derived& operator=(std::nullptr_t) {
-        if (mHandle != nullptr) {
-            Derived::{{c_prefix}}Release(mHandle);
-            mHandle = nullptr;
+            return static_cast<Derived&>(*this);
         }
-        return static_cast<Derived&>(*this);
-    }
 
-    bool operator==(std::nullptr_t) const {
-        return mHandle == nullptr;
-    }
-    bool operator!=(std::nullptr_t) const {
-        return mHandle != nullptr;
-    }
+        explicit(false) ObjectBase(std::nullptr_t) {}
+        Derived& operator=(std::nullptr_t) {
+            if (mHandle != nullptr) {
+                Derived::{{c_prefix}}Release(mHandle);
+                mHandle = nullptr;
+            }
+            return static_cast<Derived&>(*this);
+        }
 
-    explicit operator bool() const {
-        return mHandle != nullptr;
-    }
-    CType Get() const {
-        return mHandle;
-    }
-    CType MoveToCHandle() {
-        CType result = mHandle;
-        mHandle = nullptr;
-        return result;
-    }
-    static Derived Acquire(CType handle) {
-        Derived result;
-        result.mHandle = handle;
-        return result;
-    }
+        bool operator==(std::nullptr_t) const {
+            return mHandle == nullptr;
+        }
+        bool operator!=(std::nullptr_t) const {
+            return mHandle != nullptr;
+        }
 
-  protected:
-    CType mHandle = nullptr;
-};
+        explicit operator bool() const {
+            return mHandle != nullptr;
+        }
+        CType Get() const {
+            return mHandle;
+        }
+        CType MoveToCHandle() {
+            CType result = mHandle;
+            mHandle = nullptr;
+            return result;
+        }
+        static Derived Acquire(CType handle) {
+            Derived result;
+            result.mHandle = handle;
+            return result;
+        }
+
+      protected:
+        CType mHandle = nullptr;
+    };
+{%- endif %}
 
 {%- macro render_cpp_default_value(member, is_struct, force_default=False, forced_default_value="") -%}
     {%- if forced_default_value -%}
@@ -415,16 +430,18 @@ class ObjectBase {
     class {{as_cppType(type.name)}};
 {% endfor %}
 
-{% for type in by_category["structure"] %}
+{% for type in by_category["structure"] if type.name.get() not in SharedStructures %}
     struct {{as_cppType(type.name)}};
 {% endfor %}
 
-struct StringView {
-    char const * data = nullptr;
-    size_t length = WGPU_STRLEN;
+{% if not shared_cpp_header %}
+    struct StringView {
+        char const * data = nullptr;
+        size_t length = WGPU_STRLEN;
 
-    {{wgpu_string_members("StringView") | indent(4)}}
-};
+        {{wgpu_string_members("StringView") | indent(4)}}
+    };
+{% endif %}
 
 namespace detail {
 constexpr size_t ConstexprMax(size_t a, size_t b) {
@@ -1185,7 +1202,18 @@ struct CallbackInfoHelper {
 
 {% endfor %}
 
-{% if c_namespace %}
+// The objects and structures of this API by name, for code that is generic over the API it uses.
+struct ApiTypes {
+    {% for type in by_category["object"] %}
+        using {{as_cppType(type.name)}} = {{ApiNamespace}}::{{as_cppType(type.name)}};
+    {% endfor %}
+    {% for type in by_category["structure"] %}
+        {% set Namespace = "::" + metadata.namespace if type.name.get() in SharedStructures else ApiNamespace %}
+        using {{as_cppType(type.name)}} = {{Namespace}}::{{as_cppType(type.name)}};
+    {% endfor %}
+};
+
+{% if c_namespace and not shared_cpp_header %}
     }  // namespace {{c_namespace.namespace_case()}}
 
     {% for type in by_category["object"] %}
@@ -1225,17 +1253,24 @@ struct CallbackInfoHelper {
     }
 {% endfor %}
 
+{% if shared_cpp_header %}
+    }  // namespace {{c_namespace.namespace_case()}}
+
+{% endif %}
 }  // namespace {{metadata.namespace}}
 
-namespace wgpu {
+{% set TrailingNamespace = "wgpu::" + c_namespace.namespace_case() if shared_cpp_header else "wgpu" %}
+namespace {{TrailingNamespace}} {
 
-{% for type in by_category["bitmask"] %}
-    template<>
-    struct IsWGPUBitmask<{{metadata.namespace}}::{{as_cppType(type.name)}}> {
-        static constexpr bool enable = true;
-    };
+{% if not shared_cpp_header %}
+    {% for type in by_category["bitmask"] %}
+        template<>
+        struct IsWGPUBitmask<{{metadata.namespace}}::{{as_cppType(type.name)}}> {
+            static constexpr bool enable = true;
+        };
 
-{% endfor %}
+    {% endfor %}
+{% endif %}
 
 {% if "texture component swizzle" in types %}
     inline bool operator==(const TextureComponentSwizzle& s1, const TextureComponentSwizzle& s2) {
@@ -1246,24 +1281,26 @@ namespace wgpu {
     }
 {% endif %}
 
-} // namespace wgpu
+} // namespace {{TrailingNamespace}}
 
-namespace std {
-// Custom boolean class needs corresponding hash function so that it appears as a transparent bool.
-template <>
-struct hash<{{metadata.namespace}}::{{BoolCppType}}> {
-  public:
-    size_t operator()(const {{metadata.namespace}}::{{BoolCppType}} &v) const {
-        return hash<bool>()(v);
-    }
-};
-template <>
-struct hash<{{metadata.namespace}}::{{OptionalBoolCppType}}> {
-  public:
-    size_t operator()(const {{metadata.namespace}}::{{OptionalBoolCppType}} &v) const {
-        return hash<{{OptionalBoolCType}}>()(v.mValue);
-    }
-};
-}  // namespace std
+{% if not shared_cpp_header %}
+    namespace std {
+    // Custom boolean class needs corresponding hash function so that it appears as a transparent bool.
+    template <>
+    struct hash<{{metadata.namespace}}::{{BoolCppType}}> {
+      public:
+        size_t operator()(const {{metadata.namespace}}::{{BoolCppType}} &v) const {
+            return hash<bool>()(v);
+        }
+    };
+    template <>
+    struct hash<{{metadata.namespace}}::{{OptionalBoolCppType}}> {
+      public:
+        size_t operator()(const {{metadata.namespace}}::{{OptionalBoolCppType}} &v) const {
+            return hash<{{OptionalBoolCType}}>()(v.mValue);
+        }
+    };
+    }  // namespace std
+{% endif %}
 
-#endif // {{PREFIX}}{{API}}_CPP_H_
+#endif // {{PREFIX}}{{API}}{{SUFFIX}}

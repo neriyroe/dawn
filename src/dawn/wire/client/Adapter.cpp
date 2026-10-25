@@ -276,12 +276,21 @@ wgpu::Status Adapter::APIGetInfo(AdapterInfo* info) const {
     return wgpu::Status::Success;
 }
 
+std::tuple<Ref<Device>, FutureID, bool> Adapter::TrackDeviceRequest(
+    const DeviceDescriptor* descriptor,
+    const WGPURequestDeviceCallbackInfo& callbackInfo) {
+    Ref<Device> device = GetClient()->Make<Device>(GetInstance(), this, descriptor);
+    auto [futureID, tracked] =
+        GetEventManager().TrackEvent(AcquireRef(new RequestDeviceEvent(callbackInfo, device)));
+    // The lost event follows the request's; tracking it also ends the device's hold on it.
+    device->APIGetLostFuture();
+    return {std::move(device), futureID, tracked};
+}
+
 Future Adapter::APIRequestDevice(const DeviceDescriptor* descriptor,
                                  const WGPURequestDeviceCallbackInfo& callbackInfo) {
     Client* client = GetClient();
-    Ref<Device> device = client->Make<Device>(GetInstance(), this, descriptor);
-    auto [futureIDInternal, tracked] =
-        GetEventManager().TrackEvent(AcquireRef(new RequestDeviceEvent(callbackInfo, device)));
+    auto [device, futureIDInternal, tracked] = TrackDeviceRequest(descriptor, callbackInfo);
     if (!tracked) {
         return {futureIDInternal};
     }

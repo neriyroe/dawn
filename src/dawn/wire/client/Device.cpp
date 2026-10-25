@@ -264,6 +264,10 @@ bool Device::IsKnownLost() const {
     return mIsLost;
 }
 
+void Device::SetImported() {
+    mIsImported = true;
+}
+
 Queue* Device::GetQueue() {
     // The queue is lazily created because if a Device is created by Reserve/Inject, we cannot send
     // the GetQueue message until it has been injected on the Server. It cannot happen immediately
@@ -286,9 +290,16 @@ const LimitsAndFeatures& Device::GetLimitsAndFeatures() const {
 }
 
 void Device::WillDropLastExternalRef() {
-    if (IsRegistered()) {
-        APIDestroy();
+    if (!IsRegistered()) {
+        return;
     }
+    // An imported device stays the embedder's: ending its lost event lets the device unregister,
+    // and the server then returns its reference without destroying it.
+    if (mIsImported) {
+        HandleDeviceLost(wgpu::DeviceLostReason::CallbackCancelled, "Device was released.");
+        return;
+    }
+    APIDestroy();
 }
 
 wgpu::Status Device::APIGetLimits(Limits* limits) const {

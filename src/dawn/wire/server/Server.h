@@ -194,7 +194,8 @@ class Server : public ServerBase {
     static std::shared_ptr<Server> Create(const DawnProcTable& procs,
                                           CommandSerializer* serializer,
                                           MemoryTransferService* memoryTransferService,
-                                          bool useSpontaneousCallbacks);
+                                          bool useSpontaneousCallbacks,
+                                          bool processEventsAfterCommands);
     ~Server() override;
 
     // ChunkedCommandHandler implementation
@@ -206,6 +207,14 @@ class Server : public ServerBase {
                              const Handle& handle,
                              const Handle& instanceHandle);
     WireResult InjectInstance(WGPUInstance instance, const Handle& handle);
+    WireResult InjectAdapter(WGPUAdapter adapter,
+                             const Handle& handle,
+                             const Handle& instanceHandle,
+                             WGPUFuture future);
+    WireResult InjectDevice(WGPUDevice device,
+                            const Handle& handle,
+                            const Handle& instanceHandle,
+                            WGPUFuture future);
 
     WGPUDevice GetDevice(uint32_t id, uint32_t generation);
     using ServerBase::IsDeviceKnown;
@@ -233,7 +242,8 @@ class Server : public ServerBase {
     Server(const DawnProcTable& procs,
            CommandSerializer* serializer,
            MemoryTransferService* memoryTransferService,
-           bool useSpontaneousCallbacks);
+           bool useSpontaneousCallbacks,
+           bool processEventsAfterCommands);
 
     template <typename Cmd>
     void SerializeCommand(Cmd&& cmd) {
@@ -265,6 +275,16 @@ class Server : public ServerBase {
     };
 
     void SetForwardingDeviceCallbacks(Known<WGPUDevice> device);
+
+    // Fill the reservation at `handle` and serialize the request's reply. A device the wire cannot
+    // carry, or a reservation that is gone, is refused in the reply and released.
+    WireResult FulfillAdapterRequest(ReturnInstanceRequestAdapterCallbackCmd cmd,
+                                     ObjectHandle handle,
+                                     WGPUAdapter adapter);
+    WireResult FulfillDeviceRequest(ReturnAdapterRequestDeviceCallbackCmd cmd,
+                                    ObjectHandle handle,
+                                    WGPUDevice device,
+                                    Known<WGPUDevice>* known);
 
     // Async event callbacks:
     //   These callbacks are expected to be called while holding the server object lock via
@@ -321,6 +341,7 @@ class Server : public ServerBase {
     std::unique_ptr<MemoryTransferService> mOwnedMemoryTransferService = nullptr;
     raw_ptr<MemoryTransferService> mMemoryTransferService = nullptr;
     bool mUseSpontaneousCallbacks = false;
+    bool mProcessEventsAfterCommands = true;
 
     // Weak pointer to self to facilitate creation of userdata.
     std::weak_ptr<Server> mSelf;

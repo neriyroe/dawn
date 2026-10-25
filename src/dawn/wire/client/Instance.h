@@ -29,6 +29,7 @@
 #define SRC_DAWN_WIRE_CLIENT_INSTANCE_H_
 
 #include <memory>
+#include <tuple>
 
 #include "absl/container/flat_hash_set.h"
 #include "dawn/wire/WireClient.h"
@@ -56,6 +57,11 @@ class Instance final : public ObjectBase {
 
     Future APIRequestAdapter(const RequestAdapterOptions* options,
                              const WGPURequestAdapterCallbackInfo& callbackInfo);
+
+    // Makes the adapter an adapter request yields and tracks the request's event, without sending
+    // the request. The bool is false when the event was not tracked, as after a disconnect.
+    std::tuple<Ref<Adapter>, FutureID, bool> TrackAdapterRequest(
+        const WGPURequestAdapterCallbackInfo& callbackInfo);
 
     void APIProcessEvents();
     wgpu::WaitStatus APIWaitAny(Span<FutureWaitInfo> infos, uint64_t timeoutNS);

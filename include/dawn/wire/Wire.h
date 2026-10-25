@@ -53,6 +53,11 @@ class DAWN_WIRE_EXPORT CommandSerializer {
     virtual std::optional<std::span<volatile std::byte>> GetCommandSpace(size_t size) = 0;
     virtual bool Flush() = 0;
     virtual size_t GetMaximumAllocationSize() const = 0;
+
+    // Called after a command whose data the memory transfer service carries outside the commands,
+    // with that data's size, so a serializer that bounds what the receiver has yet to take can
+    // count it as well.
+    virtual void OnOutOfBandData(size_t size) {}
 };
 
 class DAWN_WIRE_EXPORT CommandHandler {

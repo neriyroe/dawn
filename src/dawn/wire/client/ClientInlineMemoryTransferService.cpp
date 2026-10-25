@@ -76,8 +76,8 @@ class InlineMemoryTransferService : public MemoryTransferService {
             DAWN_ASSERT(offset <= mStagingData.size());
             DAWN_ASSERT(size <= mStagingData.size() - offset);
 
-            auto src = GetData().subspan(offset, serializeData.size());
-            std::ranges::copy(src, serializeData.begin());
+            Span<volatile std::byte>(serializeData)
+                .CopyFrom(GetData().subspan(offset, serializeData.size()));
         }
 
         bool DeserializeDataUpdate(std::span<const std::byte> deserializeData,
@@ -181,7 +181,9 @@ class InlineMemoryTransferService : public MemoryTransferService {
             return false;
         }
 
-        return memoryHandleUse == MemoryHandleUse::MappedBuffer;
+        // Bulk data is read once by the server's queue write, straight out of the shared memory.
+        return memoryHandleUse == MemoryHandleUse::MappedBuffer ||
+               memoryHandleUse == MemoryHandleUse::BulkData;
     }
 
     std::shared_ptr<InlineSharedMemoryManager> mSharedMemoryManager;

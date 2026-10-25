@@ -47,8 +47,8 @@ namespace {
 class InlineSharedMemoryManagerTest : public testing::Test {
   protected:
     void SetUp() override {
-#if !DAWN_PLATFORM_IS(WINDOWS)
-        GTEST_SKIP() << "InlineSharedMemoryManager is only implemented on Windows";
+#if !DAWN_PLATFORM_IS(WINDOWS) && !DAWN_PLATFORM_IS(LINUX) && !DAWN_PLATFORM_IS(APPLE)
+        GTEST_SKIP() << "InlineSharedMemoryManager is only implemented on Windows, Linux and Apple";
 #endif
         mManager = CreateInlineSharedMemoryManager();
     }
@@ -94,6 +94,9 @@ TEST_F(InlineSharedMemoryManagerTest, CreateSharedMemory_MemoryIsZeroInitialized
 }
 
 TEST_F(InlineSharedMemoryManagerTest, GetHandle_ReturnsNonNullHandle) {
+#if !DAWN_PLATFORM_IS(WINDOWS)
+    GTEST_SKIP() << "Only a Windows file mapping has a handle; POSIX maps anonymously in process";
+#endif
     Ref<SharedMemory> memory = mManager->CreateSharedMemory(256);
     EXPECT_TRUE(memory->GetSystemHandle().IsValid());
 }
@@ -206,8 +209,7 @@ class ClientInlineMemoryTransferServiceTest : public InlineSharedMemoryManagerTe
     }
 
     void TestSerializedAsStagingHandle(MemoryHandleUse stagingMemoryHandleUse) {
-        DAWN_ASSERT(stagingMemoryHandleUse == MemoryHandleUse::BulkData ||
-                    stagingMemoryHandleUse == MemoryHandleUse::MappedAtCreationData);
+        DAWN_ASSERT(stagingMemoryHandleUse == MemoryHandleUse::MappedAtCreationData);
 
         std::unique_ptr<MemoryHandle> handle =
             mService->CreateMemoryHandle(kSize, stagingMemoryHandleUse);
@@ -223,29 +225,40 @@ class ClientInlineMemoryTransferServiceTest : public InlineSharedMemoryManagerTe
         EXPECT_EQ(kInvalidSharedMemoryID, wireHandle.id);
     }
 
+    // A handle backed by shared memory serializes a reference to the same underlying memory.
+    void TestSerializedAsSharedHandle(MemoryHandleUse sharedMemoryHandleUse) {
+        std::unique_ptr<MemoryHandle> handle =
+            mService->CreateMemoryHandle(kSize, sharedMemoryHandleUse);
+
+        ASSERT_EQ(sizeof(SharedMemoryHandle), handle->GetSerializeCreateSize());
+
+        // Record the handle's mapped data before serializing.
+        std::span<std::byte> handleData = handle->GetData();
+        ASSERT_EQ(kSize, handleData.size());
+
+        std::vector<std::byte> serialized(handle->GetSerializeCreateSize());
+        handle->SerializeCreate(
+            std::span<volatile std::byte>(serialized.data(), serialized.size()));
+
+        // Deserializing should yield the exact same memory: same pointer and size.
+        SharedMemoryHandle wireHandle = ReadSerializedHandle(serialized);
+        Ref<SharedMemory> acquired = mManager->AcquireFromWire(SharedMemoryID(wireHandle.id));
+        ASSERT_NE(nullptr, acquired.Get());
+        EXPECT_EQ(handleData.data(), acquired->GetMappedSpan().data());
+        EXPECT_EQ(handleData.size(), acquired->GetMappedSpan().size());
+    }
+
     std::unique_ptr<client::MemoryTransferService> mService;
 };
 
-// A handle backed by shared memory serializes a reference to the same underlying memory.
+// A mappable buffer's handle is backed by shared memory.
 TEST_F(ClientInlineMemoryTransferServiceTest, SharedMemoryHandle_SerializeCreate) {
-    std::unique_ptr<MemoryHandle> handle =
-        mService->CreateMemoryHandle(kSize, MemoryHandleUse::MappedBuffer);
+    TestSerializedAsSharedHandle(MemoryHandleUse::MappedBuffer);
+}
 
-    ASSERT_EQ(sizeof(SharedMemoryHandle), handle->GetSerializeCreateSize());
-
-    // Record the handle's mapped data before serializing.
-    std::span<std::byte> handleData = handle->GetData();
-    ASSERT_EQ(kSize, handleData.size());
-
-    std::vector<std::byte> serialized(handle->GetSerializeCreateSize());
-    handle->SerializeCreate(std::span<volatile std::byte>(serialized.data(), serialized.size()));
-
-    // Deserializing should yield the exact same memory: same pointer and size.
-    SharedMemoryHandle wireHandle = ReadSerializedHandle(serialized);
-    Ref<SharedMemory> acquired = mManager->AcquireFromWire(SharedMemoryID(wireHandle.id));
-    ASSERT_NE(nullptr, acquired.Get());
-    EXPECT_EQ(handleData.data(), acquired->GetMappedSpan().data());
-    EXPECT_EQ(handleData.size(), acquired->GetMappedSpan().size());
+// Bulk data, which a queue write reads once on the server, is backed by shared memory too.
+TEST_F(ClientInlineMemoryTransferServiceTest, SharedMemoryHandle_SerializeCreate_BulkData) {
+    TestSerializedAsSharedHandle(MemoryHandleUse::BulkData);
 }
 
 // A shared-memory-backed handle exposes the shared memory directly, so writes through GetData are
@@ -275,12 +288,6 @@ TEST_F(ClientInlineMemoryTransferServiceTest, SharedMemoryHandle_DataIsSharedDir
     EXPECT_THAT(acquiredData, testing::ElementsAreArray(kExpectedData));
 }
 
-// With `MemoryHandleUse::BulkData` the service falls back to a staging-buffer-backed handle whose
-// SerializeCreate writes an empty (zeroed) SharedMemoryHandle.
-TEST_F(ClientInlineMemoryTransferServiceTest, StagingHandle_SerializeCreate_BulkData) {
-    TestSerializedAsStagingHandle(MemoryHandleUse::BulkData);
-}
-
 // With `MemoryHandleUse::MappedAtCreationData` the service falls back to a staging-buffer-backed
 // handle whose SerializeCreate writes an empty (zeroed) SharedMemoryHandle.
 TEST_F(ClientInlineMemoryTransferServiceTest, StagingHandle_SerializeCreate_MappedAtCreationData) {
@@ -291,7 +298,7 @@ TEST_F(ClientInlineMemoryTransferServiceTest, StagingHandle_SerializeCreate_Mapp
 // written through GetData can be recovered from the serialized array.
 TEST_F(ClientInlineMemoryTransferServiceTest, StagingHandle_SerializeDataUpdate) {
     std::unique_ptr<MemoryHandle> handle =
-        mService->CreateMemoryHandle(kSize, MemoryHandleUse::BulkData);
+        mService->CreateMemoryHandle(kSize, MemoryHandleUse::MappedAtCreationData);
 
     std::span<std::byte> data = handle->GetData();
     ASSERT_EQ(kSize, data.size());

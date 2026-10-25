@@ -47,6 +47,10 @@ void ChunkedCommandSerializer::Flush() {
     mSerializer->Flush();
 }
 
+void ChunkedCommandSerializer::OnOutOfBandData(size_t size) {
+    mSerializer->OnOutOfBandData(size);
+}
+
 void ChunkedCommandSerializer::SerializeChunkedCommand(Span<const std::byte> allocatedBuffer) {
     // Constant regarding the size of the WireChunkedCommandCmd that can be computed once.
     static size_t kWireChunkedCmdPrefixSize = ChunkedCommandCmd{0, 0, {}}.GetRequiredSize();

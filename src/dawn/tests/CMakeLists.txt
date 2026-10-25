@@ -727,6 +727,8 @@ set(unittest_sources
     "unittests/wire/WireBasicTests.cpp"
     "unittests/wire/WireBufferMappingTests.cpp"
     "unittests/wire/WireConfusionDeathTests.cpp"
+    "unittests/wire/WireCppDomainLayoutTests.cpp"
+    "unittests/wire/WireCppDomainTests.cpp"
     "unittests/wire/WireCreatePipelineAsyncTests.cpp"
     "unittests/wire/WireDeviceLifetimeTests.cpp"
     "unittests/wire/WireDisconnectTests.cpp"
@@ -735,9 +737,11 @@ set(unittest_sources
     "unittests/wire/WireFutureTest.cpp"
     "unittests/wire/WireFutureTest.h"
     "unittests/wire/WireInjectBufferTests.cpp"
+    "unittests/wire/WireInjectDeviceTests.cpp"
     "unittests/wire/WireInjectInstanceTests.cpp"
     "unittests/wire/WireInjectSurfaceTests.cpp"
     "unittests/wire/WireInjectTextureTests.cpp"
+    "unittests/wire/WireInlineSharedMemoryManagerTests.cpp"
     "unittests/wire/WireInstanceTests.cpp"
     "unittests/wire/WireMemoryTransferServiceTests.cpp"
     "unittests/wire/WireOptionalTests.cpp"
@@ -757,7 +761,6 @@ set(unittest_conditional_private_depends)
 if (WIN32)
     list(APPEND unittest_sources
         "unittests/WindowsUtilsTests.cpp"
-        "unittests/wire/WireInlineSharedMemoryManagerTests.cpp"
     )
 endif()
 

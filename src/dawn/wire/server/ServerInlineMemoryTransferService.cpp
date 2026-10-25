@@ -38,6 +38,7 @@
 #include "src/utils/assert.h"
 #include "src/utils/compiler.h"
 #include "src/utils/log.h"
+#include "src/utils/span.h"
 
 namespace dawn::wire::server {
 
@@ -59,7 +60,7 @@ class InlineMemoryTransferService : public MemoryTransferService {
             DAWN_ASSERT(serializeData.size() == GetSerializeDataUpdateSize(offset, size));
             DAWN_ASSERT(data.size() == size);
             DAWN_ASSERT(serializeData.size() >= data.size());
-            std::ranges::copy(data, serializeData.begin());
+            Span<volatile std::byte>(serializeData).CopyPrefixFrom(data);
         }
 
         bool DeserializeDataUpdate(std::span<const std::byte> deserializeData,
@@ -81,6 +82,9 @@ class InlineMemoryTransferService : public MemoryTransferService {
         explicit MemoryHandleWithSharedMemoryImpl(Ref<SharedMemory> sharedMemory)
             : mSharedMemory(std::move(sharedMemory)) {}
         ~MemoryHandleWithSharedMemoryImpl() override { Release(); }
+
+        // The client wrote the data into the shared memory, so a queue write reads it in place.
+        std::span<std::byte> GetSource() const override { return mSharedMemory->GetMappedSpan(); }
 
         size_t GetSerializeDataUpdateSize(size_t offset, size_t size) const override {
             // The data is transferred out-of-band through the shared memory, so nothing needs to

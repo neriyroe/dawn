@@ -27,6 +27,7 @@
 
 #include <cstring>
 #include <memory>
+#include <vector>
 
 #include "dawn/wire/WireClient.h"
 #include "gmock/gmock.h"
@@ -80,6 +81,43 @@ TEST_F(WireWriteBufferTests, WriteBufferChunkedCommands) {
                              kLargeAllocationSize)))
         .Times(1);
     FlushClient();
+}
+
+// Tests that writes of every size arrive intact: inline at sizes around the copy widths, chunked
+// past the serializer's allocation, and staged at the 4 MiB bulk threshold and beyond.
+TEST_F(WireWriteBufferTests, WriteBufferSizeSweep) {
+    constexpr size_t kBulkThreshold = 4 * 1024 * 1024;
+    const size_t chunkThreshold = GetC2SMaxAllocationSize();
+    std::vector<size_t> sizes = {1,   2,   3,    4,    5,    7,     8,     9,     15,
+                                 16,  17,  31,   32,   33,   63,    64,    65,    255,
+                                 256, 257, 4095, 4096, 4097, 65535, 65536, 65537, 262147};
+    sizes.insert(sizes.end(), {chunkThreshold - 4096, chunkThreshold + 16, kBulkThreshold - 1,
+                               kBulkThreshold, kBulkThreshold + 3});
+    const size_t largest = kBulkThreshold + 3;
+
+    WGPUBuffer apiBuffer = api.GetNewBuffer();
+    wgpu::BufferDescriptor desc = {};
+    desc.usage = wgpu::BufferUsage::CopyDst;
+    desc.size = largest;
+    wgpu::Buffer buffer = device.CreateBuffer(&desc);
+    EXPECT_CALL(api, DeviceCreateBuffer(apiDevice, _)).WillOnce(Return(apiBuffer));
+    FlushClient();
+
+    std::vector<uint8_t> data(largest);
+    for (size_t size : sizes) {
+        for (size_t i = 0; i < size; ++i) {
+            data[i] = static_cast<uint8_t>(i * 31 + size);
+        }
+        queue.WriteBuffer(buffer, 0, data.data(), size);
+        EXPECT_CALL(api, QueueWriteBuffer(
+                             apiQueue, apiBuffer, 0, MatchesLambda([&](void const* actual) {
+                                 return DAWN_UNSAFE_TODO(std::memcmp(data.data(), actual, size)) ==
+                                        0;
+                             }),
+                             size))
+            .Times(1);
+        FlushClient();
+    }
 }
 
 using WireQueueTestBase = WireFutureTest<wgpu::QueueWorkDoneCallback<void>*>;

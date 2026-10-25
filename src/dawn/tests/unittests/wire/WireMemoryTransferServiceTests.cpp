@@ -25,18 +25,23 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <cstring>
 #include <memory>
 #include <tuple>
 #include <utility>
+#include <vector>
 
+#include "dawn/wire/InlineMemoryTransferService.h"
 #include "src/dawn/common/StringViewUtils.h"
 #include "src/dawn/tests/MockCallback.h"
 #include "src/dawn/tests/ParamGenerator.h"
 #include "src/dawn/tests/StringViewMatchers.h"
 #include "src/dawn/tests/unittests/wire/WireTest.h"
+#include "src/dawn/utils/TerribleCommandBuffer.h"
 #include "src/dawn/wire/client/ClientMemoryTransferService_mock.h"
 #include "src/dawn/wire/server/ServerMemoryTransferService_mock.h"
 #include "src/utils/compiler.h"
+#include "src/utils/platform.h"
 
 namespace wgpu {
 // Define a stream operator for wgpu::MapMode so that it can be found on resolution for test name
@@ -786,6 +791,172 @@ TEST_P(WireMemoryTransferServiceBufferMappedAtCreationTests, DestroyBeforeUnmap)
     // The handle(s) are already destroyed so release only results in a server release call.
     buffer = nullptr;
     EXPECT_CALL(api, BufferRelease(apiBuffer)).Times(1);
+    FlushClient();
+}
+
+// The exported inline pair, sharing the platform's memory manager: a mappable buffer's data reaches
+// the other side, outside the commands and replies on platforms with shared memory.
+class WireInlineMemoryTransferServiceTests : public WireTest {
+  protected:
+    static constexpr size_t kSize = 64 * 1024;
+    static constexpr bool kSharesMemory =
+        DAWN_PLATFORM_IS(WINDOWS) || DAWN_PLATFORM_IS(LINUX) || DAWN_PLATFORM_IS(APPLE);
+
+    wgpu::Buffer CreateMappableBuffer(wgpu::BufferUsage usage, WGPUBuffer apiBuffer) {
+        wgpu::BufferDescriptor descriptor = {};
+        descriptor.size = kSize;
+        descriptor.usage = usage;
+        wgpu::Buffer buffer = device.CreateBuffer(&descriptor);
+        EXPECT_CALL(api, DeviceCreateBuffer(apiDevice, _)).WillOnce(Return(apiBuffer));
+        FlushClient();
+        return buffer;
+    }
+
+    // Maps the whole buffer and returns the size of the server's reply.
+    size_t Map(const wgpu::Buffer& buffer, WGPUBuffer apiBuffer, wgpu::MapMode mode) {
+        bool mapped = false;
+        buffer.MapAsync(mode, 0, kSize, wgpu::CallbackMode::AllowProcessEvents,
+                        [&mapped](wgpu::MapAsyncStatus status, wgpu::StringView) {
+                            mapped = status == wgpu::MapAsyncStatus::Success;
+                        });
+        EXPECT_CALL(api,
+                    OnBufferMapAsync(apiBuffer, static_cast<WGPUMapMode>(mode), 0, kSize, _, _))
+            .WillOnce(WithArg<5>([&](WGPUFuture future) {
+                api.CallBufferMapAsyncCallback(apiBuffer, WGPUMapAsyncStatus_Success,
+                                               kEmptyOutputStringView, future);
+            }));
+        auto* replies = static_cast<utils::TerribleCommandBuffer*>(GetS2CSerializer());
+        size_t before = replies->GetOffsetForTesting();
+        FlushClient();
+        size_t replySize = replies->GetOffsetForTesting() - before;
+        FlushServer();
+        instance.ProcessEvents();
+        EXPECT_TRUE(mapped);
+        return replySize;
+    }
+
+    static std::vector<uint8_t> Pattern(uint8_t seed) {
+        std::vector<uint8_t> bytes(kSize);
+        for (size_t i = 0; i < kSize; ++i) {
+            bytes[i] = static_cast<uint8_t>(i * 7 + seed);
+        }
+        return bytes;
+    }
+
+    InlineMemoryTransferServices mServices = CreateInlineMemoryTransferServices();
+
+  private:
+    client::MemoryTransferService* GetClientMemoryTransferService() override {
+        return mServices.client.get();
+    }
+    server::MemoryTransferService* GetServerMemoryTransferService() override {
+        return mServices.server.get();
+    }
+};
+
+// Test that a mapped read arrives, with its data outside the reply where memory is shared.
+TEST_F(WireInlineMemoryTransferServiceTests, MapReadDataArrives) {
+    WGPUBuffer apiBuffer = api.GetNewBuffer();
+    wgpu::Buffer buffer = CreateMappableBuffer(wgpu::BufferUsage::MapRead, apiBuffer);
+    std::vector<uint8_t> contents = Pattern(1);
+
+    EXPECT_CALL(api, BufferGetConstMappedRange(apiBuffer, 0, kSize))
+        .WillOnce(Return(contents.data()));
+    size_t replySize = Map(buffer, apiBuffer, wgpu::MapMode::Read);
+    if (kSharesMemory) {
+        EXPECT_LT(replySize, kSize);
+    }
+
+    const auto* read = static_cast<const uint8_t*>(buffer.GetConstMappedRange(0, kSize));
+    ASSERT_NE(read, nullptr);
+    EXPECT_EQ(DAWN_UNSAFE_TODO(std::memcmp(read, contents.data(), kSize)), 0);
+}
+
+// Test that a mapped write reaches the server, with its data outside the commands where memory is
+// shared.
+TEST_F(WireInlineMemoryTransferServiceTests, MapWriteDataArrives) {
+    WGPUBuffer apiBuffer = api.GetNewBuffer();
+    wgpu::Buffer buffer = CreateMappableBuffer(wgpu::BufferUsage::MapWrite, apiBuffer);
+    Map(buffer, apiBuffer, wgpu::MapMode::Write);
+
+    std::vector<uint8_t> written = Pattern(3);
+    auto* mapped = static_cast<uint8_t*>(buffer.GetMappedRange(0, kSize));
+    ASSERT_NE(mapped, nullptr);
+    DAWN_UNSAFE_TODO(std::memcpy(mapped, written.data(), kSize));
+
+    std::vector<uint8_t> received(kSize);
+    EXPECT_CALL(api, BufferGetMappedRange(apiBuffer, 0, kSize)).WillOnce(Return(received.data()));
+    EXPECT_CALL(api, BufferUnmap(apiBuffer));
+    buffer.Unmap();
+    if (kSharesMemory) {
+        EXPECT_LT(GetC2SCommandBuffer()->GetOffsetForTesting(), kSize);
+    }
+    FlushClient();
+    EXPECT_TRUE(received == written);
+}
+
+// Test that a bulk buffer write arrives, with its data outside the commands where memory is shared.
+TEST_F(WireInlineMemoryTransferServiceTests, WriteBufferXlDataArrives) {
+    constexpr size_t kBulkSize = 4 * 1024 * 1024 + 3;
+    WGPUBuffer apiBuffer = api.GetNewBuffer();
+    wgpu::BufferDescriptor descriptor = {};
+    descriptor.size = kBulkSize;
+    descriptor.usage = wgpu::BufferUsage::CopyDst;
+    wgpu::Buffer buffer = device.CreateBuffer(&descriptor);
+    EXPECT_CALL(api, DeviceCreateBuffer(apiDevice, _)).WillOnce(Return(apiBuffer));
+    FlushClient();
+
+    std::vector<uint8_t> written(kBulkSize);
+    for (size_t i = 0; i < kBulkSize; ++i) {
+        written[i] = static_cast<uint8_t>(i * 13 + 5);
+    }
+    size_t before = GetC2SCommandBuffer()->GetOffsetForTesting();
+    queue.WriteBuffer(buffer, 0, written.data(), kBulkSize);
+    if (kSharesMemory) {
+        EXPECT_LT(GetC2SCommandBuffer()->GetOffsetForTesting() - before, kSize);
+    }
+    EXPECT_CALL(api, QueueWriteBuffer(apiQueue, apiBuffer, 0, MatchesLambda([&](void const* data) {
+                                          return DAWN_UNSAFE_TODO(std::memcmp(
+                                                     data, written.data(), kBulkSize)) == 0;
+                                      }),
+                                      kBulkSize));
+    FlushClient();
+}
+
+// Test that a bulk texture write arrives, with its data outside the commands where memory is
+// shared.
+TEST_F(WireInlineMemoryTransferServiceTests, WriteTextureXlDataArrives) {
+    constexpr uint32_t kSide = 1024;
+    constexpr size_t kBulkSize = size_t(kSide) * kSide * 4;
+    WGPUTexture apiTexture = api.GetNewTexture();
+    wgpu::TextureDescriptor descriptor = {};
+    descriptor.size = {kSide, kSide};
+    descriptor.format = wgpu::TextureFormat::RGBA8Unorm;
+    descriptor.usage = wgpu::TextureUsage::CopyDst;
+    wgpu::Texture texture = device.CreateTexture(&descriptor);
+    EXPECT_CALL(api, DeviceCreateTexture(apiDevice, _)).WillOnce(Return(apiTexture));
+    FlushClient();
+
+    std::vector<uint8_t> written(kBulkSize);
+    for (size_t i = 0; i < kBulkSize; ++i) {
+        written[i] = static_cast<uint8_t>(i * 11 + 7);
+    }
+    wgpu::TexelCopyTextureInfo destination = {};
+    destination.texture = texture;
+    wgpu::TexelCopyBufferLayout layout = {};
+    layout.bytesPerRow = kSide * 4;
+    layout.rowsPerImage = kSide;
+    wgpu::Extent3D extent = {kSide, kSide};
+    size_t before = GetC2SCommandBuffer()->GetOffsetForTesting();
+    queue.WriteTexture(&destination, written.data(), kBulkSize, &layout, &extent);
+    if (kSharesMemory) {
+        EXPECT_LT(GetC2SCommandBuffer()->GetOffsetForTesting() - before, kSize);
+    }
+    EXPECT_CALL(api, QueueWriteTexture(apiQueue, _, MatchesLambda([&](void const* data) {
+                                           return DAWN_UNSAFE_TODO(std::memcmp(
+                                                      data, written.data(), kBulkSize)) == 0;
+                                       }),
+                                       kBulkSize, _, _));
     FlushClient();
 }
 

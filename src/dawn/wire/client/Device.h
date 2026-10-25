@@ -62,6 +62,9 @@ class Device final : public RefCountedWithExternalCount<ObjectWithEventsBase> {
 
     bool IsDestroyed() const;
     bool IsKnownLost() const;
+    // Marks a device the server injects: it belongs to the embedder, so dropping the last
+    // reference cancels its lost event instead of destroying it.
+    void SetImported();
     Queue* GetQueue();
     const LimitsAndFeatures& GetLimitsAndFeatures() const;
 
@@ -126,6 +129,7 @@ class Device final : public RefCountedWithExternalCount<ObjectWithEventsBase> {
     // on the lost state.
     bool mIsDestroyed = false;
     bool mIsLost = false;
+    bool mIsImported = false;
 };
 
 }  // namespace dawn::wire::client

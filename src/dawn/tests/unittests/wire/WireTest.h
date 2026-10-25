@@ -193,6 +193,7 @@ class WireTest : virtual public testing::Test {
   private:
     virtual wire::client::MemoryTransferService* GetClientMemoryTransferService();
     virtual wire::server::MemoryTransferService* GetServerMemoryTransferService();
+    virtual bool GetProcessEventsAfterCommands();
 
     // Devices created on the server MUST call Device.Destroy at least once. This map is used to
     // ensure that this invariant holds true for any devices returned.

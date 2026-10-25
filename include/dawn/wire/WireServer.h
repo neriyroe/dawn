@@ -49,6 +49,9 @@ struct DAWN_WIRE_EXPORT WireServerDescriptor {
     CommandSerializer* serializer = nullptr;
     server::MemoryTransferService* memoryTransferService = nullptr;
     bool useSpontaneousCallbacks = false;
+    // Whether HandleCommands processes the events of every instance after each batch. An embedder
+    // that processes events itself turns this off.
+    bool processEventsAfterCommands = true;
 };
 
 class DAWN_WIRE_EXPORT WireServer : public CommandHandler {
@@ -62,6 +65,18 @@ class DAWN_WIRE_EXPORT WireServer : public CommandHandler {
     bool InjectTexture(WGPUTexture texture, const Handle& handle, const Handle& deviceHandle);
     bool InjectSurface(WGPUSurface surface, const Handle& handle, const Handle& instanceHandle);
     bool InjectInstance(WGPUInstance instance, const Handle& handle);
+
+    // Answer a client's ReserveAdapter or ReserveDevice as the request's reply would, or return
+    // false. An injected device stays the embedder's: the client's release returns the reference
+    // taken here, and only the client's Destroy() destroys it.
+    bool InjectAdapter(WGPUAdapter adapter,
+                       const Handle& handle,
+                       const Handle& instanceHandle,
+                       WGPUFuture future);
+    bool InjectDevice(WGPUDevice device,
+                      const Handle& handle,
+                      const Handle& instanceHandle,
+                      WGPUFuture future);
 
     // Look up a device by (id, generation) pair. Returns nullptr if the generation
     // has expired or the id is not found.

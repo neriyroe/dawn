@@ -25,6 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <tuple>
 #include <utility>
 
 #include "src/dawn/common/StringViewUtils.h"
@@ -69,12 +70,19 @@ void Server::OnRequestAdapterCallback(RequestAdapterUserdata* data,
         return;
     }
 
+    // A failure is the client's to see, in the reply.
+    std::ignore = FulfillAdapterRequest(std::move(cmd), data->adapter, adapter);
+}
+
+WireResult Server::FulfillAdapterRequest(ReturnInstanceRequestAdapterCallbackCmd cmd,
+                                         ObjectHandle handle,
+                                         WGPUAdapter adapter) {
     // Assign the handle and allocated status if the adapter is created successfully.
-    if (FillReservation(data->adapter, adapter) == WireResult::FatalError) {
+    if (FillReservation(handle, adapter) == WireResult::FatalError) {
         cmd.status = wgpu::RequestAdapterStatus::CallbackCancelled;
         cmd.message = "Destroyed before request was fulfilled.";
         SerializeCommand(std::move(cmd));
-        return;
+        return WireResult::FatalError;
     }
 
     // Query and report the adapter supported features.
@@ -137,6 +145,7 @@ void Server::OnRequestAdapterCallback(RequestAdapterUserdata* data,
     cmd.limits = FromAPI(&limits);
 
     SerializeCommand(std::move(cmd));
+    return WireResult::Success;
 }
 
 }  // namespace dawn::wire::server

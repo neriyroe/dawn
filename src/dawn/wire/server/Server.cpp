@@ -40,9 +40,11 @@ CallbackUserdata::CallbackUserdata(const std::weak_ptr<Server>& server,
 std::shared_ptr<Server> Server::Create(const DawnProcTable& procs,
                                        CommandSerializer* serializer,
                                        MemoryTransferService* memoryTransferService,
-                                       bool useSpontaneousCallbacks) {
-    auto server = std::shared_ptr<Server>(
-        new Server(procs, serializer, memoryTransferService, useSpontaneousCallbacks));
+                                       bool useSpontaneousCallbacks,
+                                       bool processEventsAfterCommands) {
+    auto server =
+        std::shared_ptr<Server>(new Server(procs, serializer, memoryTransferService,
+                                           useSpontaneousCallbacks, processEventsAfterCommands));
     server->mSelf = server;
     return server;
 }
@@ -50,11 +52,13 @@ std::shared_ptr<Server> Server::Create(const DawnProcTable& procs,
 Server::Server(const DawnProcTable& procs,
                CommandSerializer* serializer,
                MemoryTransferService* memoryTransferService,
-               bool useSpontaneousCallbacks)
+               bool useSpontaneousCallbacks,
+               bool processEventsAfterCommands)
     : ServerBase(procs),
       mSerializer(serializer),
       mMemoryTransferService(memoryTransferService),
-      mUseSpontaneousCallbacks(useSpontaneousCallbacks) {
+      mUseSpontaneousCallbacks(useSpontaneousCallbacks),
+      mProcessEventsAfterCommands(processEventsAfterCommands) {
     if (mMemoryTransferService == nullptr) {
         // If a MemoryTransferService is not provided, fallback to inline memory.
         mOwnedMemoryTransferService = CreateInlineMemoryTransferService();
@@ -63,9 +67,9 @@ Server::Server(const DawnProcTable& procs,
 }
 
 Server::~Server() {
-    // Destroy all the devices to un-set the error and lost callbacks since we cannot forward
-    // them after the server has been destroyed.
-    for (WGPUDevice device : GetAllDeviceHandles()) {
+    // Destroy the devices the wire created to un-set the error and lost callbacks since we cannot
+    // forward them after the server has been destroyed. Injected devices forward none.
+    for (WGPUDevice device : GetAllOwnedDeviceHandles()) {
         mProcs->deviceDestroy(device);
     }
     DestroyAllObjects();
@@ -156,6 +160,58 @@ WireResult Server::InjectInstance(WGPUInstance instance, const Handle& handle) {
     // message from the client. Add a reference to counterbalance the eventual release.
     mProcs->instanceAddRef(instance);
 
+    return WireResult::Success;
+}
+
+WireResult Server::InjectAdapter(WGPUAdapter adapter,
+                                 const Handle& handle,
+                                 const Handle& instanceHandle,
+                                 WGPUFuture future) {
+    DAWN_ASSERT(adapter != nullptr);
+    Known<WGPUInstance> instance;
+    WIRE_TRY(Get(instanceHandle.id, &instance));
+    if (instance->generation != instanceHandle.generation) {
+        return WireResult::FatalError;
+    }
+
+    Reserved<WGPUAdapter> reservation;
+    WIRE_TRY(Allocate(&reservation, handle, AllocationState::Reserved));
+
+    // The adapter is externally owned. Add a reference to counterbalance the eventual release.
+    mProcs->adapterAddRef(adapter);
+
+    ReturnInstanceRequestAdapterCallbackCmd cmd = {};
+    cmd.instanceId = instanceHandle.id;
+    cmd.future = {future.id};
+    cmd.status = wgpu::RequestAdapterStatus::Success;
+    return FulfillAdapterRequest(std::move(cmd), handle, adapter);
+}
+
+WireResult Server::InjectDevice(WGPUDevice device,
+                                const Handle& handle,
+                                const Handle& instanceHandle,
+                                WGPUFuture future) {
+    DAWN_ASSERT(device != nullptr);
+    Known<WGPUInstance> instance;
+    WIRE_TRY(Get(instanceHandle.id, &instance));
+    if (instance->generation != instanceHandle.generation) {
+        return WireResult::FatalError;
+    }
+
+    Reserved<WGPUDevice> reservation;
+    WIRE_TRY(Allocate(&reservation, handle, AllocationState::Reserved));
+
+    // The device stays the embedder's: never destroyed implicitly, and none of its callbacks are
+    // forwarded, as they would outlive the DeviceInfo freed on release.
+    mProcs->deviceAddRef(device);
+
+    ReturnAdapterRequestDeviceCallbackCmd cmd = {};
+    cmd.instanceId = instanceHandle.id;
+    cmd.future = {future.id};
+    cmd.status = wgpu::RequestDeviceStatus::Success;
+    Known<WGPUDevice> known;
+    WIRE_TRY(FulfillDeviceRequest(std::move(cmd), handle, device, &known));
+    known->info->external = true;
     return WireResult::Success;
 }
 

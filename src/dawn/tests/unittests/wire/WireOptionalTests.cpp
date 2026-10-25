@@ -191,5 +191,36 @@ TEST_F(WireOptionalTests, OptionalStructPointer) {
     FlushClient();
 }
 
+// Test that a mesh pipeline's vertex module crosses the wire as null beside its mesh stage.
+TEST_F(WireOptionalTests, NullVertexModuleWithMeshState) {
+    wgpu::ShaderModuleDescriptor moduleDescriptor = {};
+    wgpu::ShaderModule meshModule = device.CreateShaderModule(&moduleDescriptor);
+    WGPUShaderModule apiMeshModule = api.GetNewShaderModule();
+    EXPECT_CALL(api, DeviceCreateShaderModule(apiDevice, _)).WillOnce(Return(apiMeshModule));
+    FlushClient();
+
+    wgpu::DawnMeshPipelineState meshState = {};
+    meshState.mesh.module = meshModule;
+    wgpu::RenderPipelineDescriptor pipelineDescriptor = {};
+    pipelineDescriptor.nextInChain = &meshState;
+    pipelineDescriptor.vertex.module = nullptr;
+    wgpu::RenderPipeline pipeline = device.CreateRenderPipeline(&pipelineDescriptor);
+
+    WGPURenderPipeline apiPipeline = api.GetNewRenderPipeline();
+    EXPECT_CALL(
+        api, DeviceCreateRenderPipeline(
+                 apiDevice,
+                 MatchesLambda([apiMeshModule](const WGPURenderPipelineDescriptor* desc) -> bool {
+                     const auto* state =
+                         reinterpret_cast<const WGPUDawnMeshPipelineState*>(desc->nextInChain);
+                     return desc->vertex.module == nullptr && state != nullptr &&
+                            state->chain.sType == WGPUSType_DawnMeshPipelineState &&
+                            state->task == nullptr && state->mesh.module == apiMeshModule;
+                 })))
+        .WillOnce(Return(apiPipeline));
+
+    FlushClient();
+}
+
 }  // anonymous namespace
 }  // namespace dawn::wire

@@ -29,9 +29,16 @@
 #include <webgpu/webgpu.h>
 
 #include <memory>
+#include <optional>
 #include <utility>
+#include <vector>
 
+#include "dawn/dawn_proc.h"
+#include "dawn/native/DawnNative.h"
+#include "dawn/wire/WireClient.h"
+#include "dawn/wire/WireServer.h"
 #include "src/dawn/native/Instance.h"
+#include "src/dawn/utils/TerribleCommandBuffer.h"
 #include "src/dawn/utils/WireHelper.h"
 
 namespace dawn {
@@ -210,6 +217,152 @@ TEST_F(WireDeviceLifetimeTests, DeviceDroppedFromWireThenLostCallback) {
     // Finally, release the old retained device which will flush any of its outstanding
     // callbacks.
     nativeProcs.deviceRelease(oldDevice);
+}
+
+// A wire over an embedder's own null backend device, which it injects instead of requesting.
+class WireImportedDeviceLifetimeTests : public testing::Test {
+  protected:
+    void SetUp() override {
+        wgpu::RequestAdapterOptions options = {};
+        options.backendType = wgpu::BackendType::Null;
+        std::vector<native::Adapter> adapters = mNativeInstance.EnumerateAdapters(&options);
+        ASSERT_FALSE(adapters.empty());
+        mNativeAdapter = adapters[0].Get();
+        mNativeProcs.adapterAddRef(mNativeAdapter);
+
+        WGPUDeviceDescriptor nativeDesc = {};
+        nativeDesc.deviceLostCallbackInfo = {
+            nullptr, WGPUCallbackMode_AllowSpontaneous,
+            [](WGPUDevice const*, WGPUDeviceLostReason reason, WGPUStringView, void* self, void*) {
+                static_cast<WireImportedDeviceLifetimeTests*>(self)->mNativeLoss = reason;
+            },
+            this, nullptr};
+        mNativeDevice = adapters[0].CreateDevice(&nativeDesc);
+        ASSERT_NE(mNativeDevice, nullptr);
+
+        mC2s = std::make_unique<utils::TerribleCommandBuffer>();
+        mS2c = std::make_unique<utils::TerribleCommandBuffer>();
+        wire::WireServerDescriptor serverDesc = {};
+        serverDesc.procs = &mNativeProcs;
+        serverDesc.serializer = mS2c.get();
+        mServer = std::make_unique<wire::WireServer>(serverDesc);
+        mC2s->SetHandler(mServer.get());
+        wire::WireClientDescriptor clientDesc = {};
+        clientDesc.serializer = mC2s.get();
+        mClient = std::make_unique<wire::WireClient>(clientDesc);
+        mS2c->SetHandler(mClient.get());
+        dawnProcSetProcs(&wire::client::GetProcs());
+
+        // The import: every reservation first, then the injections that answer them.
+        wire::ReservedInstance instance = mClient->ReserveInstance();
+        constexpr WGPURequestAdapterCallbackInfo kAdapterAnswer = {
+            nullptr, WGPUCallbackMode_AllowSpontaneous, nullptr, nullptr, nullptr};
+        wire::ReservedAdapter adapter = mClient->ReserveAdapter(instance.instance, kAdapterAnswer);
+        WGPUDeviceDescriptor deviceDesc = {};
+        deviceDesc.deviceLostCallbackInfo = {
+            nullptr, WGPUCallbackMode_AllowSpontaneous,
+            [](WGPUDevice const*, WGPUDeviceLostReason, WGPUStringView, void*, void*) {}, nullptr,
+            nullptr};
+        constexpr WGPURequestDeviceCallbackInfo kDeviceAnswer = {
+            nullptr, WGPUCallbackMode_AllowSpontaneous, nullptr, nullptr, nullptr};
+        wire::ReservedDevice device =
+            mClient->ReserveDevice(adapter.adapter, &deviceDesc, kDeviceAnswer);
+        ASSERT_TRUE(mServer->InjectInstance(mNativeInstance.Get(), instance.handle));
+        ASSERT_TRUE(mServer->InjectAdapter(mNativeAdapter, adapter.handle, adapter.instanceHandle,
+                                           adapter.future));
+        ASSERT_TRUE(mServer->InjectDevice(mNativeDevice, device.handle, device.instanceHandle,
+                                          device.future));
+        ASSERT_TRUE(mS2c->Flush());
+        mInstance = wgpu::Instance::Acquire(instance.instance);
+        mAdapter = wgpu::Adapter::Acquire(adapter.adapter);
+        mDevice = wgpu::Device::Acquire(device.device);
+    }
+
+    void TearDown() override {
+        mDevice = nullptr;
+        mAdapter = nullptr;
+        mInstance = nullptr;
+        if (mS2c != nullptr) {
+            mS2c->SetHandler(nullptr);
+        }
+        mClient = nullptr;
+        if (mC2s != nullptr) {
+            mC2s->SetHandler(nullptr);
+        }
+        mServer = nullptr;
+        dawnProcSetProcs(nullptr);
+        if (mNativeDevice != nullptr) {
+            mNativeProcs.deviceRelease(mNativeDevice);
+        }
+        if (mNativeAdapter != nullptr) {
+            mNativeProcs.adapterRelease(mNativeAdapter);
+        }
+    }
+
+    // Whether the embedder's device is still standing once native events have run.
+    bool NativeDeviceStands() {
+        mNativeProcs.instanceProcessEvents(mNativeInstance.Get());
+        return !mNativeLoss.has_value();
+    }
+
+    const DawnProcTable mNativeProcs = native::GetProcs();
+    native::Instance mNativeInstance;
+    WGPUAdapter mNativeAdapter = nullptr;
+    WGPUDevice mNativeDevice = nullptr;
+    std::optional<WGPUDeviceLostReason> mNativeLoss;
+
+    std::unique_ptr<utils::TerribleCommandBuffer> mC2s;
+    std::unique_ptr<utils::TerribleCommandBuffer> mS2c;
+    std::unique_ptr<wire::WireServer> mServer;
+    std::unique_ptr<wire::WireClient> mClient;
+
+    wgpu::Instance mInstance;
+    wgpu::Adapter mAdapter;
+    wgpu::Device mDevice;
+};
+
+// Test that an imported device outlives the client: its last reference returns the server's
+// reference, and neither it nor the client's teardown destroys the device.
+TEST_F(WireImportedDeviceLifetimeTests, ImportedDeviceOutlivesTheClient) {
+    wgpu::BufferDescriptor descriptor = {};
+    descriptor.size = 4;
+    descriptor.usage = wgpu::BufferUsage::CopyDst;
+    wgpu::Buffer buffer = mDevice.CreateBuffer(&descriptor);
+    ASSERT_TRUE(mC2s->Flush());
+
+    buffer = nullptr;
+    mDevice = nullptr;
+    ASSERT_TRUE(mC2s->Flush());
+    EXPECT_FALSE(mServer->IsDeviceKnown(mNativeDevice));
+    EXPECT_TRUE(NativeDeviceStands());
+
+    mAdapter = nullptr;
+    mInstance = nullptr;
+    mS2c->SetHandler(nullptr);
+    mClient = nullptr;
+    ASSERT_TRUE(mC2s->Flush());
+    EXPECT_TRUE(NativeDeviceStands());
+}
+
+// Test that an imported device the client still holds outlives the server, and that the embedder
+// still owns it and destroys it itself.
+TEST_F(WireImportedDeviceLifetimeTests, ImportedDeviceOutlivesTheServer) {
+    ASSERT_TRUE(mServer->IsDeviceKnown(mNativeDevice));
+    mC2s->SetHandler(nullptr);
+    mServer = nullptr;
+    EXPECT_TRUE(NativeDeviceStands());
+
+    mNativeProcs.deviceDestroy(mNativeDevice);
+    mNativeProcs.instanceProcessEvents(mNativeInstance.Get());
+    EXPECT_EQ(mNativeLoss, WGPUDeviceLostReason_Destroyed);
+}
+
+// Test that the client's explicit Destroy() still destroys an imported device.
+TEST_F(WireImportedDeviceLifetimeTests, DestroyDestroysTheImportedDevice) {
+    mDevice.Destroy();
+    ASSERT_TRUE(mC2s->Flush());
+    mNativeProcs.instanceProcessEvents(mNativeInstance.Get());
+    EXPECT_EQ(mNativeLoss, WGPUDeviceLostReason_Destroyed);
 }
 
 }  // anonymous namespace

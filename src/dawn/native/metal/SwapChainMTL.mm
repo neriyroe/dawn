@@ -36,6 +36,7 @@
 #include "src/dawn/native/metal/QueueMTL.h"
 #include "src/dawn/native/metal/TextureMTL.h"
 #include "src/dawn/native/metal/UtilsMetal.h"
+#include "src/dawn/platform/metrics/HistogramMacros.h"
 
 namespace dawn::native::metal {
 
@@ -109,10 +110,18 @@ MaybeError SwapChain::Initialize(SwapChainBase* previousSwapChain) {
 
     // There is no way to control Fifo vs. Mailbox in Metal.
 
+    // Report the selected swapchain, as the Vulkan one does.
+    DAWN_HISTOGRAM_SPARSE(GetDevice()->GetPlatform(), "Dawn.Surface.Metal.PresentMode",
+                          static_cast<int>(GetPresentMode()));
+    DAWN_HISTOGRAM_SPARSE(GetDevice()->GetPlatform(), "Dawn.Surface.Metal.ImageCount",
+                          static_cast<int>([*mLayer maximumDrawableCount]));
+
     return {};
 }
 
 MaybeError SwapChain::PresentImpl() {
+    SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(), "Dawn.Command.PresentMetalUS");
+
     DAWN_ASSERT(mCurrentDrawable != nullptr);
 
     Queue* queue = ToBackend(GetDevice()->GetQueue());
@@ -131,7 +140,12 @@ MaybeError SwapChain::PresentImpl() {
 ResultOrError<SwapChainTextureInfo> SwapChain::GetCurrentTextureImpl() {
     @autoreleasepool {
         DAWN_ASSERT(mCurrentDrawable == nullptr);
-        mCurrentDrawable = [*mLayer nextDrawable];
+        {
+            SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(),
+                                              "Dawn.Command.AcquireWaitUS");
+
+            mCurrentDrawable = [*mLayer nextDrawable];
+        }
 
         if (mCurrentDrawable == nullptr) {
             SwapChainTextureInfo info;

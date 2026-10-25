@@ -36,6 +36,7 @@ source_set("headers") {
   public_deps = [ "${dawn_root}/include/dawn:headers" ]
   all_dependent_configs = [ "${dawn_root}/include/dawn:public" ]
   sources = [
+    "${dawn_root}/include/dawn/wire/InlineMemoryTransferService.h",
     "${dawn_root}/include/dawn/wire/Wire.h",
     "${dawn_root}/include/dawn/wire/WireClient.h",
     "${dawn_root}/include/dawn/wire/WireServer.h",
@@ -211,6 +212,8 @@ source_set("server_sources") {
 
   if (is_win) {
     sources += [ "InlineSharedMemoryManager_win.cpp" ]
+  } else if (is_linux || is_chromeos || is_android || is_apple) {
+    sources += [ "InlineSharedMemoryManager_posix.cpp" ]
   }
 
   public_deps = [
@@ -236,6 +239,7 @@ dawn_component("wire") {
 
   configs = [ "${dawn_root}/src/dawn/common:internal_config" ]
   sources = [
+    "InlineMemoryTransferService.cpp",
     "Wire.cpp",
     "WireClient.cpp",
     "WireServer.cpp",

@@ -70,6 +70,29 @@ TEST_F(WireInstanceBasicTest, ReserveAndInject) {
     FlushClient();
 }
 
+// Test that the server processes every instance's events after each batch of commands.
+TEST_F(WireInstanceBasicTest, ProcessEventsAfterCommands) {
+    wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+    EXPECT_CALL(api, DeviceCreateCommandEncoder(apiDevice, _))
+        .WillOnce(Return(api.GetNewCommandEncoder()));
+    EXPECT_CALL(api, InstanceProcessEvents(apiInstance)).Times(1);
+    FlushClient();
+}
+
+class WireInstanceEmbedderEventsTest : public WireTest {
+  private:
+    bool GetProcessEventsAfterCommands() override { return false; }
+};
+
+// Test that a server built not to process events after commands leaves them to its embedder.
+TEST_F(WireInstanceEmbedderEventsTest, NoProcessEventsAfterCommands) {
+    wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+    EXPECT_CALL(api, DeviceCreateCommandEncoder(apiDevice, _))
+        .WillOnce(Return(api.GetNewCommandEncoder()));
+    EXPECT_CALL(api, InstanceProcessEvents(_)).Times(0);
+    FlushClient();
+}
+
 using WireInstanceTestBase = WireFutureTest<wgpu::RequestAdapterCallback<void>*>;
 class WireInstanceTests : public WireInstanceTestBase {
   protected:
@@ -447,6 +470,45 @@ TEST_P(WireInstanceTests, RequestAdapterWireLacksFeatureSupport) {
                 adapter.GetFeatures(reinterpret_cast<wgpu::SupportedFeatures*>(&features));
                 ASSERT_EQ(features.featureCount, 1u);
                 EXPECT_EQ(*features.features, WGPUFeatureName_Depth32FloatStencil8);
+            }));
+
+        FlushCallbacks();
+    });
+}
+
+// Test that the mesh shader feature an adapter reports reaches the client.
+TEST_P(WireInstanceTests, RequestAdapterCarriesMeshShaderFeature) {
+    wgpu::RequestAdapterOptions options = {};
+    RequestAdapter(&options);
+
+    std::initializer_list<WGPUFeatureName> fakeFeaturesList = {
+        WGPUFeatureName_DawnMeshShader,
+    };
+    WGPUSupportedFeatures fakeFeatures = {fakeFeaturesList.size(), std::data(fakeFeaturesList)};
+
+    WGPUAdapter apiAdapter = api.GetNewAdapter();
+    EXPECT_CALL(api, OnInstanceRequestAdapter(apiInstance, NotNull(), _, _))
+        .WillOnce(WithArg<3>([&](WGPUFuture future) {
+            EXPECT_CALL(api, AdapterHasFeature(apiAdapter, _)).WillRepeatedly(Return(false));
+            EXPECT_CALL(api, AdapterGetInfo(apiAdapter, NotNull())).Times(1);
+            EXPECT_CALL(api, AdapterGetLimits(apiAdapter, NotNull())).Times(1);
+
+            EXPECT_CALL(api, AdapterGetFeatures(apiAdapter, NotNull()))
+                .WillOnce(
+                    WithArg<1>([&](WGPUSupportedFeatures* features) { *features = fakeFeatures; }));
+
+            api.CallInstanceRequestAdapterCallback(apiInstance, WGPURequestAdapterStatus_Success,
+                                                   apiAdapter, kEmptyOutputStringView, future);
+        }));
+
+    FlushClient();
+    FlushFutures();
+
+    ExpectWireCallbacksWhen([&](auto& mockCb) {
+        EXPECT_CALL(mockCb,
+                    Call(wgpu::RequestAdapterStatus::Success, NotNull(), EmptySizedString()))
+            .WillOnce(WithArg<1>([&](wgpu::Adapter adapter) {
+                EXPECT_TRUE(adapter.HasFeature(wgpu::FeatureName::DawnMeshShader));
             }));
 
         FlushCallbacks();

@@ -43,6 +43,7 @@
 #include "src/dawn/native/PhysicalDevice.h"
 #include "src/dawn/native/metal/CommandBufferMTL.h"
 #include "src/dawn/native/metal/DeviceMTL.h"
+#include "src/dawn/platform/metrics/HistogramMacros.h"
 #include "src/dawn/platform/tracing/TraceEvent.h"
 #include "src/utils/compiler.h"
 
@@ -227,6 +228,8 @@ void Queue::SetExecutionError(std::string error) {
 }
 
 MaybeError Queue::SubmitPendingCommandBuffer() {
+    SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(), "Dawn.Command.SubmitMetalUS");
+
     // Ensure that if there's been an error, we never try to submit anything. This is also where
     // we propagate the device loss and error message from a Metal command buffer execution error
     // (for example when this is called by Tick(), which happens even if nothing is pending).
@@ -360,6 +363,9 @@ MaybeError Queue::SubmitImpl(Span<CommandBufferBase* const> commands) {
         CommandRecordingContext* commandContext = GetPendingCommandContext();
 
         {
+            SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(),
+                                              "Dawn.Command.RecordMetalUS");
+
             TRACE_EVENT(DAWN_TRACE_CATEGORY("recording"), "CommandBufferMTL::FillCommands");
             for (CommandBufferBase* commandBuffer : commands) {
                 DAWN_TRY(ToBackend(commandBuffer)->FillCommands(commandContext));

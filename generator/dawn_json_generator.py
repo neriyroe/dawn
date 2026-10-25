@@ -1765,6 +1765,19 @@ class MultiGeneratorFromDawnJSON(Generator):
                         }
                     ]))
 
+            # The wire client's C++ API as a second domain beside the native one: it shares the native
+            # header's enums, bitmasks, constants, Bool and StringView and adds no aliases to the API namespace.
+            renders.append(
+                FileRender(
+                    'api_cpp.h',
+                    'include/dawn/wire/client/' + api + '_cpp_domain.h', [
+                        RENDER_PARAMS_BASE, params_dawn, {
+                            'c_header': 'dawn/wire/client/' + api + '.h',
+                            'c_namespace': Name('dawn wire client'),
+                            'shared_cpp_header': api + '/' + api + '_cpp.h',
+                        }
+                    ]))
+
             renders.append(
                 FileRender('api_cpp_print.h',
                            'include/dawn/' + api + '_cpp_print.h', [

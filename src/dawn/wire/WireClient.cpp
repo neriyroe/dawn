@@ -68,6 +68,18 @@ ReservedInstance WireClient::ReserveInstance(const WGPUInstanceDescriptor* descr
     return mImpl->ReserveInstance(client::FromAPI(descriptor));
 }
 
+ReservedAdapter WireClient::ReserveAdapter(WGPUInstance instance,
+                                           const WGPURequestAdapterCallbackInfo& callbackInfo) {
+    return mImpl->ReserveAdapter(client::FromAPI(instance), callbackInfo);
+}
+
+ReservedDevice WireClient::ReserveDevice(WGPUAdapter adapter,
+                                         const WGPUDeviceDescriptor* descriptor,
+                                         const WGPURequestDeviceCallbackInfo& callbackInfo) {
+    return mImpl->ReserveDevice(client::FromAPI(adapter), client::FromAPI(descriptor),
+                                callbackInfo);
+}
+
 void WireClient::ReclaimBufferReservation(const ReservedBuffer& reservation) {
     mImpl->ReclaimBufferReservation(reservation);
 }

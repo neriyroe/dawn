@@ -54,6 +54,7 @@
 #include "src/dawn/native/metal/SamplerMTL.h"
 #include "src/dawn/native/metal/TextureMTL.h"
 #include "src/dawn/native/metal/UtilsMetal.h"
+#include "src/dawn/platform/metrics/HistogramMacros.h"
 #include "src/utils/assert.h"
 #include "src/utils/compiler.h"
 
@@ -1573,6 +1574,8 @@ MaybeError CommandBuffer::FillCommands(CommandRecordingContext* commandContext) 
 MaybeError CommandBuffer::EncodeComputePass(CommandRecordingContext* commandContext,
                                             BeginComputePassCmd* computePassCmd,
                                             const ComputePassResourceUsage& resourceUsage) {
+    SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(), "Dawn.Command.RecordComputeUS");
+
     uint64_t currentDispatch = 0;
     ComputePipeline* lastPipeline = nullptr;
     StorageBufferLengthTracker storageBufferLengths{GetDevice()};
@@ -1754,6 +1757,8 @@ MaybeError CommandBuffer::EncodeRenderPass(
     EmptyOcclusionQueries* emptyOcclusionQueries,
     const std::vector<MultiDrawExecutionData>& multiDrawExecutions,
     PassIndex renderPassIndex) {
+    SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(), "Dawn.Command.RecordRenderUS");
+
     bool enableVertexPulling = GetDevice()->IsToggleEnabled(Toggle::MetalEnableVertexPulling);
     RenderPipeline* lastPipeline = nullptr;
     id<MTLBuffer> indexBuffer = nullptr;
@@ -2103,6 +2108,9 @@ MaybeError CommandBuffer::EncodeRenderPass(
             }
 
             case Command::ExecuteBundles: {
+                SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(),
+                                                  "Dawn.Command.ReplayBundlesUS");
+
                 ExecuteBundlesCmd* cmd = mCommands.NextCommand<ExecuteBundlesCmd>();
                 auto bundles = mCommands.NextData<Ref<RenderBundleBase>>(cmd->count);
 

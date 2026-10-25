@@ -918,6 +918,8 @@ MaybeValError ValidateRenderPipelineDescriptor(DeviceBase* device,
             "validating mesh state.");
         preRasterModule = meshState->mesh.module;
     } else {
+        DAWN_INVALID_IF(descriptor->vertex.module == nullptr,
+                        "A render pipeline without a mesh pipeline state needs a vertex module.");
         DAWN_TRY_ASSIGN_CONTEXT(vertexEntryPoint,
                                 ValidateVertexState(device, &descriptor->vertex, descriptor->layout,
                                                     descriptor->primitive.topology),

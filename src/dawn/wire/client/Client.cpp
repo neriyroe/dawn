@@ -140,6 +140,32 @@ ReservedInstance Client::ReserveInstance(const InstanceDescriptor* descriptor) {
     return result;
 }
 
+ReservedAdapter Client::ReserveAdapter(Instance* instance,
+                                       const WGPURequestAdapterCallbackInfo& callbackInfo) {
+    auto [adapter, futureID, tracked] = instance->TrackAdapterRequest(callbackInfo);
+
+    ReservedAdapter result;
+    result.handle = adapter->GetWireHandle(this);
+    result.instanceHandle = instance->GetWireHandle(this);
+    result.future = {futureID};
+    result.adapter = ToAPI(ReturnToAPI2(std::move(adapter)));
+    return result;
+}
+
+ReservedDevice Client::ReserveDevice(Adapter* adapter,
+                                     const DeviceDescriptor* descriptor,
+                                     const WGPURequestDeviceCallbackInfo& callbackInfo) {
+    auto [device, futureID, tracked] = adapter->TrackDeviceRequest(descriptor, callbackInfo);
+    device->SetImported();
+
+    ReservedDevice result;
+    result.handle = device->GetWireHandle(this);
+    result.instanceHandle = device->GetInstance()->GetWireHandle(this);
+    result.future = {futureID};
+    result.device = ToAPI(ReturnToAPI2(std::move(device)));
+    return result;
+}
+
 void Client::ReclaimBufferReservation(const ReservedBuffer& reservation) {
     ReclaimReservation(FromAPI(reservation.buffer));
 }

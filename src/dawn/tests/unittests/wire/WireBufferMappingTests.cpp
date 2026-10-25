@@ -25,8 +25,10 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <cstring>
 #include <limits>
 #include <memory>
+#include <vector>
 
 #include "dawn/wire/WireClient.h"
 #include "src/dawn/common/StringViewUtils.h"
@@ -34,6 +36,7 @@
 #include "src/dawn/tests/unittests/wire/WireFutureTest.h"
 #include "src/dawn/tests/unittests/wire/WireTest.h"
 #include "src/utils/assert.h"
+#include "src/utils/compiler.h"
 
 namespace wgpu {
 // Define a stream operator for wgpu::MapMode so that it can be found on resolution for test name
@@ -1023,6 +1026,52 @@ TEST_P(WireBufferMappingTests, MapInsideCallbackBeforeDestroy) {
 
             FlushCallbacks();
         });
+    }
+}
+
+class WireBufferMappingSizeTests : public WireTest {};
+
+// Test that mapped reads of every size arrive intact in the reply, around the copy widths and past
+// the serializer's allocation, where the reply is chunked. Mapped ranges are multiples of 4 bytes.
+TEST_F(WireBufferMappingSizeTests, MapReadSizeSweep) {
+    for (size_t size : {4,   8,   12,  16,   20,   28,   32,    36,    60,    64,     68,
+                        252, 256, 260, 4092, 4096, 4100, 65532, 65536, 65540, 262148, 1100004}) {
+        WGPUBuffer apiBuffer = api.GetNewBuffer();
+        wgpu::BufferDescriptor descriptor = {};
+        descriptor.size = size;
+        descriptor.usage = wgpu::BufferUsage::MapRead;
+        wgpu::Buffer buffer = device.CreateBuffer(&descriptor);
+        EXPECT_CALL(api, DeviceCreateBuffer(apiDevice, _)).WillOnce(Return(apiBuffer));
+        FlushClient();
+
+        std::vector<uint8_t> contents(size);
+        for (size_t i = 0; i < size; ++i) {
+            contents[i] = static_cast<uint8_t>(i * 13 + size);
+        }
+        bool mapped = false;
+        buffer.MapAsync(wgpu::MapMode::Read, 0, size, wgpu::CallbackMode::AllowProcessEvents,
+                        [&mapped](wgpu::MapAsyncStatus status, wgpu::StringView) {
+                            mapped = status == wgpu::MapAsyncStatus::Success;
+                        });
+        EXPECT_CALL(api, OnBufferMapAsync(apiBuffer, WGPUMapMode_Read, 0, size, _, _))
+            .WillOnce(WithArg<5>([&](WGPUFuture future) {
+                api.CallBufferMapAsyncCallback(apiBuffer, WGPUMapAsyncStatus_Success,
+                                               kEmptyOutputStringView, future);
+            }));
+        EXPECT_CALL(api, BufferGetConstMappedRange(apiBuffer, 0, size))
+            .WillOnce(Return(contents.data()));
+        FlushClient();
+        FlushServer();
+        instance.ProcessEvents();
+        ASSERT_TRUE(mapped) << "size " << size;
+
+        const void* read = buffer.GetConstMappedRange(0, size);
+        ASSERT_NE(read, nullptr);
+        EXPECT_EQ(DAWN_UNSAFE_TODO(std::memcmp(read, contents.data(), size)), 0) << "size " << size;
+
+        buffer = nullptr;
+        EXPECT_CALL(api, BufferRelease(apiBuffer));
+        FlushClient();
     }
 }
 

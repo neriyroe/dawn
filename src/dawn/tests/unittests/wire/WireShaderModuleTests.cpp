@@ -27,11 +27,13 @@
 
 #include <array>
 #include <memory>
+#include <vector>
 
 #include "dawn/wire/WireClient.h"
 #include "src/dawn/common/StringViewUtils.h"
 #include "src/dawn/tests/unittests/wire/WireFutureTest.h"
 #include "src/dawn/tests/unittests/wire/WireTest.h"
+#include "src/utils/compiler.h"
 
 namespace dawn::wire {
 namespace {
@@ -445,6 +447,83 @@ TEST_F(WireShaderModuleCreationTests, ValidAndInvalidSTypeInChain) {
             EXPECT_EQ(serverDesc->nextInChain, nullptr);
             EXPECT_THAT(ToString(errorMessage),
                         testing::HasSubstr("Unsupported or invalid chained struct with SType"));
+
+            return apiShaderModule;
+        });
+    FlushClient();
+}
+
+// Test that a DawnShaderSourceNative reaches the server with its stage, entry point, blobs and
+// bindings.
+TEST_F(WireShaderModuleCreationTests, NativeSource) {
+    constexpr std::array<uint8_t, 4> kDxil = {0x44, 0x58, 0x42, 0x43};
+    constexpr std::array<uint32_t, 2> kSpirv = {0x07230203, 0x00010600};
+    wgpu::DawnNativeBinding binding = {};
+    binding.group = 3;
+    binding.binding = 1;
+    binding.type = wgpu::BufferBindingType::ReadOnlyStorage;
+    binding.minBindingSize = 64;
+
+    wgpu::DawnShaderSourceNative native = {};
+    native.stage = wgpu::ShaderStage::Mesh;
+    native.entryPoint = {"main", WGPU_STRLEN};
+    native.dxilSize = kDxil.size();
+    native.dxil = kDxil.data();
+    native.spirvSize = kSpirv.size();
+    native.spirv = kSpirv.data();
+    native.bindingCount = 1;
+    native.bindings = &binding;
+    wgpu::ShaderModuleDescriptor shaderModuleDesc = {};
+    shaderModuleDesc.nextInChain = &native;
+
+    WGPUShaderModule apiShaderModule = api.GetNewShaderModule();
+    wgpu::ShaderModule shaderModule = device.CreateShaderModule(&shaderModuleDesc);
+    EXPECT_CALL(api, DeviceCreateShaderModule(apiDevice, _))
+        .WillOnce([&](Unused, const WGPUShaderModuleDescriptor* serverDesc) -> WGPUShaderModule {
+            const auto* serverNative =
+                reinterpret_cast<const WGPUDawnShaderSourceNative*>(serverDesc->nextInChain);
+            EXPECT_EQ(serverNative->chain.sType, WGPUSType_DawnShaderSourceNative);
+            EXPECT_EQ(serverNative->chain.next, nullptr);
+            EXPECT_EQ(serverNative->stage, WGPUShaderStage_Mesh);
+            EXPECT_EQ(ToString(serverNative->entryPoint), "main");
+
+            std::vector<uint8_t> dxil(
+                serverNative->dxil, DAWN_UNSAFE_TODO(serverNative->dxil + serverNative->dxilSize));
+            EXPECT_EQ(dxil, std::vector<uint8_t>(kDxil.begin(), kDxil.end()));
+            std::vector<uint32_t> spirv(
+                serverNative->spirv,
+                DAWN_UNSAFE_TODO(serverNative->spirv + serverNative->spirvSize));
+            EXPECT_EQ(spirv, std::vector<uint32_t>(kSpirv.begin(), kSpirv.end()));
+
+            EXPECT_EQ(serverNative->bindingCount, 1u);
+            EXPECT_EQ(serverNative->bindings->group, 3u);
+            EXPECT_EQ(serverNative->bindings->binding, 1u);
+            EXPECT_EQ(serverNative->bindings->type, WGPUBufferBindingType_ReadOnlyStorage);
+            EXPECT_EQ(serverNative->bindings->minBindingSize, 64u);
+
+            return apiShaderModule;
+        });
+    FlushClient();
+}
+
+// Test that a second DawnShaderSourceNative in the chain causes CreateErrorShaderModule to be
+// called.
+TEST_F(WireShaderModuleCreationTests, DuplicateNativeSource) {
+    wgpu::DawnShaderSourceNative second = {};
+    wgpu::DawnShaderSourceNative first = {};
+    first.nextInChain = &second;
+    wgpu::ShaderModuleDescriptor shaderModuleDesc = {};
+    shaderModuleDesc.nextInChain = &first;
+
+    WGPUShaderModule apiShaderModule = api.GetNewShaderModule();
+    wgpu::ShaderModule shaderModule = device.CreateShaderModule(&shaderModuleDesc);
+    EXPECT_CALL(api, DeviceCreateErrorShaderModule(apiDevice, _, _))
+        .WillOnce([&](Unused, const WGPUShaderModuleDescriptor* serverDesc,
+                      WGPUStringView errorMessage) -> WGPUShaderModule {
+            EXPECT_EQ(serverDesc->nextInChain, nullptr);
+            EXPECT_THAT(
+                ToString(errorMessage),
+                testing::HasSubstr("Duplicate chained struct of type DawnShaderSourceNative."));
 
             return apiShaderModule;
         });

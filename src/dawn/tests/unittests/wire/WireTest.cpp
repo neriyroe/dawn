@@ -76,6 +76,10 @@ wire::server::MemoryTransferService* WireTest::GetServerMemoryTransferService() 
     return nullptr;
 }
 
+bool WireTest::GetProcessEventsAfterCommands() {
+    return true;
+}
+
 utils::TerribleCommandBuffer* WireTest::GetC2SCommandBuffer() {
     return mC2sBuf.get();
 }
@@ -91,6 +95,7 @@ void WireTest::SetUp() {
     serverDesc.procs = &mockProcs;
     serverDesc.serializer = mS2cBuf.get();
     serverDesc.memoryTransferService = GetServerMemoryTransferService();
+    serverDesc.processEventsAfterCommands = GetProcessEventsAfterCommands();
 
     mWireServer.reset(new wire::WireServer(serverDesc));
     mC2sBuf->SetHandler(mWireServer.get());

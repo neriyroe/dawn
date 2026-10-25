@@ -33,6 +33,7 @@ DawnJSONGenerator(
 )
 
 set(headers
+    "${DAWN_INCLUDE_DIR}/dawn/wire/InlineMemoryTransferService.h"
     "${DAWN_INCLUDE_DIR}/dawn/wire/Wire.h"
     "${DAWN_INCLUDE_DIR}/dawn/wire/WireClient.h"
     "${DAWN_INCLUDE_DIR}/dawn/wire/WireServer.h"
@@ -73,6 +74,7 @@ set(sources
     "${DAWN_WIRE_GEN_SOURCES}"
     "ChunkedCommandHandler.cpp"
     "ChunkedCommandSerializer.cpp"
+    "InlineMemoryTransferService.cpp"
     "InlineSharedMemoryManager.cpp"
     "client/Adapter.cpp"
     "client/Buffer.cpp"
@@ -112,6 +114,8 @@ set(sources
 
 if (WIN32)
   list(APPEND sources "InlineSharedMemoryManager_win.cpp")
+elseif (APPLE OR ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND sources "InlineSharedMemoryManager_posix.cpp")
 endif ()
 
 dawn_add_library(
@@ -133,6 +137,7 @@ dawn_add_library(
     tint_lang_wgsl
 )
 target_compile_definitions(dawn_wire PRIVATE "DAWN_WIRE_IMPLEMENTATION")
-if(BUILD_SHARED_LIBS)
+# A wire bundled into the shared monolithic library exports its API from it.
+if(BUILD_SHARED_LIBS OR (DAWN_BUNDLE_WIRE AND DAWN_BUILD_MONOLITHIC_LIBRARY STREQUAL SHARED))
     target_compile_definitions(dawn_wire PRIVATE "DAWN_WIRE_SHARED_LIBRARY")
 endif()

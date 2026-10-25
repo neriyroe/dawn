@@ -90,6 +90,11 @@ class Client : public ClientBase {
     ReservedTexture ReserveTexture(Device* device, const TextureDescriptor* descriptor);
     ReservedSurface ReserveSurface(Instance* instance, const SurfaceCapabilities* capabilities);
     ReservedInstance ReserveInstance(const InstanceDescriptor* descriptor);
+    ReservedAdapter ReserveAdapter(Instance* instance,
+                                   const WGPURequestAdapterCallbackInfo& callbackInfo);
+    ReservedDevice ReserveDevice(Adapter* adapter,
+                                 const DeviceDescriptor* descriptor,
+                                 const WGPURequestDeviceCallbackInfo& callbackInfo);
 
     void ReclaimBufferReservation(const ReservedBuffer& reservation);
     void ReclaimTextureReservation(const ReservedTexture& reservation);
@@ -109,6 +114,9 @@ class Client : public ClientBase {
 
     template <typename Cmd, typename... Args>
     void SerializeCommand(Cmd&, Args&&...) = delete;
+
+    // Tells the serializer about data the last command carried outside the commands.
+    void OnOutOfBandData(size_t size) { mSerializer.OnOutOfBandData(size); }
 
     void Disconnect();
     bool IsDisconnected() const;

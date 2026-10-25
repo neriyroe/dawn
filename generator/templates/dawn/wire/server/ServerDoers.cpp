@@ -122,11 +122,13 @@ namespace dawn::wire::server {
                         handle = data.handle;
                         state = data.state;
                         {% if type.name.get() == "device" %}
-                            if (state == AllocationState::Allocated) {
+                            if (state == AllocationState::Allocated && !data.info->external) {
                                 //* Destroy the device to ensure that the spontaneous callbacks, i.e.
                                 //* the uncaptured error and logging callbacks, are cleared, and the
                                 //* device lost callback is fired. This is important because once we
                                 //* deallocate the ObjectData, those callbacks reference freed memory.
+                                //* An injected device has none of the wire's callbacks and stays
+                                //* the embedder's.
                                 mProcs->deviceDestroy(handle);
                             }
                         {% endif %}

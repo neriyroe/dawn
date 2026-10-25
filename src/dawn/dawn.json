@@ -3720,7 +3720,7 @@
         "category": "structure",
         "extensible": "in",
         "members": [
-            {"name": "module", "type": "shader module"},
+            {"name": "module", "type": "shader module", "optional": true},
             {"name": "entry point", "type": "string view", "optional": true},
             {"name": "constant count", "type": "size_t", "default": 0},
             {"name": "constants", "type": "constant entry", "annotation": "const*", "length": "constant count"},

@@ -239,6 +239,51 @@ TEST_P(WireAdapterTests, RequestDeviceSuccess) {
     EXPECT_FALSE(GetWireServer()->IsDeviceKnown(apiDevice));
 }
 
+// Test that a device with the mesh shader feature reaches the client with it.
+TEST_P(WireAdapterTests, RequestDeviceCarriesMeshShaderFeature) {
+    std::initializer_list<WGPUFeatureName> fakeFeaturesList = {
+        WGPUFeatureName_DawnMeshShader,
+    };
+    WGPUSupportedFeatures fakeFeatures = {fakeFeaturesList.size(), std::data(fakeFeaturesList)};
+
+    wgpu::DeviceDescriptor desc = {};
+    wgpu::FeatureName requiredFeature = wgpu::FeatureName::DawnMeshShader;
+    desc.requiredFeatureCount = 1;
+    desc.requiredFeatures = &requiredFeature;
+    RequestDevice(&desc);
+
+    WGPUDevice apiDevice = GetNewDevice();
+    EXPECT_CALL(api, OnAdapterRequestDevice(apiAdapter, NotNull(), _, _))
+        .WillOnce(WithArgs<1, 3>([&](const WGPUDeviceDescriptor* apiDesc, WGPUFuture future) {
+            ASSERT_EQ(apiDesc->requiredFeatureCount, 1u);
+            EXPECT_EQ(*apiDesc->requiredFeatures, WGPUFeatureName_DawnMeshShader);
+
+            EXPECT_CALL(api, OnDeviceSetLoggingCallback(apiDevice, _)).Times(1);
+            EXPECT_CALL(api, DeviceGetLimits(apiDevice, NotNull())).Times(1);
+            EXPECT_CALL(api, DeviceGetFeatures(apiDevice, NotNull()))
+                .WillOnce(
+                    WithArg<1>([&](WGPUSupportedFeatures* features) { *features = fakeFeatures; }));
+
+            api.CallAdapterRequestDeviceCallback(apiAdapter, WGPURequestDeviceStatus_Success,
+                                                 apiDevice, kEmptyOutputStringView, future);
+        }));
+
+    FlushClient();
+    FlushFutures();
+
+    wgpu::Device device;
+    ExpectWireCallbacksWhen([&](auto& mockCb) {
+        EXPECT_CALL(mockCb, Call(wgpu::RequestDeviceStatus::Success, NotNull(), EmptySizedString()))
+            .WillOnce(WithArg<1>([&](wgpu::Device result) { device = std::move(result); }));
+        FlushCallbacks();
+    });
+    EXPECT_TRUE(device.HasFeature(wgpu::FeatureName::DawnMeshShader));
+
+    device = nullptr;
+    EXPECT_CALL(api, DeviceRelease(apiDevice));
+    FlushClient();
+}
+
 // Test that features requested that the implementation supports, but not the
 // wire reject the callback.
 TEST_P(WireAdapterTests, RequestFeatureUnsupportedByWire) {

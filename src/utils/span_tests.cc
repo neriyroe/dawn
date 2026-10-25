@@ -1618,6 +1618,35 @@ TYPED_TEST(SpanTest, CopyFromOverlapping) {
     }
 }
 
+TYPED_TEST(SpanTest, CopyFromIntoVolatileBytes) {
+    // Copy into volatile bytes, as wire serialization does.
+    {
+        std::array<std::byte, 3> src = {std::byte{1}, std::byte{2}, std::byte{3}};
+        std::array<std::byte, 3> dst = {};
+        SPAN<volatile std::byte> dst_sp{dst};
+
+        dst_sp.CopyFrom(src);
+        EXPECT_THAT(dst, ElementsAreArray(src));
+    }
+
+    // Overlapping copies keep their order.
+    {
+        std::array<std::byte, 5> data = {std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4},
+                                         std::byte{5}};
+        SPAN<volatile std::byte> dst_sp = SPAN<volatile std::byte>{data}.subspan(1, 3);
+        dst_sp.CopyFrom(SPAN<const std::byte>{data}.subspan(0, 3));
+        EXPECT_THAT(data, testing::ElementsAre(std::byte{1}, std::byte{1}, std::byte{2},
+                                               std::byte{3}, std::byte{5}));
+    }
+
+    // An empty copy writes nothing.
+    {
+        std::array<std::byte, 2> dst = {std::byte{7}, std::byte{7}};
+        SPAN<volatile std::byte>{dst}.first(0).CopyFrom(SPAN<const std::byte>{});
+        EXPECT_THAT(dst, testing::ElementsAre(std::byte{7}, std::byte{7}));
+    }
+}
+
 TYPED_TEST(SpanDeathTest, CopyFromSizeMismatch) {
     std::array<int, 3> src = {1, 2, 3};
     std::array<int, 2> dst = {0, 0};

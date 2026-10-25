@@ -29,6 +29,7 @@
 #define SRC_DAWN_WIRE_CLIENT_ADAPTER_H_
 
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "dawn/wire/WireClient.h"
@@ -64,6 +65,12 @@ class Adapter final : public ObjectWithEventsBase {
     void APIGetFeatures(SupportedFeatures* features) const;
     Future APIRequestDevice(const DeviceDescriptor* descriptor,
                             const WGPURequestDeviceCallbackInfo& callbackInfo);
+
+    // Makes the device a device request yields and tracks the request's events, without sending
+    // the request. The bool is false when the request was not tracked, as after a disconnect.
+    std::tuple<Ref<Device>, FutureID, bool> TrackDeviceRequest(
+        const DeviceDescriptor* descriptor,
+        const WGPURequestDeviceCallbackInfo& callbackInfo);
 
     // Unimplementable. Only available in dawn_native.
     Device* APICreateDevice(const DeviceDescriptor*);

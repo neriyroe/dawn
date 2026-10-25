@@ -465,11 +465,22 @@ class SpanBase : private SpanStorage<Index, PtrType, Extent> {
             std::add_const_t<std::remove_reference_t<std::ranges::range_reference_t<R>>>;
         SpanBase<RElement, Index, const RElement*> other(std::forward<R>(range));
         DAWN_CHECK(other.size() == size());
-        // Using `<=` to compare pointers to different allocations is UB;
-        // delegating to the STL is the legal workaround:
-        // https://eel.is/c++draft/defns.order.ptr
-        std::less_equal{}(data(), other.data()) ? std::ranges::copy(other, begin())
-                                                : std::ranges::copy_backward(other, end());
+        if constexpr (std::is_same_v<T, volatile std::byte> &&
+                      std::is_same_v<RElement, const std::byte>) {
+            // Volatile bytes are wire memory: only its reader needs volatile loads. Volatile stores
+            // go one byte at a time, so the writer stores with memmove.
+            if (!empty()) {
+                // SAFETY: both spans hold size() bytes, so the copy stays inside them.
+                DAWN_UNSAFE_BUFFERS(
+                    std::memmove(const_cast<std::byte*>(data()), other.data(), size_bytes()));
+            }
+        } else {
+            // Using `<=` to compare pointers to different allocations is UB;
+            // delegating to the STL is the legal workaround:
+            // https://eel.is/c++draft/defns.order.ptr
+            std::less_equal{}(data(), other.data()) ? std::ranges::copy(other, begin())
+                                                    : std::ranges::copy_backward(other, end());
+        }
     }
 
     // Like `CopyFrom()`, but allows the source to be smaller than this span, and will only copy as

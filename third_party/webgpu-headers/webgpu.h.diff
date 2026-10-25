@@ -1,0 +1,63 @@
+--- webgpu_header
++++ dawn_header
+@@
+-struct WGPUSurfaceConfiguration;
+@@
++struct WGPUSurfaceConfiguration;
+@@
+-typedef struct WGPUSurfaceConfiguration {
+-    WGPUChainedStruct * nextInChain;
+-    WGPUDevice device;
+-    WGPUTextureFormat format;
+-    WGPUTextureUsage usage;
+-    uint32_t width;
+-    uint32_t height;
+-    size_t viewFormatCount;
+-    WGPUTextureFormat const * viewFormats;
+-    WGPUCompositeAlphaMode alphaMode;
+-    WGPUPresentMode presentMode;
+-} WGPUSurfaceConfiguration WGPU_STRUCTURE_ATTRIBUTE;
+-
+-#define WGPU_SURFACE_CONFIGURATION_INIT _wgpu_MAKE_INIT_STRUCT(WGPUSurfaceConfiguration, { \
+-    /*.nextInChain=*/NULL _wgpu_COMMA \
+-    /*.device=*/NULL _wgpu_COMMA \
+-    /*.format=*/WGPUTextureFormat_Undefined _wgpu_COMMA \
+-    /*.usage=*/WGPUTextureUsage_RenderAttachment _wgpu_COMMA \
+-    /*.width=*/0 _wgpu_COMMA \
+-    /*.height=*/0 _wgpu_COMMA \
+-    /*.viewFormatCount=*/0 _wgpu_COMMA \
+-    /*.viewFormats=*/NULL _wgpu_COMMA \
+-    /*.alphaMode=*/WGPUCompositeAlphaMode_Auto _wgpu_COMMA \
+-    /*.presentMode=*/WGPUPresentMode_Undefined _wgpu_COMMA \
+-})
+-
+@@
++typedef struct WGPUSurfaceConfiguration {
++    WGPUChainedStruct * nextInChain;
++    WGPUDevice device;
++    WGPUTextureFormat format;
++    WGPUTextureUsage usage;
++    uint32_t width;
++    uint32_t height;
++    size_t viewFormatCount;
++    WGPUTextureFormat const * viewFormats;
++    WGPUCompositeAlphaMode alphaMode;
++    WGPUPresentMode presentMode;
++} WGPUSurfaceConfiguration WGPU_STRUCTURE_ATTRIBUTE;
++
++#define WGPU_SURFACE_CONFIGURATION_INIT _wgpu_MAKE_INIT_STRUCT(WGPUSurfaceConfiguration, { \
++    /*.nextInChain=*/NULL _wgpu_COMMA \
++    /*.device=*/NULL _wgpu_COMMA \
++    /*.format=*/WGPUTextureFormat_Undefined _wgpu_COMMA \
++    /*.usage=*/WGPUTextureUsage_RenderAttachment _wgpu_COMMA \
++    /*.width=*/0 _wgpu_COMMA \
++    /*.height=*/0 _wgpu_COMMA \
++    /*.viewFormatCount=*/0 _wgpu_COMMA \
++    /*.viewFormats=*/NULL _wgpu_COMMA \
++    /*.alphaMode=*/WGPUCompositeAlphaMode_Auto _wgpu_COMMA \
++    /*.presentMode=*/WGPUPresentMode_Undefined _wgpu_COMMA \
++})
++
+@@
+-    WGPUShaderModule module;
++    WGPU_NULLABLE WGPUShaderModule module;

@@ -67,10 +67,11 @@ Ref<SharedMemory> InlineSharedMemoryManager::AcquireFromWire(SharedMemoryID id) 
     });
 }
 
-#if !DAWN_PLATFORM_IS(WINDOWS)
+// Windows, Linux (with Android and ChromeOS) and Apple platforms implement it in their own files.
+#if !DAWN_PLATFORM_IS(WINDOWS) && !DAWN_PLATFORM_IS(LINUX) && !DAWN_PLATFORM_IS(APPLE)
 std::shared_ptr<InlineSharedMemoryManager> CreateInlineSharedMemoryManager() {
     return std::make_shared<InlineSharedMemoryManager>();
 }
-#endif  // !DAWN_PLATFORM_IS(WINDOWS)
+#endif  // !DAWN_PLATFORM_IS(WINDOWS) && !DAWN_PLATFORM_IS(LINUX) && !DAWN_PLATFORM_IS(APPLE)
 
 }  // namespace dawn::wire

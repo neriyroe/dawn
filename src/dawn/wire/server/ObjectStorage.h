@@ -80,6 +80,8 @@ struct ObjectData<WGPUBuffer> : public ObjectDataBase<WGPUBuffer> {
 struct DeviceInfo {
     raw_ptr<Server> server;
     ObjectHandle self;
+    // Whether the embedder injected and owns the device, which the wire never destroys implicitly.
+    bool external = false;
 };
 
 template <>
@@ -210,9 +212,15 @@ class KnownObjectsBase {
     }
 
     std::vector<T> GetAllHandles() const {
+        return GetAllHandlesIf([](const Data&) { return true; });
+    }
+
+    template <typename Predicate>
+    std::vector<T> GetAllHandlesIf(Predicate predicate) const {
         std::vector<T> objects;
         for (const Data& data : mKnown) {
-            if (data.state == AllocationState::Allocated && data.handle != nullptr) {
+            if (data.state == AllocationState::Allocated && data.handle != nullptr &&
+                predicate(data)) {
                 objects.push_back(data.handle);
             }
         }
@@ -330,6 +338,11 @@ class KnownObjects<WGPUDevice> : public KnownObjectsBase<WGPUDevice> {
     }
 
     bool IsKnown(WGPUDevice device) const { return mKnownSet.contains(device); }
+
+    // The devices the wire created, as opposed to the ones an embedder injected.
+    std::vector<WGPUDevice> GetAllOwnedHandles() const {
+        return GetAllHandlesIf([](const Data& data) { return !data.info->external; });
+    }
 
   private:
     absl::flat_hash_set<raw_ptr<WGPUDeviceImpl>> mKnownSet;

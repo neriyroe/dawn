@@ -44,6 +44,15 @@ namespace {
 // Buffer and Texture uploads larger than 4Mb use a different path optimized for larger transfers.
 const uint64_t kWriteXLThreshold = 1024ULL * 1024 * 4;
 
+// Reports the part of an XL write's data that its memory handle carries outside the commands.
+void ReportOutOfBandData(Client* client,
+                         const MemoryTransferService::MemoryHandle& memoryHandle,
+                         size_t size) {
+    if (memoryHandle.GetSerializeDataUpdateSize(0u, size) == 0) {
+        client->OnOutOfBandData(size);
+    }
+}
+
 class WorkDoneEvent : public TrackedEvent {
   public:
     static constexpr EventType kType = EventType::WorkDone;
@@ -212,6 +221,7 @@ void Queue::WriteBufferXL(Buffer* buffer, uint64_t bufferOffset, Span<const std:
                                      memoryHandle->SerializeDataUpdate(serializeBuffer, 0u,
                                                                        data.size());
                                  }});
+    ReportOutOfBandData(client, *memoryHandle, data.size());
 }
 
 void Queue::APIWriteTexture(const TexelCopyTextureInfo* destination,
@@ -271,6 +281,7 @@ void Queue::WriteTextureXL(const TexelCopyTextureInfo* destination,
                                      memoryHandle->SerializeDataUpdate(serializeBuffer, 0u,
                                                                        data.size());
                                  }});
+    ReportOutOfBandData(client, *memoryHandle, data.size());
 }
 
 }  // namespace dawn::wire::client

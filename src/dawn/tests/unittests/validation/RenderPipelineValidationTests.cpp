@@ -103,6 +103,18 @@ TEST_F(RenderPipelineValidationTest, CreateErrorRenderPipeline) {
     ASSERT_DEVICE_ERROR(pipeline.GetBindGroupLayout(0));
 }
 
+// Test that only a mesh pipeline state may leave the vertex module null.
+TEST_F(RenderPipelineValidationTest, VertexModuleRequiredWithoutMeshState) {
+    utils::ComboRenderPipelineDescriptor descriptor;
+    descriptor.vertex.module = vsModule;
+    descriptor.cFragment.module = fsModule;
+    device.CreateRenderPipeline(&descriptor);
+
+    descriptor.vertex.module = nullptr;
+    ASSERT_DEVICE_ERROR(device.CreateRenderPipeline(&descriptor),
+                        testing::HasSubstr("needs a vertex module"));
+}
+
 // Tests that depth bias parameters must not be NaN.
 TEST_F(RenderPipelineValidationTest, DepthBiasParameterNotBeNaN) {
     // Control case, depth bias parameters in ComboRenderPipeline default to 0 which is finite

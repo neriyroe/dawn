@@ -206,12 +206,18 @@ WireResult Instance::Initialize(const InstanceDescriptor* descriptor) {
     return WireResult::Success;
 }
 
+std::tuple<Ref<Adapter>, FutureID, bool> Instance::TrackAdapterRequest(
+    const WGPURequestAdapterCallbackInfo& callbackInfo) {
+    Ref<Adapter> adapter = GetClient()->Make<Adapter>(this);
+    auto [futureID, tracked] =
+        GetEventManager().TrackEvent(AcquireRef(new RequestAdapterEvent(callbackInfo, adapter)));
+    return {std::move(adapter), futureID, tracked};
+}
+
 Future Instance::APIRequestAdapter(const RequestAdapterOptions* options,
                                    const WGPURequestAdapterCallbackInfo& callbackInfo) {
     Client* client = GetClient();
-    Ref<Adapter> adapter = client->Make<Adapter>(this);
-    auto [futureIDInternal, tracked] =
-        GetEventManager().TrackEvent(AcquireRef(new RequestAdapterEvent(callbackInfo, adapter)));
+    auto [adapter, futureIDInternal, tracked] = TrackAdapterRequest(callbackInfo);
     if (!tracked) {
         return {futureIDInternal};
     }

@@ -126,6 +126,7 @@ class ChunkedCommandSerializer {
     void SerializeCommand(Cmd&, Args&&...) = delete;
 
     void Flush();
+    void OnOutOfBandData(size_t size);
 
   private:
     template <typename Cmd, typename SerializeCmdFn, typename... Extensions>

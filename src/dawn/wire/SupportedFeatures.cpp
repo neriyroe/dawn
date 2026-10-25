@@ -134,6 +134,7 @@ bool IsFeatureSupported(WGPUFeatureName feature) {
         case WGPUFeatureName_Unorm16Filterable:
         case WGPUFeatureName_TextureCompressionUnaligned:
         case WGPUFeatureName_DawnAllowUndefinedLoadStoreOp:
+        case WGPUFeatureName_DawnMeshShader:
             return true;
     }
 

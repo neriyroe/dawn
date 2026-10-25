@@ -57,6 +57,7 @@ ShaderModule* ShaderModule::Create(Device* device, const ShaderModuleDescriptor*
     // invalid extensions, instead of trying to forward the descriptor to the server, we just ask
     // the server to create an error shader module instead.
     std::optional<DawnShaderSourceSPIRV> dawnShaderSourceSPIRV;
+    std::optional<DawnShaderSourceNative> dawnShaderSourceNative;
     std::optional<ShaderSourceWGSL> shaderSourceWGSL;
     std::optional<DawnShaderModuleSPIRVOptionsDescriptor> dawnShaderModuleSPIRVOptionsDescriptor;
     std::optional<ShaderModuleCompilationOptions> shaderModuleCompilationOptions;
@@ -86,6 +87,14 @@ ShaderModule* ShaderModule::Create(Device* device, const ShaderModuleDescriptor*
                 }
                 dawnShaderSourceSPIRV = *reinterpret_cast<const DawnShaderSourceSPIRV*>(chain);
                 chainOrder.push_back(&*dawnShaderSourceSPIRV);
+                break;
+            case wgpu::SType::DawnShaderSourceNative:
+                if (dawnShaderSourceNative.has_value()) {
+                    errorMessage = "Duplicate chained struct of type DawnShaderSourceNative.";
+                    break;
+                }
+                dawnShaderSourceNative = *reinterpret_cast<const DawnShaderSourceNative*>(chain);
+                chainOrder.push_back(&*dawnShaderSourceNative);
                 break;
             case wgpu::SType::ShaderSourceWGSL:
                 if (shaderSourceWGSL.has_value()) {
