@@ -58,6 +58,8 @@ class SwapChain : public SwapChainBase {
     uint32_t GetImageCount() const {
         return static_cast<uint32_t>(mImages.size());
     }
+    // The window's VkSurfaceKHR while this swapchain is attached to it.
+    VkSurfaceKHR GetVkSurface() const { return mVkSurface; }
 
   private:
     using SwapChainBase::SwapChainBase;
