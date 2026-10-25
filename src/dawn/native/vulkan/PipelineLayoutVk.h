@@ -92,11 +92,6 @@ class PipelineLayout final : public PipelineLayoutBase {
         mVkPipelineLayouts;
 };
 
-// Contrary to WebGPU, Vulkan sets pipelines per-shader stage. Map WebGPU immediates to all the
-// Vulkan stages.
-inline constexpr VkShaderStageFlags kImmediateShaderStages =
-    VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT;
-
 }  // namespace dawn::native::vulkan
 
 #endif  // SRC_DAWN_NATIVE_VULKAN_PIPELINELAYOUTVK_H_

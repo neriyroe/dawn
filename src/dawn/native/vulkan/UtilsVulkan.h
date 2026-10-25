@@ -130,6 +130,8 @@ VkImageAspectFlags VulkanAspectMask(const Aspect& aspects);
 
 VkShaderStageFlags VulkanShaderStages(wgpu::ShaderStage stages);
 VkShaderStageFlagBits VulkanShaderStage(SingleShaderStage stage);
+// The pipeline stages that run the shader stages in `stages`.
+VkPipelineStageFlags VulkanShaderPipelineStages(wgpu::ShaderStage stages);
 
 VkAttachmentLoadOp VulkanAttachmentLoadOp(wgpu::LoadOp op);
 VkAttachmentStoreOp VulkanAttachmentStoreOp(wgpu::StoreOp op);

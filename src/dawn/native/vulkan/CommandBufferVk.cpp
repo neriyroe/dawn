@@ -394,7 +394,8 @@ using ComputeImmediatesTracker = UserImmediatesTrackerBase<ComputeImmediates, Co
 template <typename T>
 class ImmediateTracker : public T {
   public:
-    ImmediateTracker() = default;
+    // `stages` are those of the push constant range of every pipeline layout on the device.
+    explicit ImmediateTracker(VkShaderStageFlags stages) : mStages(stages) {}
 
     void DirtyAll() { this->mDirty.set(); }
 
@@ -416,14 +417,16 @@ class ImmediateTracker : public T {
                 kImmediateElementByteSize;
             auto data = this->mContent.GetDataBytes(immediateContentStartOffset,
                                                     size * kImmediateElementByteSize);
-            vk.CmdPushConstants(commandBuffer, layout, kImmediateShaderStages,
-                                pushConstantRangeStartOffset, checked_cast<uint32_t>(data.size()),
-                                data.data());
+            vk.CmdPushConstants(commandBuffer, layout, mStages, pushConstantRangeStartOffset,
+                                checked_cast<uint32_t>(data.size()), data.data());
         }
 
         // Reset all dirty bits after uploading.
         this->mDirty.reset();
     }
+
+  private:
+    const VkShaderStageFlags mStages;
 };
 
 // Records the necessary barriers for a synchronization scope using the resource usage
@@ -443,10 +446,11 @@ MaybeError PrepareResourcesForSyncScope(Device* device,
     // Separate barriers with vertex stages in destination stages from all other barriers.
     // This avoids creating unnecessary fragment->vertex dependencies when merging barriers.
     // Eg. merging a compute->vertex barrier and a fragment->fragment barrier would create
-    // a compute|fragment->vertex|fragment barrier.
-    static constexpr VkPipelineStageFlags kVertexStages = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT |
-                                                          VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
-                                                          VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+    // a compute|fragment->vertex|fragment barrier. Task and mesh shaders count as vertex stages.
+    static constexpr VkPipelineStageFlags kVertexStages =
+        VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+        VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_TASK_SHADER_BIT_EXT |
+        VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT;
 
     struct ImageBarriers {
         std::vector<VkImageMemoryBarrier> imageBarriers;
@@ -625,8 +629,10 @@ VkClearValue ToVkClearValue(dawn::native::Color clearColor, TextureComponentType
 // tracking logic of both Compute and Render passes.
 template <typename BaseImmediateTracker, typename Pipeline, VkPipelineBindPoint PipelineBindPoint>
 struct ProgrammablePassState : public StackAllocated {
-    ProgrammablePassState(const VulkanFunctions& vk, CommandRecordingContext* recordingContext)
-        : vk(vk), recordingContext(recordingContext) {}
+    ProgrammablePassState(const Device* device, CommandRecordingContext* recordingContext)
+        : vk(device->fn),
+          recordingContext(recordingContext),
+          immediates(VulkanShaderStages(device->GetSupportedShaderStages())) {}
 
     void OnSetPipeline(Pipeline* pipeline) {
         lastPipeline = pipeline;
@@ -747,6 +753,7 @@ struct ProgrammablePassState : public StackAllocated {
         VkCommandBuffer commands = recordingContext->commandBuffer;
 
         vk.CmdBindPipeline(commands, PipelineBindPoint, pipelineHandles.pipeline);
+        lastPipeline->ApplyDynamicState(commands, nullptr);
         descriptorSets.Apply(vk, commands, PipelineBindPoint, pipelineHandles.layout,
                              [&](BindGroupIndex i) { return newDescriptorSets[i]->GetHandle(); });
         immediates.Apply(vk, commands, pipelineHandles.layout, lastPipeline->GetImmediateMask());
@@ -1574,7 +1581,7 @@ MaybeError CommandBuffer::RecordComputePass(CommandRecordingContext* recordingCo
     VkCommandBuffer commands = recordingContext->commandBuffer;
 
     size_t currentDispatch = 0;
-    ComputePassState state(device->fn, recordingContext);
+    ComputePassState state(device, recordingContext);
 
     Command type;
     while (mCommands.NextCommandId(&type)) {
@@ -1746,7 +1753,7 @@ MaybeError CommandBuffer::RecordRenderPass(CommandRecordingContext* recordingCon
 
     DAWN_TRY(RecordBeginRenderPass(recordingContext, device, renderPassCmd));
 
-    RenderPassState state(device->fn, recordingContext);
+    RenderPassState state(device, recordingContext);
 
     if (usage.usesFramebufferFetch) {
         VkDescriptorSet set;
@@ -1855,6 +1862,20 @@ MaybeError CommandBuffer::RecordRenderPass(CommandRecordingContext* recordingCon
                     vk.CmdDrawIndexedIndirect(commands, indirectBuffer->GetHandle(),
                                               validatedDraw.indirectOffset, 1, 0);
                 }));
+                break;
+            }
+
+            case Command::DrawMeshTasks: {
+                workCommandCount++;
+                DrawMeshTasksCmd* draw = iter->NextCommand<DrawMeshTasksCmd>();
+
+                if (draw->groupCountX > 0 && draw->groupCountY > 0 && draw->groupCountZ > 0) {
+                    DAWN_TRY(
+                        state.SyncAndRun([&](const VulkanFunctions& vk, VkCommandBuffer commands) {
+                            vk.CmdDrawMeshTasksEXT(commands, draw->groupCountX, draw->groupCountY,
+                                                   draw->groupCountZ);
+                        }));
+                }
                 break;
             }
 

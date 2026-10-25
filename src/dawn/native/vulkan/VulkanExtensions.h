@@ -120,6 +120,7 @@ enum class DeviceExt : uint32_t {
     RasterizationOrderAttachmentAccess,
     MaximalReconvergence,
     SubgroupUniformControlFlow,
+    MeshShader,
 
     // External* extensions
     ExternalMemoryAndroidHardwareBuffer,

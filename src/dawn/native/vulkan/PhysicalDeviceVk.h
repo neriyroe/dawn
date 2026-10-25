@@ -117,6 +117,9 @@ class PhysicalDevice : public PhysicalDeviceBase {
         Ref<DeviceBase::DeviceLostEvent>&& lostEvent) override;
 
     std::optional<uint32_t> FindDefaultComputeSubgroupSize() const;
+    // Whether devices emit SPIR-V 1.4 unless a toggle says otherwise. Mesh shading needs it: every
+    // module of a mesh pipeline is SPIR-V 1.4.
+    bool DefaultsToSpirv14(dawn::platform::Platform* platform) const;
     bool CheckSemaphoreSupport(DeviceExt deviceExt,
                                VkExternalSemaphoreHandleTypeFlagBits handleType) const;
 

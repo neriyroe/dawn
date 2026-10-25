@@ -135,6 +135,10 @@ class Device final : public DeviceBase {
     // if none needs to be set.
     std::optional<uint32_t> GetComputeSubgroupSize() const;
 
+    // The stages its pipelines can have: Task and Mesh only with DawnMeshShader. Masks meant for
+    // every stage (push constant ranges, resource table layouts, barriers) name exactly these.
+    wgpu::ShaderStage GetSupportedShaderStages() const;
+
     uint32_t GetOptimalBytesPerRowAlignment() const override;
     uint64_t GetOptimalBufferToTextureCopyOffsetAlignment() const override;
 

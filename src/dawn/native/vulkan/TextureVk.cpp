@@ -239,15 +239,7 @@ VkPipelineStageFlags VulkanPipelineStage(wgpu::TextureUsage usage,
         flags |= VK_PIPELINE_STAGE_TRANSFER_BIT;
     }
     if (usage & kShaderTextureUsages) {
-        if (shaderStage & wgpu::ShaderStage::Vertex) {
-            flags |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
-        }
-        if (shaderStage & wgpu::ShaderStage::Fragment) {
-            flags |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        }
-        if (shaderStage & wgpu::ShaderStage::Compute) {
-            flags |= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-        }
+        flags |= VulkanShaderPipelineStages(shaderStage);
     }
     if (usage & kResolveAttachmentLoadingUsage) {
         // - The texture will be used as input attachment in the first subpass and loaded with

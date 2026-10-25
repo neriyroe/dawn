@@ -152,8 +152,7 @@ ResultOrError<ComputePipeline::SpecializationResult> ComputePipeline::Initialize
     result.workgroupSize = moduleAndSpirv.workgroupSize;
 
     createInfo.stage.module = moduleAndSpirv.module;
-    // string_view returned by GetIsolatedEntryPointName() points to a null-terminated string.
-    createInfo.stage.pName = device->GetIsolatedEntryPointName().data();
+    createInfo.stage.pName = moduleAndSpirv.entryPoint.data();
     createInfo.stage.pSpecializationInfo = nullptr;
 
     // If the shader stage uses subgroup matrix types or explicit subgroup size, we need to enable

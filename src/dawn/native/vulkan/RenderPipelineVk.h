@@ -28,6 +28,8 @@
 #ifndef SRC_DAWN_NATIVE_VULKAN_RENDERPIPELINEVK_H_
 #define SRC_DAWN_NATIVE_VULKAN_RENDERPIPELINEVK_H_
 
+#include <optional>
+
 #include "src/dawn/common/vulkan_platform.h"
 #include "src/dawn/native/Error.h"
 #include "src/dawn/native/RenderPipeline.h"
@@ -61,7 +63,8 @@ class RenderPipeline final : public RenderPipelineBase {
 
   private:
     struct DynamicState {
-        VkPrimitiveTopology primitiveTopology;
+        // Unset for a mesh pipeline.
+        std::optional<VkPrimitiveTopology> primitiveTopology;
         VkCullModeFlags cullMode;
         VkFrontFace frontFace;
         VkBool32 depthTestEnable;

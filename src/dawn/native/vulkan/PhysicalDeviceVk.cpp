@@ -389,6 +389,14 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
         EnableFeature(Feature::MultiDrawIndirect);
     }
 
+    // Devices that stay on SPIR-V 1.3 keep the vertex route.
+    if (mDeviceInfo.HasExt(DeviceExt::MeshShader) &&
+        mDeviceInfo.meshShaderFeatures.taskShader == VK_TRUE &&
+        mDeviceInfo.meshShaderFeatures.meshShader == VK_TRUE &&
+        DefaultsToSpirv14(mInstance->GetPlatform())) {
+        EnableFeature(Feature::DawnMeshShader);
+    }
+
     // unclippedDepth=true translates to depthClamp=true, which implicitly disables clipping.
     if (mDeviceInfo.features.depthClamp == VK_TRUE) {
         EnableFeature(Feature::DepthClipControl);
@@ -1366,13 +1374,8 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         Toggle::EnableIntegerRangeAnalysisInRobustness,
         platform->IsFeatureEnabled(platform::Features::kWebGPUEnableRangeAnalysisForRobustness));
 
-    // TODO(https://issues.chromium.org/498659375): Re-enable on Android ARM.
-    // Disable SPIR-V 1.4 on Adreno 7xx devices due to a driver bug with OpCopyLogical on structs
-    // (see https://crbug.com/566593641).
     if (GetDeviceInfo().HasExt(DeviceExt::Spirv14)) {
-        deviceToggles->Default(Toggle::UseSpirv14,
-                               platform->IsFeatureEnabled(platform::Features::kWebGPUUseSpirv14) &&
-                                   !IsAndroidARM() && !IsAdreno7xx());
+        deviceToggles->Default(Toggle::UseSpirv14, DefaultsToSpirv14(platform));
     } else {
         deviceToggles->ForceSet(Toggle::UseSpirv14, false);
     }
@@ -1485,6 +1488,16 @@ FeatureValidationResult PhysicalDevice::ValidateFeatureSupportedWithTogglesImpl(
             if (gpu_info::IsAMD(GetVendorId())) {
                 return FeatureValidationResult(
                     absl::StrFormat("Feature %s is not yet supported on AMD GPUs", feature));
+            }
+            break;
+
+        // Mesh pipelines need SPIR-V 1.4, which only a device's toggles can turn off; adapter-stage
+        // toggles may not be asked about a device toggle at all.
+        case wgpu::FeatureName::DawnMeshShader:
+            if (toggles.GetStage() == ToggleStage::Device && toggles.IsSet(Toggle::UseSpirv14) &&
+                !toggles.IsEnabled(Toggle::UseSpirv14)) {
+                return FeatureValidationResult(absl::StrFormat(
+                    "Feature %s requires the use_spirv_1_4 toggle on Vulkan.", feature));
             }
             break;
 
@@ -1616,6 +1629,14 @@ std::optional<uint32_t> PhysicalDevice::FindDefaultComputeSubgroupSize() const {
     } else {
         return ext.minSubgroupSize;
     }
+}
+
+bool PhysicalDevice::DefaultsToSpirv14(dawn::platform::Platform* platform) const {
+    // TODO(https://issues.chromium.org/498659375): Re-enable on Android ARM.
+    // Adreno 7xx drivers mishandle OpCopyLogical on structs (see https://crbug.com/566593641).
+    return mDeviceInfo.HasExt(DeviceExt::Spirv14) &&
+           platform->IsFeatureEnabled(platform::Features::kWebGPUUseSpirv14) && !IsAndroidARM() &&
+           !IsAdreno7xx();
 }
 
 bool PhysicalDevice::CheckSemaphoreSupport(DeviceExt deviceExt,

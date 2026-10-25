@@ -482,8 +482,9 @@ ResultOrError<RenderPipeline::SpecializationResult> RenderPipeline::InitializeSp
     DAWN_TRY_ASSIGN(result.layout,
                     layout->GetOrCreateVkLayoutObject(std::move(specialization.layout)));
 
-    // There are at most 2 shader stages in render pipeline, i.e. vertex and fragment
-    std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages{};
+    // There are at most 3 shader stages in render pipeline: vertex and fragment, or task, mesh
+    // and fragment.
+    std::array<VkPipelineShaderStageCreateInfo, 3> shaderStages{};
     uint32_t stageCount = 0;
 
     auto AddShaderStage = [&](const ShaderModule::CompileParameters& compileParams) -> MaybeError {
@@ -503,8 +504,7 @@ ResultOrError<RenderPipeline::SpecializationResult> RenderPipeline::InitializeSp
         shaderStage->flags = 0;
         shaderStage->pSpecializationInfo = nullptr;
         shaderStage->stage = VulkanShaderStage(compileParams.stage->metadata->stage);
-        // string_view returned by GetIsolatedEntryPointName() points to a null-terminated string.
-        shaderStage->pName = device->GetIsolatedEntryPointName().data();
+        shaderStage->pName = moduleAndSpirv.entryPoint.data();
 
         if (device->GetDeviceInfo().HasExt(DeviceExt::SubgroupSizeControl) &&
             shaderStage->stage == VK_SHADER_STAGE_FRAGMENT_BIT) {
@@ -520,7 +520,10 @@ ResultOrError<RenderPipeline::SpecializationResult> RenderPipeline::InitializeSp
 
     std::optional<uint32_t> pixelCenterPolyfillLocation = std::nullopt;
     if (NeedsPixelCenterPolyfill()) {
-        const EntryPointMetadata* vtx = GetStage(SingleShaderStage::Vertex).metadata;
+        // The stage feeding the rasterizer writes the polyfill's interpolant.
+        const SingleShaderStage rasterInput =
+            IsMeshPipeline() ? SingleShaderStage::Mesh : SingleShaderStage::Vertex;
+        const EntryPointMetadata* vtx = GetStage(rasterInput).metadata;
         for (uint32_t i = 0; i < vtx->usedInterStageVariables.size(); ++i) {
             if (vtx->usedInterStageVariables[i] == false) {
                 pixelCenterPolyfillLocation = i;
@@ -541,27 +544,18 @@ ResultOrError<RenderPipeline::SpecializationResult> RenderPipeline::InitializeSp
         }
     }
 
-    // Add the vertex stage that's always present.
-    DAWN_TRY(AddShaderStage({
-        .stage = &GetStage(SingleShaderStage::Vertex),
-        .layout = layout,
-        .immediateMask = GetImmediateMask(),
-        .ycbcrExternalTextures = &specialization.ycbcrExternalTextures,
-        .polyfillPixelCenter = pixelCenterPolyfillLocation,
-        .emitPointSize = GetPrimitiveTopology() == wgpu::PrimitiveTopology::PointList,
-        .pipelineUsesFramebufferFetch = UsesFramebufferFetch(),
-    }));
-
-    // Add the fragment stage if present.
-    if (GetStageMask() & wgpu::ShaderStage::Fragment) {
+    for (SingleShaderStage stage : IterateStages(GetStageMask())) {
         DAWN_TRY(AddShaderStage({
-            .stage = &GetStage(SingleShaderStage::Fragment),
+            .stage = &GetStage(stage),
             .layout = layout,
             .immediateMask = GetImmediateMask(),
             .ycbcrExternalTextures = &specialization.ycbcrExternalTextures,
             .polyfillPixelCenter = pixelCenterPolyfillLocation,
+            .emitPointSize = stage == SingleShaderStage::Vertex &&
+                             GetPrimitiveTopology() == wgpu::PrimitiveTopology::PointList,
             .pipelineUsesFramebufferFetch = UsesFramebufferFetch(),
-            .needsMultisampledFramebufferFetch = UseSampleRateShading() && UsesFramebufferFetch(),
+            .needsMultisampledFramebufferFetch = stage == SingleShaderStage::Fragment &&
+                                                 UseSampleRateShading() && UsesFramebufferFetch(),
         }));
     }
 
@@ -716,12 +710,15 @@ ResultOrError<RenderPipeline::SpecializationResult> RenderPipeline::InitializeSp
     // The states will be ignored by CreateGraphicsPipelines, but they are reset to a constant value
     // here (0 where possible) to ensure the Vulkan cache key is compatible between pipelines.
     if (device->IsToggleEnabled(Toggle::VulkanUseExtendedDynamicState)) {
-        dynamicStates.push_back(VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY_EXT);
-        mDynamicState.primitiveTopology = inputAssembly.topology;
         // TODO(463893795): Look into using dynamicPrimitiveTopologyUnrestricted from
         // VK_EXT_extended_dynamic_state3 to remove the requirement that this needs to be set to the
         // same topology class (point/line/triangle) as the dynamic state it will be used with.
-        inputAssembly.topology = GetTopologyClass(inputAssembly.topology);
+        // Vulkan forbids a dynamic topology on a mesh pipeline, which has no input assembly.
+        if (!IsMeshPipeline()) {
+            dynamicStates.push_back(VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY_EXT);
+            mDynamicState.primitiveTopology = inputAssembly.topology;
+            inputAssembly.topology = GetTopologyClass(inputAssembly.topology);
+        }
 
         dynamicStates.push_back(VK_DYNAMIC_STATE_CULL_MODE_EXT);
         mDynamicState.cullMode = rasterization.cullMode;
@@ -778,8 +775,9 @@ ResultOrError<RenderPipeline::SpecializationResult> RenderPipeline::InitializeSp
     createInfo.flags = 0;
     createInfo.stageCount = stageCount;
     createInfo.pStages = shaderStages.data();
-    createInfo.pVertexInputState = &vertexInputCreateInfo;
-    createInfo.pInputAssemblyState = &inputAssembly;
+    // Vulkan ignores both states for a mesh pipeline, which reads no vertices.
+    createInfo.pVertexInputState = IsMeshPipeline() ? nullptr : &vertexInputCreateInfo;
+    createInfo.pInputAssemblyState = IsMeshPipeline() ? nullptr : &inputAssembly;
     createInfo.pTessellationState = nullptr;
     createInfo.pViewportState = &viewport;
     createInfo.pRasterizationState = &rasterization;
@@ -969,7 +967,12 @@ void RenderPipeline::ApplyDynamicState(VkCommandBuffer& commands,
             prevState = &prevPipeline->mDynamicState;
         }
 
-        SetDynamicState(CmdSetPrimitiveTopologyEXT, primitiveTopology);
+        // A mesh pipeline has no topology to set, and binding one drops the dynamic topology: an
+        // unset previous topology differs from any, so the vertex pipeline after it sets its own.
+        if (mDynamicState.primitiveTopology.has_value() &&
+            (!prevState || prevState->primitiveTopology != mDynamicState.primitiveTopology)) {
+            device->fn.CmdSetPrimitiveTopologyEXT(commands, *mDynamicState.primitiveTopology);
+        }
         SetDynamicState(CmdSetCullModeEXT, cullMode);
         SetDynamicState(CmdSetFrontFaceEXT, frontFace);
         SetDynamicState(CmdSetDepthTestEnableEXT, depthTestEnable);

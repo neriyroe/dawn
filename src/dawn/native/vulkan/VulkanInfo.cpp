@@ -404,6 +404,13 @@ ResultOrError<VulkanDeviceInfo> GatherDeviceInfo(const PhysicalDevice& device) {
             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_FEATURES_EXT);
     }
 
+    if (info.extensions[DeviceExt::MeshShader]) {
+        featuresChain.Add(&info.meshShaderFeatures,
+                          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT);
+        propertiesChain.Add(&info.meshShaderProperties,
+                            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT);
+    }
+
     // Use vkGetPhysicalDevice{Features,Properties}2 if required to gather information about
     // the extensions. DeviceExt::GetPhysicalDeviceProperties2 is guaranteed to be available
     // because these extensions (transitively) depend on it in `EnsureDependencies`

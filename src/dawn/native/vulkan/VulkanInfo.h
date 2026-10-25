@@ -85,6 +85,7 @@ struct VulkanDeviceKnobs {
     VkPhysicalDeviceShaderMaximalReconvergenceFeaturesKHR shaderMaximalReconvergenceFeatures;
     VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR
         shaderSubgroupUniformControlFlowFeatures;
+    VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures;
     // Never gathered, only ever set: Dawn wants nothing of these, and an embedder that does asks for them.
     VkPhysicalDeviceTimelineSemaphoreFeaturesKHR timelineSemaphoreFeatures;
     VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures;
@@ -109,6 +110,7 @@ struct VulkanDeviceInfo : VulkanDeviceKnobs {
     VkPhysicalDevicePipelineRobustnessProperties pipelineRobustnessProperties;
     VkPhysicalDeviceMaintenance5Properties propertiesMaintenance5;
     VkPhysicalDeviceDrmPropertiesEXT drmProperties;
+    VkPhysicalDeviceMeshShaderPropertiesEXT meshShaderProperties;
 
     std::vector<VkQueueFamilyProperties> queueFamilies;
     std::vector<VkCooperativeMatrixPropertiesKHR> cooperativeMatrixConfigs;

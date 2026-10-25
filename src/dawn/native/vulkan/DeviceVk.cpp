@@ -151,6 +151,9 @@ MaybeError Device::Initialize(const UnpackedPtr<DeviceDescriptor>& descriptor) {
         functions->CmdDrawIndexed = NoopDrawFunction<PFN_vkCmdDrawIndexed>::Fun;
         functions->CmdDrawIndirect = NoopDrawFunction<PFN_vkCmdDrawIndirect>::Fun;
         functions->CmdDrawIndexedIndirect = NoopDrawFunction<PFN_vkCmdDrawIndexedIndirect>::Fun;
+        if (mDeviceInfo.HasExt(DeviceExt::MeshShader)) {
+            functions->CmdDrawMeshTasksEXT = NoopDrawFunction<PFN_vkCmdDrawMeshTasksEXT>::Fun;
+        }
     }
 
     mFramebufferCache = std::make_unique<FramebufferCache>(this);
@@ -451,8 +454,11 @@ void Device::CacheStaticSampler(const Ref<Sampler>& s) {
 ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysicalDevice) {
     VulkanDeviceKnobs usedKnobs = {};
 
-    // Ask for all available known extensions.
+    // Ask for all available known extensions; VK_EXT_mesh_shader only with DawnMeshShader.
     usedKnobs.extensions = mDeviceInfo.extensions;
+    if (!HasFeature(Feature::DawnMeshShader)) {
+        usedKnobs.extensions.reset(DeviceExt::MeshShader);
+    }
 
     std::vector<const char*> extensionNames;
     for (DeviceExt ext : usedKnobs.extensions) {
@@ -714,6 +720,17 @@ ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysica
         DAWN_CHECK(usedKnobs.HasExt(DeviceExt::DrawIndirectCount) &&
                    mDeviceInfo.features.multiDrawIndirect == VK_TRUE);
         usedKnobs.features.multiDrawIndirect = VK_TRUE;
+    }
+
+    // Multiview, primitive shading rate and mesh queries stay off: Dawn uses none of them.
+    if (HasFeature(Feature::DawnMeshShader)) {
+        DAWN_CHECK(usedKnobs.HasExt(DeviceExt::MeshShader) &&
+                   mDeviceInfo.meshShaderFeatures.taskShader == VK_TRUE &&
+                   mDeviceInfo.meshShaderFeatures.meshShader == VK_TRUE);
+        usedKnobs.meshShaderFeatures.taskShader = VK_TRUE;
+        usedKnobs.meshShaderFeatures.meshShader = VK_TRUE;
+        featuresChain.Add(&usedKnobs.meshShaderFeatures,
+                          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT);
     }
 
     if (HasFeature(Feature::ChromiumExperimentalSubgroupMatrix)) {
@@ -1146,6 +1163,15 @@ ResultOrError<Ref<TextureBase>> Device::CreateTextureWrappingVulkanImage(
 
 std::optional<uint32_t> Device::GetComputeSubgroupSize() const {
     return ToBackend(GetPhysicalDevice())->GetDefaultComputeSubgroupSize();
+}
+
+wgpu::ShaderStage Device::GetSupportedShaderStages() const {
+    wgpu::ShaderStage stages =
+        wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment | wgpu::ShaderStage::Compute;
+    if (HasFeature(Feature::DawnMeshShader)) {
+        stages |= wgpu::ShaderStage::Task | wgpu::ShaderStage::Mesh;
+    }
+    return stages;
 }
 
 void Device::OnDebugMessage(std::string message) {

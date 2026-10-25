@@ -108,15 +108,7 @@ VkPipelineStageFlags VulkanPipelineStage(wgpu::BufferUsage usage, wgpu::ShaderSt
         flags |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
     }
     if (usage & kShaderBufferUsages) {
-        if (shaderStage & wgpu::ShaderStage::Vertex) {
-            flags |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
-        }
-        if (shaderStage & wgpu::ShaderStage::Fragment) {
-            flags |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        }
-        if (shaderStage & wgpu::ShaderStage::Compute) {
-            flags |= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-        }
+        flags |= VulkanShaderPipelineStages(shaderStage);
     }
     if (usage & kIndirectBufferForBackendResourceTracking) {
         flags |= VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;

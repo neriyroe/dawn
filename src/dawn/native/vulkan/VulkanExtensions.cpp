@@ -162,6 +162,7 @@ static constexpr std::array<DeviceExtInfo, kDeviceExtCount> sDeviceExtInfos{{
     {DeviceExt::RasterizationOrderAttachmentAccess, "VK_EXT_rasterization_order_attachment_access"},
     {DeviceExt::MaximalReconvergence, "VK_KHR_shader_maximal_reconvergence"},
     {DeviceExt::SubgroupUniformControlFlow, "VK_KHR_shader_subgroup_uniform_control_flow"},
+    {DeviceExt::MeshShader, "VK_EXT_mesh_shader"},
 
     {DeviceExt::ExternalMemoryAndroidHardwareBuffer,
      "VK_ANDROID_external_memory_android_hardware_buffer"},
@@ -287,6 +288,11 @@ DeviceExtSet EnsureDependencies(const DeviceExtSet& advertisedExts,
 
             case DeviceExt::Spirv14:
                 hasDependencies = HasDep(DeviceExt::ShaderFloatControls);
+                break;
+
+            // The spec also accepts Vulkan 1.2; Dawn's SPIR-V 1.4 path keys off VK_KHR_spirv_1_4.
+            case DeviceExt::MeshShader:
+                hasDependencies = HasDep(DeviceExt::Spirv14);
                 break;
 
             case DeviceExt::DynamicRendering:

@@ -57,12 +57,13 @@ ResultOrError<VkDescriptorSetLayout> ResourceTable::MakeDescriptorSetLayout(Devi
     //  - Binding 0: the metadata storage buffer.
     //  - Binding 1: the variable length, partially bound, update-after-bind array of sampled
     //  textures/samplers.
+    const VkShaderStageFlags stages = VulkanShaderStages(device->GetSupportedShaderStages());
     std::array<VkDescriptorSetLayoutBinding, 2> bindings = {
         {{
              .binding = 0,
              .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
              .descriptorCount = 1,
-             .stageFlags = VulkanShaderStages(kAllStages),
+             .stageFlags = stages,
              .pImmutableSamplers = nullptr,
          },
          {
@@ -80,7 +81,7 @@ ResultOrError<VkDescriptorSetLayout> ResourceTable::MakeDescriptorSetLayout(Devi
              .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
              .descriptorCount =
                  kMaxResourceTableSize + uint32_t{ResourceTableDefaultResources::GetCount()},
-             .stageFlags = VulkanShaderStages(kAllStages),
+             .stageFlags = stages,
              .pImmutableSamplers = nullptr,
          }}};
     std::array<VkDescriptorBindingFlags, 2> flags = {
@@ -215,12 +216,13 @@ MaybeError ResourceTable::ApplyPendingUpdates(
 MaybeError ResourceTable::TransitionResources(
     CommandRecordingContext* recordingContext,
     const absl::flat_hash_set<raw_ptr<TextureBase>>& textures) {
+    const wgpu::ShaderStage stages = ToBackend(GetDevice())->GetSupportedShaderStages();
     for (const auto& texture : textures) {
         Texture* textureBackend = ToBackend(texture);
         DAWN_TRY(textureBackend->EnsureSubresourceContentInitialized(
             recordingContext, textureBackend->GetAllSubresources()));
         textureBackend->TransitionUsageNow(recordingContext, wgpu::TextureUsage::TextureBinding,
-                                           kAllStages, textureBackend->GetAllSubresources());
+                                           stages, textureBackend->GetAllSubresources());
     }
     return {};
 }
@@ -267,7 +269,7 @@ MaybeError ResourceTable::UpdateMetadataBuffer(CommandRecordingContext* recordin
             // Transition the buffer back to be used as storage as that's how it will be used for
             // shader-side validation.
             metadataBuffer->TransitionUsageNow(recordingContext, kReadOnlyStorageBuffer,
-                                               kAllStages);
+                                               device->GetSupportedShaderStages());
 
             return {};
         });

@@ -27,8 +27,10 @@
 
 #include "src/dawn/native/vulkan/UtilsVulkan.h"
 
+#include "src/dawn/common/ityp_array.h"
 #include "src/dawn/native/EnumMaskIterator.h"
 #include "src/dawn/native/Format.h"
+#include "src/dawn/native/PerStage.h"
 #include "src/dawn/native/Pipeline.h"
 #include "src/dawn/native/ShaderModule.h"
 #include "src/dawn/native/vulkan/DeviceVk.h"
@@ -147,24 +149,51 @@ VkImageAspectFlags VulkanAspectMask(const Aspect& aspects) {
     return flags;
 }
 
-VkShaderStageFlags VulkanShaderStages(wgpu::ShaderStage stages) {
-    VkShaderStageFlags flags = 0;
+namespace {
 
-    if (stages & wgpu::ShaderStage::Vertex) {
-        flags |= VK_SHADER_STAGE_VERTEX_BIT;
-    }
-    if (stages & wgpu::ShaderStage::Fragment) {
-        flags |= VK_SHADER_STAGE_FRAGMENT_BIT;
-    }
-    if (stages & wgpu::ShaderStage::Compute) {
-        flags |= VK_SHADER_STAGE_COMPUTE_BIT;
-    }
+// The Vulkan shader stage of a SingleShaderStage and the pipeline stage that runs it.
+struct VulkanStage {
+    VkShaderStageFlagBits shader;
+    VkPipelineStageFlagBits pipeline;
+};
 
+constexpr ityp::array<SingleShaderStage, VulkanStage, kNumStages> kVulkanStages = []() constexpr {
+    ityp::array<SingleShaderStage, VulkanStage, kNumStages> table{};
+    table[SingleShaderStage::Vertex] = {VK_SHADER_STAGE_VERTEX_BIT,
+                                        VK_PIPELINE_STAGE_VERTEX_SHADER_BIT};
+    table[SingleShaderStage::Fragment] = {VK_SHADER_STAGE_FRAGMENT_BIT,
+                                          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT};
+    table[SingleShaderStage::Compute] = {VK_SHADER_STAGE_COMPUTE_BIT,
+                                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT};
+    table[SingleShaderStage::Task] = {VK_SHADER_STAGE_TASK_BIT_EXT,
+                                      VK_PIPELINE_STAGE_TASK_SHADER_BIT_EXT};
+    table[SingleShaderStage::Mesh] = {VK_SHADER_STAGE_MESH_BIT_EXT,
+                                      VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT};
+    return table;
+}();
+
+// The union of one kind of Vulkan stage bit over `stages`.
+template <typename Flags, typename Bit>
+Flags UnionOfVulkanStages(wgpu::ShaderStage stages, Bit VulkanStage::* bit) {
+    Flags flags = 0;
+    for (SingleShaderStage stage : IterateStages(stages)) {
+        flags |= kVulkanStages[stage].*bit;
+    }
     return flags;
 }
 
+}  // anonymous namespace
+
+VkShaderStageFlags VulkanShaderStages(wgpu::ShaderStage stages) {
+    return UnionOfVulkanStages<VkShaderStageFlags>(stages, &VulkanStage::shader);
+}
+
 VkShaderStageFlagBits VulkanShaderStage(SingleShaderStage stage) {
-    return static_cast<VkShaderStageFlagBits>(VulkanShaderStages(StageBit(stage)));
+    return kVulkanStages[stage].shader;
+}
+
+VkPipelineStageFlags VulkanShaderPipelineStages(wgpu::ShaderStage stages) {
+    return UnionOfVulkanStages<VkPipelineStageFlags>(stages, &VulkanStage::pipeline);
 }
 
 VkAttachmentLoadOp VulkanAttachmentLoadOp(wgpu::LoadOp op) {

@@ -60,6 +60,8 @@ class ShaderModule final : public ShaderModuleBase {
     // Caller is responsible for destroying the `VkShaderModule` returned.
     struct ModuleAndSpirv {
         VkShaderModule module;
+        // The null-terminated name the stage's entry point has in `spirv`, for pName.
+        std::string_view entryPoint;
         std::vector<uint32_t> spirv;
         bool hasInputAttachment = false;
         Extent3D workgroupSize;
@@ -85,6 +87,9 @@ class ShaderModule final : public ShaderModuleBase {
                  const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
                  std::vector<tint::wgsl::Extension> internalExtensions);
     ~ShaderModule() override;
+
+    // Dumps and validates `spirv` as the device's toggles ask, then makes its VkShaderModule.
+    ResultOrError<VkShaderModule> CreateHandle(const std::vector<uint32_t>& spirv);
 };
 
 }  // namespace vulkan

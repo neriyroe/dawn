@@ -401,6 +401,9 @@ struct VulkanFunctions {
     // VK_EXT_hdr_metadata
     VkFn<PFN_vkSetHdrMetadataEXT> SetHdrMetadataEXT = nullptr;
 
+    // VK_EXT_mesh_shader
+    VkFn<PFN_vkCmdDrawMeshTasksEXT> CmdDrawMeshTasksEXT = nullptr;
+
 #if defined(VK_USE_PLATFORM_FUCHSIA)
     // VK_FUCHSIA_external_memory
     VkFn<PFN_vkGetMemoryZirconHandleFUCHSIA> GetMemoryZirconHandleFUCHSIA = nullptr;

@@ -448,6 +448,10 @@ MaybeError VulkanFunctions::LoadDeviceProcs(VkInstance instance,
         GET_DEVICE_PROC(SetHdrMetadataEXT);
     }
 
+    if (deviceInfo.HasExt(DeviceExt::MeshShader)) {
+        GET_DEVICE_PROC(CmdDrawMeshTasksEXT);
+    }
+
     if (deviceInfo.HasExt(DeviceExt::Swapchain)) {
         GET_DEVICE_PROC(CreateSwapchainKHR);
         GET_DEVICE_PROC(DestroySwapchainKHR);

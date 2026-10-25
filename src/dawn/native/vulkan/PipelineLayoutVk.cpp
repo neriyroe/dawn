@@ -95,9 +95,11 @@ ResultOrError<Ref<RefCountedVkHandle<VkPipelineLayout>>> PipelineLayout::CreateV
     createInfo.pushConstantRangeCount = 0;
     createInfo.pPushConstantRanges = nullptr;
 
+    // Contrary to WebGPU, Vulkan sets immediates per shader stage, so the range covers every stage.
+    Device* device = ToBackend(GetDevice());
     VkPushConstantRange pushConstantRange;
     if (specialization.pushConstantBytes > 0) {
-        pushConstantRange.stageFlags = kImmediateShaderStages;
+        pushConstantRange.stageFlags = VulkanShaderStages(device->GetSupportedShaderStages());
         pushConstantRange.offset = 0;
         pushConstantRange.size = specialization.pushConstantBytes;
         createInfo.pushConstantRangeCount = 1;
@@ -105,7 +107,6 @@ ResultOrError<Ref<RefCountedVkHandle<VkPipelineLayout>>> PipelineLayout::CreateV
     }
 
     VkPipelineLayout vkPipelineLayout;
-    Device* device = ToBackend(GetDevice());
     DAWN_TRY(CheckVkSuccess(device->fn.CreatePipelineLayout(device->GetVkDevice(), &createInfo,
                                                             nullptr, &*vkPipelineLayout),
                             "CreatePipelineLayout"));

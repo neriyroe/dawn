@@ -131,6 +131,19 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
     const CompileParameters& in) {
     TRACE_EVENT(DAWN_TRACE_CATEGORY(), "ShaderModuleVk::GetHandleAndSpirv");
 
+    // A native module is SPIR-V already, compiled offline from the same HLSL as its DXIL.
+    if (IsNative()) {
+        DAWN_INVALID_IF(GetNativeSpirv().empty(), "%s carries no SPIR-V for Vulkan.", this);
+        // Its descriptor sets are its bind group numbers, which a leading internal set would shift.
+        DAWN_INVALID_IF(in.pipelineUsesFramebufferFetch || in.layout->UsesResourceTable(),
+                        "%s cannot be used with framebuffer fetch or a resource table.", this);
+        std::vector<uint32_t> spirv = GetNativeSpirv();
+        VkShaderModule handle;
+        DAWN_TRY_ASSIGN(handle, CreateHandle(spirv));
+        return ModuleAndSpirv{
+            .module = handle, .entryPoint = GetNativeEntryPoint(), .spirv = std::move(spirv)};
+    }
+
 #if TINT_BUILD_SPV_WRITER
     // Creation of module and spirv is deferred to this point when using tint generator
 
@@ -481,17 +494,35 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
         },
         "Vulkan.CompileShaderToSPIRV");
 
+    VkShaderModule newHandle;
+    DAWN_TRY_ASSIGN(newHandle, CreateHandle(compilation->spirv));
+    ToBackend(GetDevice())->GetBlobCache()->EnsureStored(compilation);
+
+    return ModuleAndSpirv{.module = newHandle,
+                          .entryPoint = GetDevice()->GetIsolatedEntryPointName(),
+                          .spirv = std::move(compilation->spirv),
+                          .hasInputAttachment = hasInputAttachment,
+                          .workgroupSize = compilation->workgroupSize,
+                          .explicitSubgroupSize = compilation->explicitSubgroupSize};
+#else
+    return DAWN_UNRECOVERABLE_ERROR("TINT_BUILD_SPV_WRITER is not defined.");
+#endif
+}
+
+ResultOrError<VkShaderModule> ShaderModule::CreateHandle(const std::vector<uint32_t>& spirv) {
+    Device* device = ToBackend(GetDevice());
+
 #ifdef DAWN_ENABLE_SPIRV_VALIDATION
-    if (GetDevice()->IsToggleEnabled(Toggle::DumpShaders)) {
-        DumpSpirv(GetDevice(), compilation->spirv);
+    if (device->IsToggleEnabled(Toggle::DumpShaders)) {
+        DumpSpirv(device, spirv);
     }
 
-    if (GetDevice()->IsToggleEnabled(Toggle::EnableSpirvValidation)) {
-        SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(), "Vulkan.ValidateSpirv");
+    if (device->IsToggleEnabled(Toggle::EnableSpirvValidation)) {
+        SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(device->GetPlatform(), "Vulkan.ValidateSpirv");
 
         // Validate and if required dump the compiled SPIR-V code.
-        const bool spv14 = GetDevice()->IsToggleEnabled(Toggle::UseSpirv14);
-        DAWN_TRY(ValidateSpirv(GetDevice(), compilation->spirv, spv14));
+        const bool spv14 = device->IsToggleEnabled(Toggle::UseSpirv14);
+        DAWN_TRY(ValidateSpirv(device, spirv, spv14));
     }
 #endif
 
@@ -499,14 +530,12 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.pNext = nullptr;
     createInfo.flags = 0u;
-    createInfo.codeSize = compilation->spirv.size() * sizeof(uint32_t);
-    createInfo.pCode = compilation->spirv.data();
-
-    Device* device = ToBackend(GetDevice());
+    createInfo.codeSize = spirv.size() * sizeof(uint32_t);
+    createInfo.pCode = spirv.data();
 
     VkShaderModule newHandle = VK_NULL_HANDLE;
     {
-        SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(), "Vulkan.CreateShaderModule");
+        SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(device->GetPlatform(), "Vulkan.CreateShaderModule");
         TRACE_EVENT(DAWN_TRACE_CATEGORY(), "vkCreateShaderModule");
 
         ::VkResult vkResult =
@@ -520,17 +549,8 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
     }
     DAWN_CHECK(newHandle != VK_NULL_HANDLE);
 
-    device->GetBlobCache()->EnsureStored(compilation);
-    SetDebugName(ToBackend(GetDevice()), newHandle, "Dawn_ShaderModule", GetLabel());
-
-    return ModuleAndSpirv{.module = newHandle,
-                          .spirv = std::move(compilation->spirv),
-                          .hasInputAttachment = hasInputAttachment,
-                          .workgroupSize = compilation->workgroupSize,
-                          .explicitSubgroupSize = compilation->explicitSubgroupSize};
-#else
-    return DAWN_UNRECOVERABLE_ERROR("TINT_BUILD_SPV_WRITER is not defined.");
-#endif
+    SetDebugName(device, newHandle, "Dawn_ShaderModule", GetLabel());
+    return newHandle;
 }
 
 }  // namespace dawn::native::vulkan
