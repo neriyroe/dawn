@@ -3027,7 +3027,8 @@
             {"name": "group", "type": "uint32_t"},
             {"name": "binding", "type": "uint32_t"},
             {"name": "type", "type": "buffer binding type"},
-            {"name": "min binding size", "type": "uint64_t", "default": 0}
+            {"name": "min binding size", "type": "uint64_t", "default": 0},
+            {"name": "metal index", "type": "uint32_t", "default": "limit u32 undefined"}
         ]
     },
     "dawn shader source native": {
@@ -3043,7 +3044,10 @@
             {"name": "spirv size", "type": "size_t", "default": 0},
             {"name": "spirv", "type": "uint32_t", "annotation": "const*", "length": "spirv size"},
             {"name": "binding count", "type": "size_t", "default": 0},
-            {"name": "bindings", "type": "dawn native binding", "annotation": "const*", "length": "binding count"}
+            {"name": "bindings", "type": "dawn native binding", "annotation": "const*", "length": "binding count"},
+            {"name": "msl", "type": "string view", "optional": true},
+            {"name": "msl entry point", "type": "string view", "optional": true},
+            {"name": "workgroup size", "type": "extent 3D"}
         ]
     },
     "primitive topology": {

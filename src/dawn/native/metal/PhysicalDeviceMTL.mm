@@ -634,6 +634,12 @@ MaybeError PhysicalDevice::InitializeImpl() {
 }
 
 void PhysicalDevice::InitializeSupportedFeaturesImpl() {
+    if (@available(macOS 26.0, iOS 26.0, tvOS 26.0, *)) {
+        if ([*mDevice supportsFamily:MTLGPUFamilyApple7]) {
+            EnableFeature(Feature::DawnMeshShader);
+        }
+    }
+
 #if (defined(__MAC_11_0) && __MAC_OS_X_VERSION_MIN_REQUIRED >= __MAC_11_0) || \
     (defined(__IPHONE_14_0) && __IPHONE_OS_VERSION_MIN_REQUIRED >= __IPHONE_14_0)
     if ([*mDevice supports32BitFloatFiltering]) {

@@ -516,11 +516,23 @@ MaybeError ShaderModule::CreateFunction(SingleShaderStage stage,
         DAWN_ASSERT(renderPipeline != nullptr);
     }
 
-    CacheResult<MslCompilation> mslCompilation;
-    DAWN_TRY_ASSIGN(mslCompilation,
-                    TranslateToMSL(GetDevice(), programmableStage, stage, layout, sampleMask,
-                                   renderPipeline, GetEntryPoint(entryPointName).bindings,
-                                   GetStrictMath().value_or(false), pipelineImmediateMask));
+    CacheResult<MslCompilation> cachedCompilation;
+    MslCompilation nativeCompilation;
+    const MslCompilation* mslCompilation;
+    if (IsNative()) {
+        DAWN_INVALID_IF(GetNativeMsl().empty(), "%s carries no MSL for Metal.", this);
+        nativeCompilation.msl = GetNativeMsl();
+        nativeCompilation.remappedEntryPointName = GetNativeMslEntryPoint();
+        nativeCompilation.hasInvariantAttribute = true;
+        nativeCompilation.localWorkgroupSize = GetNativeWorkgroupSize();
+        mslCompilation = &nativeCompilation;
+    } else {
+        DAWN_TRY_ASSIGN(cachedCompilation,
+                        TranslateToMSL(GetDevice(), programmableStage, stage, layout, sampleMask,
+                                       renderPipeline, GetEntryPoint(entryPointName).bindings,
+                                       GetStrictMath().value_or(false), pipelineImmediateMask));
+        mslCompilation = &*cachedCompilation;
+    }
 
     out->workgroupAllocations = std::move(mslCompilation->workgroupAllocations);
     out->localWorkgroupSize = MTLSizeMake(mslCompilation->localWorkgroupSize.width,
@@ -531,13 +543,18 @@ MaybeError ShaderModule::CreateFunction(SingleShaderStage stage,
         AcquireNSRef([[NSString alloc] initWithUTF8String:mslCompilation->msl.c_str()]);
 
     NSRef<MTLCompileOptions> compileOptions = AcquireNSRef([[MTLCompileOptions alloc] init]);
+    if (IsNative()) {
+        if (@available(macOS 26.0, iOS 26.0, tvOS 26.0, *)) {
+            (*compileOptions).languageVersion = MTLLanguageVersion4_0;
+        }
+    }
     if (mslCompilation->hasInvariantAttribute) {
         (*compileOptions).preserveInvariance = true;
     }
 
     // TODO(433534277): Warn if the pipeline uses print but it is not available or enabled.
 #if __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000
-    if (GetDevice()->IsToggleEnabled(Toggle::EnableShaderPrint)) {
+    if (!IsNative() && GetDevice()->IsToggleEnabled(Toggle::EnableShaderPrint)) {
         if (@available(macOS 15.0, iOS 18.0, *)) {
             (*compileOptions).enableLogging = true;
             (*compileOptions).languageVersion = MTLLanguageVersion3_2;
@@ -606,7 +623,9 @@ MaybeError ShaderModule::CreateFunction(SingleShaderStage stage,
     std::ostringstream labelStream;
     labelStream << GetLabel() << "::" << entryPointName;
     SetDebugName(GetDevice(), out->function.Get(), "Dawn_ShaderModule", labelStream.str());
-    GetDevice()->GetBlobCache()->EnsureStored(mslCompilation);
+    if (!IsNative()) {
+        GetDevice()->GetBlobCache()->EnsureStored(cachedCompilation);
+    }
 
     // For emitting MSL in error message if render pipeline creation fails.
     out->msl = std::move(mslCompilation->msl);

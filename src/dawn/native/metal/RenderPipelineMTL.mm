@@ -33,6 +33,7 @@
 #include "src/dawn/native/metal/BackendMTL.h"
 #include "src/dawn/native/metal/DeviceMTL.h"
 #include "src/dawn/native/metal/ImmediatesLayoutMTL.h"
+#include "src/dawn/native/metal/MeshPipelineMTL.h"
 #include "src/dawn/native/metal/PipelineLayoutMTL.h"
 #include "src/dawn/native/metal/ShaderModuleMTL.h"
 #include "src/dawn/native/metal/TextureMTL.h"
@@ -390,15 +391,17 @@ MaybeError RenderPipeline::InitializeImpl() {
         GetImmediateBlockBits(offsetof(RenderImmediates, nonConstantZero), sizeof(NonConstantZero));
 
     const PerStage<ProgrammableStage>& allStages = GetAllStages();
-    const ProgrammableStage& vertexStage = allStages[wgpu::ShaderStage::Vertex];
     ShaderModule::MetalFunctionData vertexData;
-    DAWN_TRY_CONTEXT(
-        ToBackend(vertexStage.module.Get())
-            ->CreateFunction(SingleShaderStage::Vertex, vertexStage, ToBackend(GetLayout()),
-                             GetImmediateMask(), &vertexData, 0xFFFFFFFF, this),
-        " getting vertex MTLFunction for %s", this);
+    if (!IsMeshPipeline()) {
+        const ProgrammableStage& vertexStage = allStages[wgpu::ShaderStage::Vertex];
+        DAWN_TRY_CONTEXT(
+            ToBackend(vertexStage.module.Get())
+                ->CreateFunction(SingleShaderStage::Vertex, vertexStage, ToBackend(GetLayout()),
+                                 GetImmediateMask(), &vertexData, 0xFFFFFFFF, this),
+            " getting vertex MTLFunction for %s", this);
 
-    descriptorMTL.vertexFunction = vertexData.function.Get();
+        descriptorMTL.vertexFunction = vertexData.function.Get();
+    }
 
     ShaderModule::MetalFunctionData fragmentData;
     if (GetStageMask() & wgpu::ShaderStage::Fragment) {
@@ -469,8 +472,13 @@ MaybeError RenderPipeline::InitializeImpl() {
 
     platform::metrics::DawnHistogramTimer timer(GetDevice()->GetPlatform());
     NSError* error = nullptr;
-    mMtlRenderPipelineState =
-        AcquireNSPRef([mtlDevice newRenderPipelineStateWithDescriptor:descriptorMTL error:&error]);
+    if (IsMeshPipeline()) {
+        mMeshPipeline = std::make_unique<MeshPipeline>();
+        DAWN_TRY_ASSIGN(mMtlRenderPipelineState, mMeshPipeline->Initialize(this, descriptorMTL));
+    } else {
+        mMtlRenderPipelineState =
+            AcquireNSPRef([mtlDevice newRenderPipelineStateWithDescriptor:descriptorMTL error:&error]);
+    }
     if (error != nullptr) {
         std::string errorMessage = absl::StrFormat(
             "RenderPipelineMTL: error creating pipeline state: %s from vertex MSL:\n\n%s",
@@ -491,6 +499,14 @@ MaybeError RenderPipeline::InitializeImpl() {
         AcquireNSPRef([mtlDevice newDepthStencilStateWithDescriptor:depthStencilDesc.Get()]);
 
     return {};
+}
+
+const MeshPipeline* RenderPipeline::GetMeshPipeline() const {
+    return mMeshPipeline.get();
+}
+
+uint64_t RenderPipeline::GetMaxMeshTaskGroups() const {
+    return mMeshPipeline ? mMeshPipeline->GetMaxTaskGroups() : RenderPipelineBase::GetMaxMeshTaskGroups();
 }
 
 MTLPrimitiveType RenderPipeline::GetMTLPrimitiveTopology() const {

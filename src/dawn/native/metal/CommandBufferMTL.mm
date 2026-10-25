@@ -51,6 +51,7 @@
 #include "src/dawn/native/metal/PipelineLayoutMTL.h"
 #include "src/dawn/native/metal/QuerySetMTL.h"
 #include "src/dawn/native/metal/RenderPipelineMTL.h"
+#include "src/dawn/native/metal/MeshPipelineMTL.h"
 #include "src/dawn/native/metal/SamplerMTL.h"
 #include "src/dawn/native/metal/TextureMTL.h"
 #include "src/dawn/native/metal/UtilsMetal.h"
@@ -683,6 +684,17 @@ class BindGroupTracker : public BindGroupTrackerBase<true> {
           mLengthTracker(lengthTracker),
           mUseArgumentBuffers(useArgumentBuffers) {}
 
+    using BindGroupTrackerBase::OnSetPipeline;
+
+    void OnSetPipeline(RenderPipeline* pipeline) {
+        const auto* mesh = pipeline->GetMeshPipeline();
+        if (mesh != mMeshPipeline) {
+            mDirtyBindGroupsObjectChangedOrIsDynamic |= pipeline->GetLayout()->GetBindGroupLayoutsMask();
+        }
+        mMeshPipeline = mesh;
+        BindGroupTrackerBase::OnSetPipeline(pipeline);
+    }
+
     template <typename Encoder>
     void Apply(Encoder encoder) {
         BeforeApply();
@@ -908,9 +920,14 @@ class BindGroupTracker : public BindGroupTrackerBase<true> {
         }
     }
 
-    template <typename... Args>
-    void ApplyBindGroup(id<MTLRenderCommandEncoder> encoder, Args&&... args) {
-        ApplyBindGroupImpl(encoder, nullptr, std::forward<Args&&>(args)...);
+    void ApplyBindGroup(id<MTLRenderCommandEncoder> encoder, BindGroupIndex index, BindGroup* group,
+                       ityp::span<BindingIndex, uint32_t> dynamicOffsets, PipelineLayout* layout,
+                       uint32_t argumentBufferIndex, std::optional<uint32_t> dynamicBufferIndex) {
+        ApplyBindGroupImpl(encoder, nullptr, index, group, dynamicOffsets, layout,
+                           argumentBufferIndex, dynamicBufferIndex);
+        if (mMeshPipeline) {
+            mMeshPipeline->ApplyBindings(encoder, index, group, dynamicOffsets);
+        }
     }
 
     template <typename... Args>
@@ -926,6 +943,7 @@ class BindGroupTracker : public BindGroupTrackerBase<true> {
     PerStage<absl::flat_hash_map<uint32_t, id<MTLTexture>>> mBoundTextures;
     PerStage<absl::flat_hash_map<uint32_t, id<MTLSamplerState>>> mBoundSamplers;
 
+    const MeshPipeline* mMeshPipeline = nullptr;
     bool mUseArgumentBuffers = false;
 };
 
@@ -1825,6 +1843,19 @@ MaybeError CommandBuffer::EncodeRenderPass(
                                    baseInstance:draw->firstInstance];
                         didDrawInCurrentOcclusionQuery = true;
                     }
+                }
+                break;
+            }
+
+            case Command::DrawMeshTasks: {
+                DrawMeshTasksCmd* draw = iter->NextCommand<DrawMeshTasksCmd>();
+                bindGroups.Apply(encoder);
+                storageBufferLengths.Apply(lastPipeline, false);
+                immediates.Apply(encoder, &storageBufferLengths);
+                if (draw->groupCountX && draw->groupCountY && draw->groupCountZ) {
+                    lastPipeline->GetMeshPipeline()->Draw(
+                        encoder, MTLSizeMake(draw->groupCountX, draw->groupCountY, draw->groupCountZ));
+                    didDrawInCurrentOcclusionQuery = true;
                 }
                 break;
             }

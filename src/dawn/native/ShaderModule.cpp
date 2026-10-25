@@ -1839,6 +1839,10 @@ ShaderModuleBase::ShaderModuleBase(DeviceBase* device,
         mNative.dxil.assign(nativeDesc->dxil.begin(), nativeDesc->dxil.end());
         mNative.spirv.assign(nativeDesc->spirv.begin(), nativeDesc->spirv.end());
         mNative.bindings.assign(nativeDesc->bindings.begin(), nativeDesc->bindings.end());
+        mNative.msl = std::string(nativeDesc->msl);
+        mNative.mslEntryPoint = std::string_view(nativeDesc->mslEntryPoint).empty()
+                                   ? mNative.entryPoint : std::string(nativeDesc->mslEntryPoint);
+        mNative.workgroupSize = nativeDesc->workgroupSize;
         shaderCode = SpanAsBytes(Span<const uint8_t>(mNative.dxil));
     } else {
         DAWN_ASSERT(false);
@@ -1872,7 +1876,20 @@ ShaderModuleBase::ShaderModuleBase(DeviceBase* device,
         hasher.Update(ByteSpanFromRef(mNative.spirv.size()));
         hasher.Update(SpanAsBytes(Span<const uint32_t>(mNative.spirv)));
         hasher.Update(ByteSpanFromRef(mNative.bindings.size()));
-        hasher.Update(SpanAsBytes(Span<const DawnNativeBinding>(mNative.bindings)));
+        for (const auto& binding : mNative.bindings) {
+            hasher.Update(ByteSpanFromRef(binding.group));
+            hasher.Update(ByteSpanFromRef(binding.binding));
+            hasher.Update(ByteSpanFromRef(binding.type));
+            hasher.Update(ByteSpanFromRef(binding.minBindingSize));
+            hasher.Update(ByteSpanFromRef(binding.metalIndex));
+        }
+        hasher.Update(ByteSpanFromRef(mNative.msl.size()));
+        hasher.Update(SpanAsBytes(Span<const char>(mNative.msl)));
+        hasher.Update(ByteSpanFromRef(mNative.mslEntryPoint.size()));
+        hasher.Update(SpanAsBytes(Span<const char>(mNative.mslEntryPoint)));
+        hasher.Update(ByteSpanFromRef(mNative.workgroupSize.width));
+        hasher.Update(ByteSpanFromRef(mNative.workgroupSize.height));
+        hasher.Update(ByteSpanFromRef(mNative.workgroupSize.depthOrArrayLayers));
     }
 
     mHash = hasher.Finalize();
@@ -2072,6 +2089,9 @@ size_t ShaderModuleBase::ComputeContentHash() {
 
 bool ShaderModuleBase::EqualityFunc::operator()(const ShaderModuleBase* a,
                                                 const ShaderModuleBase* b) const {
+    if (a->IsNative() || b->IsNative()) {
+        return a->mType == b->mType && a->mHash == b->mHash;
+    }
     bool membersEq = a->mType == b->mType && a->mOriginalSpirv == b->mOriginalSpirv &&
                      a->mWgsl == b->mWgsl && a->mStrictMath == b->mStrictMath;
     // Assert that the hash is equal if and only if the members are equal.

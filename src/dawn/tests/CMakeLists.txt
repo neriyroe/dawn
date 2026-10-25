@@ -170,6 +170,7 @@ set(end2end_sources
     "end2end/EventTests.cpp"
     "end2end/ExternalTextureTests.cpp"
     "end2end/FirstIndexOffsetTests.cpp"
+    "end2end/MetalMeshShaderTests.cpp"
     "end2end/FragDepthTests.cpp"
     "end2end/FramebufferFetchTests.cpp"
     "end2end/GpuMemorySynchronizationTests.cpp"
@@ -508,6 +509,19 @@ get_target_property(buffer_upload_test_dependencies dawn_whitebox_test_objects L
 target_link_libraries(dawn_buffer_upload_tests PRIVATE ${buffer_upload_test_dependencies} partition_alloc)
 if (DAWN_SUPPORTS_GLFW_FOR_WINDOWING)
     target_link_libraries(dawn_buffer_upload_tests PRIVATE dawn_glfw)
+endif()
+
+if (DAWN_ENABLE_METAL)
+    add_executable(dawn_metal_mesh_shader_tests
+        "End2EndTestsMain.cpp"
+        "end2end/MetalMeshShaderTests.cpp"
+    )
+    common_compile_options(dawn_metal_mesh_shader_tests)
+    get_target_property(mesh_test_dependencies dawn_end2end_test_objects LINK_LIBRARIES)
+    target_link_libraries(dawn_metal_mesh_shader_tests PRIVATE ${mesh_test_dependencies} partition_alloc)
+    if (DAWN_SUPPORTS_GLFW_FOR_WINDOWING)
+        target_link_libraries(dawn_metal_mesh_shader_tests PRIVATE dawn_glfw)
+    endif()
 endif()
 
 ################################################################################

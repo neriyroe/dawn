@@ -65,6 +65,19 @@ id<MTLCommandQueue> GetMTLCommandQueue(WGPUDevice device) {
     return ToBackend(backendDevice->GetQueue())->GetMTLCommandQueue();
 }
 
+void SetTextureInitialized(WGPUTexture texture) {
+    if (!texture) {
+        return;
+    }
+    Texture* backendTexture = ToBackend(FromAPI(texture));
+    auto deviceGuard = backendTexture->GetDevice()->GetGuard();
+    if (backendTexture->IsError() || backendTexture->IsDestroyed() ||
+        backendTexture->GetDevice()->IsLost()) {
+        return;
+    }
+    backendTexture->SetIsSubresourceContentInitialized(true, backendTexture->GetAllSubresources());
+}
+
 id<MTLCommandBuffer> GetPendingMTLCommandBuffer(WGPUDevice device) {
     Device* backendDevice = ToBackend(FromAPI(device));
     auto deviceGuard = backendDevice->GetGuard();

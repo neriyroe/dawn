@@ -2352,8 +2352,8 @@ ResultOrValError<Ref<ShaderModuleBase>> DeviceBase::CreateShaderModule(
                                 native->stage != wgpu::ShaderStage::Mesh,
                             "Native shader stage (%s) is not Task or Mesh.", native->stage);
             DAWN_INVALID_IF(native->entryPoint.length == 0, "Native shader has no entry point.");
-            DAWN_INVALID_IF(native->dxil.empty() && native->spirv.empty(),
-                            "Native shader carries neither DXIL nor SPIR-V.");
+            DAWN_INVALID_IF(native->dxil.empty() && native->spirv.empty() && std::string_view(native->msl).empty(),
+                            "Native shader carries no DXIL, SPIR-V, or MSL.");
             for (const DawnNativeBinding& binding : native->bindings) {
                 DAWN_INVALID_IF(binding.group >= kMaxBindGroups,
                                 "Native shader binding group (%u) exceeds the bind group count.",

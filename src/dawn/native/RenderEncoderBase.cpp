@@ -104,7 +104,6 @@ Ref<AttachmentState> RenderEncoderBase::AcquireAttachmentState() {
 
 // D3D12's DispatchMesh bounds, the tighter of the backends' limits.
 static constexpr uint32_t kMaxMeshTaskGroupsPerAxis = 65535;
-static constexpr uint64_t kMaxMeshTaskGroups = 1u << 22;
 
 void RenderEncoderBase::APIDrawMeshTasks(uint32_t groupCountX,
                                          uint32_t groupCountY,
@@ -120,14 +119,16 @@ void RenderEncoderBase::APIDrawMeshTasks(uint32_t groupCountX,
                 if (!GetDevice()->HasFlexibleTextureViews()) {
                     DAWN_TRY(mCommandBufferState.ValidateNoDifferentTextureViewsOnSameTexture());
                 }
+                const uint64_t maxGroups =
+                    mCommandBufferState.GetRenderPipeline()->GetMaxMeshTaskGroups();
                 DAWN_INVALID_IF(groupCountX > kMaxMeshTaskGroupsPerAxis ||
                                     groupCountY > kMaxMeshTaskGroupsPerAxis ||
                                     groupCountZ > kMaxMeshTaskGroupsPerAxis ||
                                     uint64_t{groupCountX} * groupCountY * groupCountZ >
-                                        kMaxMeshTaskGroups,
+                                        maxGroups,
                                 "Mesh task group counts (%u, %u, %u) exceed %u per axis or %u total.",
                                 groupCountX, groupCountY, groupCountZ, kMaxMeshTaskGroupsPerAxis,
-                                kMaxMeshTaskGroups);
+                                maxGroups);
             }
 
             DrawMeshTasksCmd* draw = allocator->Allocate<DrawMeshTasksCmd>(Command::DrawMeshTasks);

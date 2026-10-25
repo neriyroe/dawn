@@ -54,6 +54,9 @@ DAWN_NATIVE_EXPORT id<MTLDevice> GetMTLDevice(WGPUDevice device);
 // The caller must retain the WGPUTexture and honor any shared-memory access boundaries.
 DAWN_NATIVE_EXPORT id<MTLTexture> GetMTLTexture(WGPUTexture texture);
 
+// Mark a texture fully written by native commands on Dawn's pending command buffer.
+DAWN_NATIVE_EXPORT void SetTextureInitialized(WGPUTexture texture);
+
 // Return the MTLCommandQueue the WGPUDevice's default queue submits on, so that work submitted
 // alongside Dawn's is ordered by submission rather than by a cross-queue fence.
 DAWN_NATIVE_EXPORT id<MTLCommandQueue> GetMTLCommandQueue(WGPUDevice device);

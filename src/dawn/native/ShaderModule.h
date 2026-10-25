@@ -417,6 +417,10 @@ class ShaderModuleBase : public RefCountedWithExternalCount<ApiObjectBase>,
     const std::vector<uint8_t>& GetNativeDxil() const { return mNative.dxil; }
     const std::vector<uint32_t>& GetNativeSpirv() const { return mNative.spirv; }
     const std::string& GetNativeEntryPoint() const { return mNative.entryPoint; }
+    const std::string& GetNativeMsl() const { return mNative.msl; }
+    const std::string& GetNativeMslEntryPoint() const { return mNative.mslEntryPoint; }
+    const Extent3D& GetNativeWorkgroupSize() const { return mNative.workgroupSize; }
+    const std::vector<DawnNativeBinding>& GetNativeBindings() const { return mNative.bindings; }
 
     // Get tintProgram, (re)create it if necessary.
     Ref<TintProgram> GetTintProgram();
@@ -459,6 +463,9 @@ class ShaderModuleBase : public RefCountedWithExternalCount<ApiObjectBase>,
         std::vector<uint8_t> dxil;
         std::vector<uint32_t> spirv;
         std::vector<DawnNativeBinding> bindings;
+        std::string msl;
+        std::string mslEntryPoint;
+        Extent3D workgroupSize;
     };
     NativeSource mNative;
     std::unique_ptr<EntryPointMetadata> BuildNativeMetadata() const;

@@ -108,6 +108,7 @@ class RenderPipelineBase : public PipelineBase,
     VertexBufferSlot GetVertexBufferCount() const;
     /** Whether the pre-raster stages are task+mesh rather than a vertex stage. */
     bool IsMeshPipeline() const;
+    virtual uint64_t GetMaxMeshTaskGroups() const { return 1u << 22; }
 
     // Color attachment getters
     const ColorTargetState* GetColorTargetState(ColorAttachmentIndex attachmentSlot) const;

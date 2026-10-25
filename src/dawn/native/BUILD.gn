@@ -730,6 +730,8 @@ source_set("sources") {
       "metal/QueueMTL.h",
       "metal/QueueMTL.mm",
       "metal/RenderPipelineMTL.h",
+      "metal/MeshPipelineMTL.h",
+      "metal/MeshPipelineMTL.mm",
       "metal/RenderPipelineMTL.mm",
       "metal/SamplerMTL.h",
       "metal/SamplerMTL.mm",

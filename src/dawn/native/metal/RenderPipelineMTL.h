@@ -36,6 +36,7 @@
 namespace dawn::native::metal {
 
 class Device;
+class MeshPipeline;
 
 class RenderPipeline final : public RenderPipelineBase {
   public:
@@ -51,6 +52,8 @@ class RenderPipeline final : public RenderPipelineBase {
     MTLCullMode GetMTLCullMode() const;
 
     void Encode(id<MTLRenderCommandEncoder> encoder);
+    const MeshPipeline* GetMeshPipeline() const;
+    uint64_t GetMaxMeshTaskGroups() const override;
 
     id<MTLDepthStencilState> GetMTLDepthStencilState();
 
@@ -66,6 +69,7 @@ class RenderPipeline final : public RenderPipelineBase {
     NSRef<MTLVertexDescriptor> MakeVertexDesc() const;
     NSRef<MTLDepthStencilDescriptor> MakeDepthStencilDesc();
 
+    std::unique_ptr<MeshPipeline> mMeshPipeline;
     MTLPrimitiveType mMtlPrimitiveTopology{};
     MTLWinding mMtlFrontFace{};
     MTLCullMode mMtlCullMode{};
