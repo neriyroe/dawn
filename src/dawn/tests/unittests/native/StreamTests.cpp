@@ -731,22 +731,23 @@ static auto kStreamValueVectorParams = std::make_tuple(
     // Test array of non-fundamental type.
     std::vector<std::array<std::string, 2>>{{"abcd", "efg"}, {"123hij", ""}});
 
-static auto kStreamValueInitListParams = std::make_tuple(
-    std::initializer_list<char[12]>{"test string", "string test"},
-    std::initializer_list<double[3]>{{5.435, 32.3, 1.23}, {8.2345, 0.234532, 4.435}});
+// C arrays live in two-dimensional arrays: an initializer_list of arrays copies them, which GCC rejects.
+static const char kStreamCharArrays[][12] = {"test string", "string test"};
+static const double kStreamDoubleArrays[][3] = {{5.435, 32.3, 1.23}, {8.2345, 0.234532, 4.435}};
+static auto kStreamValueArrayParams = std::make_tuple(std::span<const char[12]>(kStreamCharArrays),
+                                                      std::span<const double[3]>(kStreamDoubleArrays));
 
 template <typename, typename>
 struct StreamValueTestTypesImpl;
 
 template <typename... T, typename... T2>
-struct StreamValueTestTypesImpl<std::tuple<std::vector<T>...>,
-                                std::tuple<std::initializer_list<T2>...>> {
+struct StreamValueTestTypesImpl<std::tuple<std::vector<T>...>, std::tuple<std::span<const T2>...>> {
     using type = ::testing::Types<T..., T2...>;
 };
 
 using StreamValueTestTypes =
     typename StreamValueTestTypesImpl<decltype(kStreamValueVectorParams),
-                                      decltype(kStreamValueInitListParams)>::type;
+                                      decltype(kStreamValueArrayParams)>::type;
 
 template <typename T>
 class StreamParameterizedTests : public ::testing::Test {
@@ -759,8 +760,8 @@ class StreamParameterizedTests : public ::testing::Test {
 template <typename T, size_t N>
 class StreamParameterizedTests<T[N]> : public ::testing::Test {
   protected:
-    static std::initializer_list<T[N]> GetParams() {
-        return std::get<std::initializer_list<T[N]>>(kStreamValueInitListParams);
+    static std::span<const T[N]> GetParams() {
+        return std::get<std::span<const T[N]>>(kStreamValueArrayParams);
     }
 
     void ExpectEq(const T (&lhs)[N], const T (&rhs)[N]) {
