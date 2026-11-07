@@ -60,7 +60,7 @@ class Queue final : public QueueBase {
 
     id<MTLSharedEvent> GetMTLSharedEvent() const;
     id<MTLCommandQueue> GetMTLCommandQueue() const;
-    ResultOrError<Ref<SharedFence>> GetOrCreateSharedFence();
+    ResultOrUnknownError<Ref<SharedFence>> GetOrCreateSharedFence();
 
   private:
     Queue(Device* device, const QueueDescriptor* descriptor);

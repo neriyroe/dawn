@@ -76,7 +76,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, S, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, S, read> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -98,7 +98,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 268435456>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 268435456>, read> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -173,7 +173,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, array<SB, 4>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<SB, 4>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -201,7 +201,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 8>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 8>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -257,7 +257,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, SB, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, SB, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -286,7 +286,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 2>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 2>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -322,7 +322,7 @@ TEST_F(IR_DecomposeAccessTest, UniformAccessVectorLoad) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<uniform, vec4<f32>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, vec4<f32>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -345,7 +345,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 1>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 1>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -392,7 +392,7 @@ TEST_F(IR_DecomposeAccessTest, UniformAccessScalarF16) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<uniform, f16, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, f16, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -407,7 +407,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 1>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 1>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -444,7 +444,7 @@ TEST_F(IR_DecomposeAccessTest, UniformAccessVectorF16) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<uniform, vec4<f16>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, vec4<f16>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -468,7 +468,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 1>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 1>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -530,7 +530,7 @@ TEST_F(IR_DecomposeAccessTest, UniformAccessMat2x3F16) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<uniform, mat2x3<f16>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, mat2x3<f16>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -551,7 +551,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 1>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 1>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -623,7 +623,7 @@ TEST_F(IR_DecomposeAccessTest, UniformAccessMatrix) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<uniform, mat4x4<f32>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, mat4x4<f32>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -644,7 +644,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 4>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 4>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -707,7 +707,7 @@ TEST_F(IR_DecomposeAccessTest, UniformAccessArray) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<uniform, array<vec3<f32>, 5>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec3<f32>, 5>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -725,7 +725,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 5>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 5>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -745,33 +745,37 @@ $B1: {  # root
     %a_1:ptr<function, array<vec3<f32>, 5>, read_write> = var array<vec3<f32>, 5>(vec3<f32>(0.0f))  # %a_1: 'a'
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %14:bool = gte %idx, 5u
-        if %14 [t: $B7] {  # if_1
+      $B5: {  # body
+        %14:u32 = load %idx
+        %15:bool = gte %14, 5u
+        if %15 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %15:u32 = mul %idx, 16u
-        %16:u32 = add %start_byte_offset, %15
-        %17:ptr<function, vec3<f32>, read_write> = access %a_1, %idx
-        %18:u32 = div %16, 16u
-        %19:ptr<uniform, vec4<u32>, read> = access %v, %18
-        %20:vec4<u32> = load %19
-        %21:vec3<u32> = swizzle %20, xyz
-        %22:vec3<f32> = bitcast<vec3<f32>> %21
-        store %17, %22
+        %16:u32 = mul %14, 16u
+        %17:u32 = add %start_byte_offset, %16
+        %18:ptr<function, vec3<f32>, read_write> = access %a_1, %14
+        %19:u32 = div %17, 16u
+        %20:ptr<uniform, vec4<u32>, read> = access %v, %19
+        %21:vec4<u32> = load %20
+        %22:vec3<u32> = swizzle %21, xyz
+        %23:vec3<f32> = bitcast<vec3<f32>> %22
+        store %18, %23
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %23:u32 = add %idx, 1u
-        next_iteration %23  # -> $B5
+        %24:u32 = load %idx
+        %25:u32 = add %24, 1u
+        store %idx, %25
+        next_iteration  # -> $B5
       }
     }
-    %24:array<vec3<f32>, 5> = load %a_1
-    ret %24
+    %26:array<vec3<f32>, 5> = load %a_1
+    ret %26
   }
 }
 )";
@@ -794,7 +798,7 @@ TEST_F(IR_DecomposeAccessTest, UniformAccessArrayWhichCanHaveSizesOtherThenFive)
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<uniform, array<vec3<f32>, 42>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec3<f32>, 42>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -812,7 +816,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 42>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 42>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -832,33 +836,37 @@ $B1: {  # root
     %a_1:ptr<function, array<vec3<f32>, 42>, read_write> = var array<vec3<f32>, 42>(vec3<f32>(0.0f))  # %a_1: 'a'
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %14:bool = gte %idx, 42u
-        if %14 [t: $B7] {  # if_1
+      $B5: {  # body
+        %14:u32 = load %idx
+        %15:bool = gte %14, 42u
+        if %15 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %15:u32 = mul %idx, 16u
-        %16:u32 = add %start_byte_offset, %15
-        %17:ptr<function, vec3<f32>, read_write> = access %a_1, %idx
-        %18:u32 = div %16, 16u
-        %19:ptr<uniform, vec4<u32>, read> = access %v, %18
-        %20:vec4<u32> = load %19
-        %21:vec3<u32> = swizzle %20, xyz
-        %22:vec3<f32> = bitcast<vec3<f32>> %21
-        store %17, %22
+        %16:u32 = mul %14, 16u
+        %17:u32 = add %start_byte_offset, %16
+        %18:ptr<function, vec3<f32>, read_write> = access %a_1, %14
+        %19:u32 = div %17, 16u
+        %20:ptr<uniform, vec4<u32>, read> = access %v, %19
+        %21:vec4<u32> = load %20
+        %22:vec3<u32> = swizzle %21, xyz
+        %23:vec3<f32> = bitcast<vec3<f32>> %22
+        store %18, %23
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %23:u32 = add %idx, 1u
-        next_iteration %23  # -> $B5
+        %24:u32 = load %idx
+        %25:u32 = add %24, 1u
+        store %idx, %25
+        next_iteration  # -> $B5
       }
     }
-    %24:array<vec3<f32>, 42> = load %a_1
-    ret %24
+    %26:array<vec3<f32>, 42> = load %a_1
+    ret %26
   }
 }
 )";
@@ -891,7 +899,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, SB, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, SB, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -914,7 +922,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 1>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 1>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -999,7 +1007,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, SB, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, SB, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1032,7 +1040,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 10>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 10>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1111,33 +1119,37 @@ $B1: {  # root
     %a_1:ptr<function, array<vec3<f32>, 5>, read_write> = var array<vec3<f32>, 5>(vec3<f32>(0.0f))  # %a_1: 'a'
     loop [i: $B8, b: $B9, c: $B10] {  # loop_1
       $B8: {  # initializer
-        next_iteration 0u  # -> $B9
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B9
       }
-      $B9 (%idx:u32): {  # body
-        %61:bool = gte %idx, 5u
-        if %61 [t: $B11] {  # if_1
+      $B9: {  # body
+        %61:u32 = load %idx
+        %62:bool = gte %61, 5u
+        if %62 [t: $B11] {  # if_1
           $B11: {  # true
             exit_loop  # loop_1
           }
         }
-        %62:u32 = mul %idx, 16u
-        %63:u32 = add %start_byte_offset_4, %62
-        %64:ptr<function, vec3<f32>, read_write> = access %a_1, %idx
-        %65:u32 = div %63, 16u
-        %66:ptr<uniform, vec4<u32>, read> = access %v, %65
-        %67:vec4<u32> = load %66
-        %68:vec3<u32> = swizzle %67, xyz
-        %69:vec3<f32> = bitcast<vec3<f32>> %68
-        store %64, %69
+        %63:u32 = mul %61, 16u
+        %64:u32 = add %start_byte_offset_4, %63
+        %65:ptr<function, vec3<f32>, read_write> = access %a_1, %61
+        %66:u32 = div %64, 16u
+        %67:ptr<uniform, vec4<u32>, read> = access %v, %66
+        %68:vec4<u32> = load %67
+        %69:vec3<u32> = swizzle %68, xyz
+        %70:vec3<f32> = bitcast<vec3<f32>> %69
+        store %65, %70
         continue  # -> $B10
       }
       $B10: {  # continuing
-        %70:u32 = add %idx, 1u
-        next_iteration %70  # -> $B9
+        %71:u32 = load %idx
+        %72:u32 = add %71, 1u
+        store %idx, %72
+        next_iteration  # -> $B9
       }
     }
-    %71:array<vec3<f32>, 5> = load %a_1
-    ret %71
+    %73:array<vec3<f32>, 5> = load %a_1
+    ret %73
   }
 }
 )";
@@ -1171,7 +1183,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, SB, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, SB, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1194,7 +1206,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 2>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 2>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1247,7 +1259,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, SB, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, SB, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1272,7 +1284,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 4>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 4>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1289,32 +1301,36 @@ $B1: {  # root
     %a_1:ptr<function, array<vec4<i32>, 2>, read_write> = var array<vec4<i32>, 2>(vec4<i32>(0i))  # %a_1: 'a'
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %12:bool = gte %idx, 2u
-        if %12 [t: $B7] {  # if_1
+      $B5: {  # body
+        %12:u32 = load %idx
+        %13:bool = gte %12, 2u
+        if %13 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %13:u32 = mul %idx, 16u
-        %14:u32 = add %start_byte_offset, %13
-        %15:ptr<function, vec4<i32>, read_write> = access %a_1, %idx
-        %16:u32 = div %14, 16u
-        %17:ptr<uniform, vec4<u32>, read> = access %v, %16
-        %18:vec4<u32> = load %17
-        %19:vec4<i32> = bitcast<vec4<i32>> %18
-        store %15, %19
+        %14:u32 = mul %12, 16u
+        %15:u32 = add %start_byte_offset, %14
+        %16:ptr<function, vec4<i32>, read_write> = access %a_1, %12
+        %17:u32 = div %15, 16u
+        %18:ptr<uniform, vec4<u32>, read> = access %v, %17
+        %19:vec4<u32> = load %18
+        %20:vec4<i32> = bitcast<vec4<i32>> %19
+        store %16, %20
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %20:u32 = add %idx, 1u
-        next_iteration %20  # -> $B5
+        %21:u32 = load %idx
+        %22:u32 = add %21, 1u
+        store %idx, %22
+        next_iteration  # -> $B5
       }
     }
-    %21:array<vec4<i32>, 2> = load %a_1
-    ret %21
+    %23:array<vec4<i32>, 2> = load %a_1
+    ret %23
   }
 }
 %4 = func(%start_byte_offset_1:u32):array<vec4<f32>, 2> {  # %start_byte_offset_1: 'start_byte_offset'
@@ -1322,32 +1338,36 @@ $B1: {  # root
     %a_2:ptr<function, array<vec4<f32>, 2>, read_write> = var array<vec4<f32>, 2>(vec4<f32>(0.0f))  # %a_2: 'a'
     loop [i: $B9, b: $B10, c: $B11] {  # loop_2
       $B9: {  # initializer
-        next_iteration 0u  # -> $B10
+        %idx_1:ptr<function, u32, read_write> = var 0u  # %idx_1: 'idx'
+        next_iteration  # -> $B10
       }
-      $B10 (%idx_1:u32): {  # body
-        %25:bool = gte %idx_1, 2u
-        if %25 [t: $B12] {  # if_2
+      $B10: {  # body
+        %27:u32 = load %idx_1
+        %28:bool = gte %27, 2u
+        if %28 [t: $B12] {  # if_2
           $B12: {  # true
             exit_loop  # loop_2
           }
         }
-        %26:u32 = mul %idx_1, 16u
-        %27:u32 = add %start_byte_offset_1, %26
-        %28:ptr<function, vec4<f32>, read_write> = access %a_2, %idx_1
-        %29:u32 = div %27, 16u
-        %30:ptr<uniform, vec4<u32>, read> = access %v, %29
-        %31:vec4<u32> = load %30
-        %32:vec4<f32> = bitcast<vec4<f32>> %31
-        store %28, %32
+        %29:u32 = mul %27, 16u
+        %30:u32 = add %start_byte_offset_1, %29
+        %31:ptr<function, vec4<f32>, read_write> = access %a_2, %27
+        %32:u32 = div %30, 16u
+        %33:ptr<uniform, vec4<u32>, read> = access %v, %32
+        %34:vec4<u32> = load %33
+        %35:vec4<f32> = bitcast<vec4<f32>> %34
+        store %31, %35
         continue  # -> $B11
       }
       $B11: {  # continuing
-        %33:u32 = add %idx_1, 1u
-        next_iteration %33  # -> $B10
+        %36:u32 = load %idx_1
+        %37:u32 = add %36, 1u
+        store %idx_1, %37
+        next_iteration  # -> $B10
       }
     }
-    %34:array<vec4<f32>, 2> = load %a_2
-    ret %34
+    %38:array<vec4<f32>, 2> = load %a_2
+    ret %38
   }
 }
 )";
@@ -1387,7 +1407,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, array<SB, 2>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<SB, 2>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1413,7 +1433,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 8>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 8>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1430,32 +1450,36 @@ $B1: {  # root
     %a_1:ptr<function, array<vec4<i32>, 2>, read_write> = var array<vec4<i32>, 2>(vec4<i32>(0i))  # %a_1: 'a'
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %12:bool = gte %idx, 2u
-        if %12 [t: $B7] {  # if_1
+      $B5: {  # body
+        %12:u32 = load %idx
+        %13:bool = gte %12, 2u
+        if %13 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %13:u32 = mul %idx, 16u
-        %14:u32 = add %start_byte_offset, %13
-        %15:ptr<function, vec4<i32>, read_write> = access %a_1, %idx
-        %16:u32 = div %14, 16u
-        %17:ptr<uniform, vec4<u32>, read> = access %v, %16
-        %18:vec4<u32> = load %17
-        %19:vec4<i32> = bitcast<vec4<i32>> %18
-        store %15, %19
+        %14:u32 = mul %12, 16u
+        %15:u32 = add %start_byte_offset, %14
+        %16:ptr<function, vec4<i32>, read_write> = access %a_1, %12
+        %17:u32 = div %15, 16u
+        %18:ptr<uniform, vec4<u32>, read> = access %v, %17
+        %19:vec4<u32> = load %18
+        %20:vec4<i32> = bitcast<vec4<i32>> %19
+        store %16, %20
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %20:u32 = add %idx, 1u
-        next_iteration %20  # -> $B5
+        %21:u32 = load %idx
+        %22:u32 = add %21, 1u
+        store %idx, %22
+        next_iteration  # -> $B5
       }
     }
-    %21:array<vec4<i32>, 2> = load %a_1
-    ret %21
+    %23:array<vec4<i32>, 2> = load %a_1
+    ret %23
   }
 }
 %4 = func(%start_byte_offset_1:u32):array<vec4<f32>, 2> {  # %start_byte_offset_1: 'start_byte_offset'
@@ -1463,32 +1487,36 @@ $B1: {  # root
     %a_2:ptr<function, array<vec4<f32>, 2>, read_write> = var array<vec4<f32>, 2>(vec4<f32>(0.0f))  # %a_2: 'a'
     loop [i: $B9, b: $B10, c: $B11] {  # loop_2
       $B9: {  # initializer
-        next_iteration 0u  # -> $B10
+        %idx_1:ptr<function, u32, read_write> = var 0u  # %idx_1: 'idx'
+        next_iteration  # -> $B10
       }
-      $B10 (%idx_1:u32): {  # body
-        %25:bool = gte %idx_1, 2u
-        if %25 [t: $B12] {  # if_2
+      $B10: {  # body
+        %27:u32 = load %idx_1
+        %28:bool = gte %27, 2u
+        if %28 [t: $B12] {  # if_2
           $B12: {  # true
             exit_loop  # loop_2
           }
         }
-        %26:u32 = mul %idx_1, 16u
-        %27:u32 = add %start_byte_offset_1, %26
-        %28:ptr<function, vec4<f32>, read_write> = access %a_2, %idx_1
-        %29:u32 = div %27, 16u
-        %30:ptr<uniform, vec4<u32>, read> = access %v, %29
-        %31:vec4<u32> = load %30
-        %32:vec4<f32> = bitcast<vec4<f32>> %31
-        store %28, %32
+        %29:u32 = mul %27, 16u
+        %30:u32 = add %start_byte_offset_1, %29
+        %31:ptr<function, vec4<f32>, read_write> = access %a_2, %27
+        %32:u32 = div %30, 16u
+        %33:ptr<uniform, vec4<u32>, read> = access %v, %32
+        %34:vec4<u32> = load %33
+        %35:vec4<f32> = bitcast<vec4<f32>> %34
+        store %31, %35
         continue  # -> $B11
       }
       $B11: {  # continuing
-        %33:u32 = add %idx_1, 1u
-        next_iteration %33  # -> $B10
+        %36:u32 = load %idx_1
+        %37:u32 = add %36, 1u
+        store %idx_1, %37
+        next_iteration  # -> $B10
       }
     }
-    %34:array<vec4<f32>, 2> = load %a_2
-    ret %34
+    %38:array<vec4<f32>, 2> = load %a_2
+    ret %38
   }
 }
 )";
@@ -1528,7 +1556,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, array<SB, 2>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<SB, 2>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1553,7 +1581,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 8>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 8>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1570,32 +1598,36 @@ $B1: {  # root
     %a_1:ptr<function, array<vec4<i32>, 2>, read_write> = var array<vec4<i32>, 2>(vec4<i32>(0i))  # %a_1: 'a'
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %12:bool = gte %idx, 2u
-        if %12 [t: $B7] {  # if_1
+      $B5: {  # body
+        %12:u32 = load %idx
+        %13:bool = gte %12, 2u
+        if %13 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %13:u32 = mul %idx, 16u
-        %14:u32 = add %start_byte_offset, %13
-        %15:ptr<function, vec4<i32>, read_write> = access %a_1, %idx
-        %16:u32 = div %14, 16u
-        %17:ptr<uniform, vec4<u32>, read> = access %v, %16
-        %18:vec4<u32> = load %17
-        %19:vec4<i32> = bitcast<vec4<i32>> %18
-        store %15, %19
+        %14:u32 = mul %12, 16u
+        %15:u32 = add %start_byte_offset, %14
+        %16:ptr<function, vec4<i32>, read_write> = access %a_1, %12
+        %17:u32 = div %15, 16u
+        %18:ptr<uniform, vec4<u32>, read> = access %v, %17
+        %19:vec4<u32> = load %18
+        %20:vec4<i32> = bitcast<vec4<i32>> %19
+        store %16, %20
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %20:u32 = add %idx, 1u
-        next_iteration %20  # -> $B5
+        %21:u32 = load %idx
+        %22:u32 = add %21, 1u
+        store %idx, %22
+        next_iteration  # -> $B5
       }
     }
-    %21:array<vec4<i32>, 2> = load %a_1
-    ret %21
+    %23:array<vec4<i32>, 2> = load %a_1
+    ret %23
   }
 }
 %4 = func(%start_byte_offset_1:u32):array<vec4<f32>, 2> {  # %start_byte_offset_1: 'start_byte_offset'
@@ -1603,32 +1635,36 @@ $B1: {  # root
     %a_2:ptr<function, array<vec4<f32>, 2>, read_write> = var array<vec4<f32>, 2>(vec4<f32>(0.0f))  # %a_2: 'a'
     loop [i: $B9, b: $B10, c: $B11] {  # loop_2
       $B9: {  # initializer
-        next_iteration 0u  # -> $B10
+        %idx_1:ptr<function, u32, read_write> = var 0u  # %idx_1: 'idx'
+        next_iteration  # -> $B10
       }
-      $B10 (%idx_1:u32): {  # body
-        %25:bool = gte %idx_1, 2u
-        if %25 [t: $B12] {  # if_2
+      $B10: {  # body
+        %27:u32 = load %idx_1
+        %28:bool = gte %27, 2u
+        if %28 [t: $B12] {  # if_2
           $B12: {  # true
             exit_loop  # loop_2
           }
         }
-        %26:u32 = mul %idx_1, 16u
-        %27:u32 = add %start_byte_offset_1, %26
-        %28:ptr<function, vec4<f32>, read_write> = access %a_2, %idx_1
-        %29:u32 = div %27, 16u
-        %30:ptr<uniform, vec4<u32>, read> = access %v, %29
-        %31:vec4<u32> = load %30
-        %32:vec4<f32> = bitcast<vec4<f32>> %31
-        store %28, %32
+        %29:u32 = mul %27, 16u
+        %30:u32 = add %start_byte_offset_1, %29
+        %31:ptr<function, vec4<f32>, read_write> = access %a_2, %27
+        %32:u32 = div %30, 16u
+        %33:ptr<uniform, vec4<u32>, read> = access %v, %32
+        %34:vec4<u32> = load %33
+        %35:vec4<f32> = bitcast<vec4<f32>> %34
+        store %31, %35
         continue  # -> $B11
       }
       $B11: {  # continuing
-        %33:u32 = add %idx_1, 1u
-        next_iteration %33  # -> $B10
+        %36:u32 = load %idx_1
+        %37:u32 = add %36, 1u
+        store %idx_1, %37
+        next_iteration  # -> $B10
       }
     }
-    %34:array<vec4<f32>, 2> = load %a_2
-    ret %34
+    %38:array<vec4<f32>, 2> = load %a_2
+    ret %38
   }
 }
 )";
@@ -1651,7 +1687,7 @@ TEST_F(IR_DecomposeAccessTest, Storage_AccessU16_LoadF16) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, f16, read> = var undef @binding_point(0, 0)
+  %v:ptr<storage, f16, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1667,7 +1703,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<u16, 1>, read> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 1>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1699,7 +1735,7 @@ TEST_F(IR_DecomposeAccessTest, Storage_AccessU32_LoadF32) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, f32, read> = var undef @binding_point(0, 0)
+  %v:ptr<storage, f32, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1715,7 +1751,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<u32, 1>, read> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32, 1>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1746,7 +1782,7 @@ TEST_F(IR_DecomposeAccessTest, Workgroup_AccessU32_LoadBool) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<workgroup, bool, read_write> = var undef
+  %v:ptr<workgroup, bool, read_write> = var
 }
 
 %foo = func():void {
@@ -1762,7 +1798,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 1>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 1>, read_write> = var
 }
 
 %foo = func():void {
@@ -1804,7 +1840,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1829,7 +1865,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 4>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1878,7 +1914,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -1903,7 +1939,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u16, 4>, read_write> = var undef
+  %v:ptr<workgroup, array<u16, 4>, read_write> = var
 }
 
 %foo = func():void {
@@ -1953,7 +1989,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -1978,7 +2014,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 4>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2027,7 +2063,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2052,7 +2088,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 8>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 8>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2103,7 +2139,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2128,7 +2164,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 8>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 8>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2181,7 +2217,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2206,7 +2242,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 8>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 8>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2262,7 +2298,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2287,7 +2323,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 16>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 16>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2350,7 +2386,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2375,7 +2411,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 16>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 16>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2443,7 +2479,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -2468,7 +2504,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u16, 8>, read_write> = var undef
+  %v:ptr<workgroup, array<u16, 8>, read_write> = var
 }
 
 %foo = func():void {
@@ -2525,7 +2561,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -2550,7 +2586,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u16, 16>, read_write> = var undef
+  %v:ptr<workgroup, array<u16, 16>, read_write> = var
 }
 
 %foo = func():void {
@@ -2614,7 +2650,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -2639,7 +2675,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u16, 16>, read_write> = var undef
+  %v:ptr<workgroup, array<u16, 16>, read_write> = var
 }
 
 %foo = func():void {
@@ -2708,7 +2744,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2733,7 +2769,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u32, 4>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2781,7 +2817,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2806,7 +2842,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u32, 8>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32, 8>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2857,7 +2893,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2882,7 +2918,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u32, 8>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32, 8>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -2934,7 +2970,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -2959,7 +2995,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 4>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 4>, read_write> = var
 }
 
 %foo = func():void {
@@ -3008,7 +3044,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -3033,7 +3069,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 8>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 8>, read_write> = var
 }
 
 %foo = func():void {
@@ -3085,7 +3121,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -3110,7 +3146,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 8>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 8>, read_write> = var
 }
 
 %foo = func():void {
@@ -3164,7 +3200,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -3189,7 +3225,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<vec2<u32>, 2>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<vec2<u32>, 2>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -3235,7 +3271,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -3261,7 +3297,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u32, 8>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32, 8>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -3316,7 +3352,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -3341,7 +3377,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<vec2<u32>, 4>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<vec2<u32>, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -3389,7 +3425,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -3414,7 +3450,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<vec2<u32>, 2>, read_write> = var undef
+  %v:ptr<workgroup, array<vec2<u32>, 2>, read_write> = var
 }
 
 %foo = func():void {
@@ -3460,7 +3496,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -3486,7 +3522,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 8>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 8>, read_write> = var
 }
 
 %foo = func():void {
@@ -3541,7 +3577,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -3566,7 +3602,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<vec2<u32>, 4>, read_write> = var undef
+  %v:ptr<workgroup, array<vec2<u32>, 4>, read_write> = var
 }
 
 %foo = func():void {
@@ -3612,7 +3648,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -3633,7 +3669,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u16, 6>, read_write> = var undef
+  %v:ptr<workgroup, array<u16, 6>, read_write> = var
 }
 
 %foo = func():void {
@@ -3659,36 +3695,40 @@ $B1: {  # root
     %a_1:ptr<function, array<u32, 2>, read_write> = var array<u32, 2>(0u)  # %a_1: 'a'
     loop [i: $B5, b: $B6, c: $B7] {  # loop_1
       $B5: {  # initializer
-        next_iteration 0u  # -> $B6
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B6
       }
-      $B6 (%idx:u32): {  # body
-        %17:bool = gte %idx, 2u
-        if %17 [t: $B8] {  # if_1
+      $B6: {  # body
+        %17:u32 = load %idx
+        %18:bool = gte %17, 2u
+        if %18 [t: $B8] {  # if_1
           $B8: {  # true
             exit_loop  # loop_1
           }
         }
-        %18:u32 = mul %idx, 4u
-        %19:u32 = add %start_byte_offset_1, %18
-        %20:ptr<function, u32, read_write> = access %a_1, %idx
-        %21:u32 = div %19, 2u
-        %22:ptr<workgroup, u16, read_write> = access %v, %21
-        %23:u16 = load %22 @align(4)
-        %24:u32 = add %21, 1u
-        %25:ptr<workgroup, u16, read_write> = access %v, %24
-        %26:u16 = load %25
-        %27:vec2<u16> = construct %23, %26
-        %28:u32 = bitcast<u32> %27
-        store %20, %28
+        %19:u32 = mul %17, 4u
+        %20:u32 = add %start_byte_offset_1, %19
+        %21:ptr<function, u32, read_write> = access %a_1, %17
+        %22:u32 = div %20, 2u
+        %23:ptr<workgroup, u16, read_write> = access %v, %22
+        %24:u16 = load %23 @align(4)
+        %25:u32 = add %22, 1u
+        %26:ptr<workgroup, u16, read_write> = access %v, %25
+        %27:u16 = load %26
+        %28:vec2<u16> = construct %24, %27
+        %29:u32 = bitcast<u32> %28
+        store %21, %29
         continue  # -> $B7
       }
       $B7: {  # continuing
-        %29:u32 = add %idx, 1u
-        next_iteration %29  # -> $B6
+        %30:u32 = load %idx
+        %31:u32 = add %30, 1u
+        store %idx, %31
+        next_iteration  # -> $B6
       }
     }
-    %30:array<u32, 2> = load %a_1
-    ret %30
+    %32:array<u32, 2> = load %a_1
+    ret %32
   }
 }
 )";
@@ -3719,7 +3759,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -3739,7 +3779,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u16, 6>, read_write> = var undef
+  %v:ptr<workgroup, array<u16, 6>, read_write> = var
 }
 
 %foo = func():void {
@@ -3764,32 +3804,36 @@ $B1: {  # root
   $B4: {
     loop [i: $B5, b: $B6, c: $B7] {  # loop_1
       $B5: {  # initializer
-        next_iteration 0u  # -> $B6
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B6
       }
-      $B6 (%idx:u32): {  # body
-        %17:bool = gte %idx, 2u
-        if %17 [t: $B8] {  # if_1
+      $B6: {  # body
+        %17:u32 = load %idx
+        %18:bool = gte %17, 2u
+        if %18 [t: $B8] {  # if_1
           $B8: {  # true
             exit_loop  # loop_1
           }
         }
-        %18:u32 = mul %idx, 4u
-        %19:u32 = add %start_byte_offset_1, %18
-        %20:u32 = access %object_1, %idx
-        %21:u32 = div %19, 2u
-        %22:vec2<u16> = bitcast<vec2<u16>> %20
-        %23:ptr<workgroup, u16, read_write> = access %v, %21
-        %24:u16 = access %22, 0u
-        store %23, %24 @align(4)
-        %25:u32 = add %21, 1u
-        %26:ptr<workgroup, u16, read_write> = access %v, %25
-        %27:u16 = access %22, 1u
-        store %26, %27
+        %19:u32 = mul %17, 4u
+        %20:u32 = add %start_byte_offset_1, %19
+        %21:u32 = access %object_1, %17
+        %22:u32 = div %20, 2u
+        %23:vec2<u16> = bitcast<vec2<u16>> %21
+        %24:ptr<workgroup, u16, read_write> = access %v, %22
+        %25:u16 = access %23, 0u
+        store %24, %25 @align(4)
+        %26:u32 = add %22, 1u
+        %27:ptr<workgroup, u16, read_write> = access %v, %26
+        %28:u16 = access %23, 1u
+        store %27, %28
         continue  # -> $B7
       }
       $B7: {  # continuing
-        %28:u32 = add %idx, 1u
-        next_iteration %28  # -> $B6
+        %29:u32 = load %idx
+        %30:u32 = add %29, 1u
+        store %idx, %30
+        next_iteration  # -> $B6
       }
     }
     ret
@@ -3816,7 +3860,7 @@ TEST_F(IR_DecomposeAccessTest, Store_AccessU16_StoreF16) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, f16, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, f16, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -3832,7 +3876,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<u16, 1>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 1>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -3865,7 +3909,7 @@ TEST_F(IR_DecomposeAccessTest, Storage_AccessU32_StoreF32) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, f32, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, f32, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -3881,7 +3925,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<u32, 1>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32, 1>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -3913,7 +3957,7 @@ TEST_F(IR_DecomposeAccessTest, Storage_AccessVec2u_StoreVec2f) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, vec2<f32>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, vec2<f32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -3928,7 +3972,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<vec2<u32>, 1>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<vec2<u32>, 1>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -3958,7 +4002,7 @@ TEST_F(IR_DecomposeAccessTest, Storage_AccessVec4u_StoreVec4f) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, vec4<f32>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, vec4<f32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -3973,7 +4017,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<vec4<u32>, 1>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<vec4<u32>, 1>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -4002,7 +4046,7 @@ TEST_F(IR_DecomposeAccessTest, Workgroup_AccessVec4u_StoreVec4b) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<workgroup, vec4<bool>, read_write> = var undef
+  %v:ptr<workgroup, vec4<bool>, read_write> = var
 }
 
 %foo = func():void {
@@ -4017,7 +4061,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<workgroup, array<vec4<u32>, 1>, read_write> = var undef
+  %v:ptr<workgroup, array<vec4<u32>, 1>, read_write> = var
 }
 
 %foo = func():void {
@@ -4057,7 +4101,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -4080,7 +4124,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 4>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -4124,7 +4168,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -4148,7 +4192,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u16, 4>, read_write> = var undef
+  %v:ptr<workgroup, array<u16, 4>, read_write> = var
 }
 
 %foo = func():void {
@@ -4198,7 +4242,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -4222,7 +4266,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 4>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -4272,7 +4316,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -4296,7 +4340,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 8>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 8>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -4350,7 +4394,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -4373,7 +4417,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 8>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 8>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -4422,7 +4466,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -4446,7 +4490,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 8>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 8>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -4508,7 +4552,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -4532,7 +4576,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 16>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 16>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -4604,7 +4648,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -4628,7 +4672,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 16>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 16>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -4711,7 +4755,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -4735,7 +4779,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u16, 8>, read_write> = var undef
+  %v:ptr<workgroup, array<u16, 8>, read_write> = var
 }
 
 %foo = func():void {
@@ -4802,7 +4846,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -4826,7 +4870,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u16, 16>, read_write> = var undef
+  %v:ptr<workgroup, array<u16, 16>, read_write> = var
 }
 
 %foo = func():void {
@@ -4905,7 +4949,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -4929,7 +4973,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u16, 16>, read_write> = var undef
+  %v:ptr<workgroup, array<u16, 16>, read_write> = var
 }
 
 %foo = func():void {
@@ -5019,7 +5063,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5042,7 +5086,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u32, 4>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5087,7 +5131,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5111,7 +5155,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u32, 8>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32, 8>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5162,7 +5206,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5185,7 +5229,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u32, 8>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32, 8>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5234,7 +5278,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5258,7 +5302,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 4>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5312,7 +5356,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5336,7 +5380,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 8>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 8>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5396,7 +5440,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -5419,7 +5463,7 @@ SB = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 4>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 4>, read_write> = var
 }
 
 %foo = func():void {
@@ -5465,7 +5509,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -5489,7 +5533,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 8>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 8>, read_write> = var
 }
 
 %foo = func():void {
@@ -5543,7 +5587,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, SB, read_write> = var undef
+  %v:ptr<workgroup, SB, read_write> = var
 }
 
 %foo = func():void {
@@ -5566,7 +5610,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 8>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 8>, read_write> = var
 }
 
 %foo = func():void {
@@ -5616,7 +5660,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5640,7 +5684,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<vec2<u32>, 4>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<vec2<u32>, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5685,7 +5729,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, SB, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, SB, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5704,7 +5748,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u32>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5737,7 +5781,7 @@ TEST_F(IR_DecomposeAccessTest, Storage_UnsizedBuffer) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, buffer, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, buffer, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5752,7 +5796,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<u32>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5784,7 +5828,7 @@ TEST_F(IR_DecomposeAccessTest, Workgroup_SizedBuffer) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<workgroup, buffer<64>, read_write> = var undef
+  %v:ptr<workgroup, buffer<64>, read_write> = var
 }
 
 %foo = func():void {
@@ -5799,7 +5843,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 16>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 16>, read_write> = var
 }
 
 %foo = func():void {
@@ -5832,7 +5876,7 @@ TEST_F(IR_DecomposeAccessTest, Uniform_SizedBuffer) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<uniform, buffer<128>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, buffer<128>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5847,7 +5891,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 8>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 8>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5878,7 +5922,7 @@ TEST_F(IR_DecomposeAccessTest, BufferLength_Sized_FromType) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<uniform, buffer<128>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, buffer<128>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5893,7 +5937,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<uniform, array<vec4<u32>, 8>, read> = var undef @binding_point(0, 0)
+  %v:ptr<uniform, array<vec4<u32>, 8>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5923,7 +5967,7 @@ TEST_F(IR_DecomposeAccessTest, BufferLength_Unsized) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, buffer, read> = var undef @binding_point(0, 0)
+  %v:ptr<storage, buffer, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5938,7 +5982,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<u32>, read> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5970,7 +6014,7 @@ TEST_F(IR_DecomposeAccessTest, ArrayLength_U32) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, array<u32>, read> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -5985,7 +6029,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<u32>, read> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -6016,7 +6060,7 @@ TEST_F(IR_DecomposeAccessTest, ArrayLength_F16) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, array<f16>, read> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<f16>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -6031,7 +6075,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<u16>, read> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -6071,7 +6115,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<SB>, read> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<SB>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -6091,7 +6135,7 @@ SB = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16>, read> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -6144,7 +6188,7 @@ outer = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, outer, read> = var undef @binding_point(0, 0)
+  %v:ptr<storage, outer, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -6170,7 +6214,7 @@ outer = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16>, read> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -6224,7 +6268,7 @@ outer = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, buffer, read> = var undef @binding_point(0, 0)
+  %v:ptr<storage, buffer, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -6250,7 +6294,7 @@ outer = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16>, read> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16>, read> = var @binding_point(0, 0)
 }
 
 %foo = @fragment func():void {
@@ -6308,8 +6352,8 @@ outer = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, buffer, read> = var undef @binding_point(0, 0)
-  %val:ptr<uniform, u32, read> = var undef @binding_point(0, 1)
+  %v:ptr<storage, buffer, read> = var @binding_point(0, 0)
+  %val:ptr<uniform, u32, read> = var @binding_point(0, 1)
 }
 
 %foo = @fragment func():void {
@@ -6336,8 +6380,8 @@ outer = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16>, read> = var undef @binding_point(0, 0)
-  %val:ptr<uniform, u32, read> = var undef @binding_point(0, 1)
+  %v:ptr<storage, array<u16>, read> = var @binding_point(0, 0)
+  %val:ptr<uniform, u32, read> = var @binding_point(0, 1)
 }
 
 %foo = @fragment func():void {
@@ -6400,8 +6444,8 @@ outer = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, buffer, read> = var undef @binding_point(0, 0)
-  %val:ptr<uniform, u32, read> = var undef @binding_point(0, 1)
+  %v:ptr<storage, buffer, read> = var @binding_point(0, 0)
+  %val:ptr<uniform, u32, read> = var @binding_point(0, 1)
 }
 
 %foo = @fragment func():void {
@@ -6429,8 +6473,8 @@ outer = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16>, read> = var undef @binding_point(0, 0)
-  %val:ptr<uniform, u32, read> = var undef @binding_point(0, 1)
+  %v:ptr<storage, array<u16>, read> = var @binding_point(0, 0)
+  %val:ptr<uniform, u32, read> = var @binding_point(0, 1)
 }
 
 %foo = @fragment func():void {
@@ -6486,8 +6530,8 @@ Input = struct @align(16) {
 }
 
 $B1: {  # root
-  %input:ptr<uniform, Input, read> = var undef @binding_point(0, 0)
-  %output:ptr<storage, u32, read_write> = var undef @binding_point(0, 1)
+  %input:ptr<uniform, Input, read> = var @binding_point(0, 0)
+  %output:ptr<storage, u32, read_write> = var @binding_point(0, 1)
 }
 
 %foo = @fragment func():void {
@@ -6515,8 +6559,8 @@ Input = struct @align(16) {
 }
 
 $B1: {  # root
-  %input:ptr<uniform, array<vec4<u32>, 501>, read> = var undef @binding_point(0, 0)
-  %output:ptr<storage, u32, read_write> = var undef @binding_point(0, 1)
+  %input:ptr<uniform, array<vec4<u32>, 501>, read> = var @binding_point(0, 0)
+  %output:ptr<storage, u32, read_write> = var @binding_point(0, 1)
 }
 
 %foo = @fragment func():void {
@@ -6565,7 +6609,7 @@ TEST_F(IR_DecomposeAccessTest, BufferArrayView_Basic_U32) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, buffer, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, buffer, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -6582,7 +6626,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<u32>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -6618,7 +6662,7 @@ TEST_F(IR_DecomposeAccessTest, BufferArrayView_Basic_Vec4f) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, buffer, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, buffer, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -6635,7 +6679,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<vec4<u32>>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<vec4<u32>>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -6681,7 +6725,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, buffer, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, buffer, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -6703,7 +6747,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<vec4<u32>>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<vec4<u32>>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -6752,7 +6796,7 @@ TEST_F(IR_DecomposeAccessTest, ArrayLength_BufferArrayView_Size_U32) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, buffer, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, buffer, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -6769,7 +6813,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<u32>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -6803,7 +6847,7 @@ TEST_F(IR_DecomposeAccessTest, ArrayLength_BufferArrayView_Size_Vec4f) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, buffer, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, buffer, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -6820,7 +6864,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<vec4<u32>>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<vec4<u32>>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -6864,7 +6908,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, buffer, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, buffer, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -6886,7 +6930,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<vec4<u32>>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<vec4<u32>>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -6934,7 +6978,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, buffer, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, buffer, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%offset:u32, %size:u32):void {
@@ -6957,7 +7001,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u32>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%offset:u32, %size:u32):void {
@@ -7009,7 +7053,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, buffer, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, buffer, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%offset:u32, %length:u32):void {
@@ -7032,7 +7076,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u32>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%offset:u32, %length:u32):void {
@@ -7065,7 +7109,7 @@ TEST_F(IR_DecomposeAccessTest, Workgroup_PhonyLoad_ArrayOfMat2x2F16_Skipped) {
 
     auto* src = R"(
 $B1: {  # root
-  %d0:ptr<workgroup, array<mat2x2<f16>, 2048>, read_write> = var undef
+  %d0:ptr<workgroup, array<mat2x2<f16>, 2048>, read_write> = var
 }
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -7080,7 +7124,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %d0:ptr<workgroup, array<u16, 8192>, read_write> = var undef
+  %d0:ptr<workgroup, array<u16, 8192>, read_write> = var
 }
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -7107,7 +7151,7 @@ TEST_F(IR_DecomposeAccessTest, Workgroup_PhonyLoad_Scalar_NotSkipped) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<workgroup, u32, read_write> = var undef
+  %v:ptr<workgroup, u32, read_write> = var
 }
 
 %foo = func():void {
@@ -7122,7 +7166,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 1>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 1>, read_write> = var
 }
 
 %foo = func():void {
@@ -7153,7 +7197,7 @@ TEST_F(IR_DecomposeAccessTest, Workgroup_UsedArrayElementLoad_NotSkipped) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 4>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 4>, read_write> = var
 }
 
 %foo = func():void {
@@ -7170,7 +7214,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 4>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 4>, read_write> = var
 }
 
 %foo = func():void {
@@ -7206,7 +7250,7 @@ TEST_F(IR_DecomposeAccessTest, Workgroup_SubgroupMatrix) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 1024>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 1024>, read_write> = var
 }
 
 %foo = func():void {
@@ -7222,7 +7266,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 1024>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 1024>, read_write> = var
 }
 
 %foo = func():void {
@@ -7262,7 +7306,7 @@ TEST_F(IR_DecomposeAccessTest, Workgroup_SubgroupMatrix_U8_Buffer) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<workgroup, buffer<1024>, read_write> = var undef
+  %v:ptr<workgroup, buffer<1024>, read_write> = var
 }
 
 %foo = func(%m:subgroup_matrix_left<u8, 8, 8>, %b_offset:u32, %m_offset:u32, %m_stride:u32):void {
@@ -7278,7 +7322,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 256>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 256>, read_write> = var
 }
 
 %foo = func(%m:subgroup_matrix_left<u8, 8, 8>, %b_offset:u32, %m_offset:u32, %m_stride:u32):void {
@@ -7331,7 +7375,7 @@ S = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, buffer<1024>, read_write> = var undef
+  %v:ptr<workgroup, buffer<1024>, read_write> = var
 }
 
 %foo = func(%b_offset:u32, %m_offset:i32, %m_stride:i32):void {
@@ -7355,7 +7399,7 @@ S = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u16, 512>, read_write> = var undef
+  %v:ptr<workgroup, array<u16, 512>, read_write> = var
 }
 
 %foo = func(%b_offset:u32, %m_offset:i32, %m_stride:i32):void {
@@ -7404,7 +7448,7 @@ TEST_F(IR_DecomposeAccessTest, Storage_SubgroupMatrix_F16_RuntimeArray_F32_Acces
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, array<f32>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<f32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%m:subgroup_matrix_left<f16, 8, 8>, %offset:u32, %stride:u32):void {
@@ -7419,7 +7463,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<u32>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%m:subgroup_matrix_left<f16, 8, 8>, %offset:u32, %stride:u32):void {
@@ -7455,7 +7499,7 @@ TEST_F(IR_DecomposeAccessTest, Storage_SubgroupMatrix_F16_RuntimeArray_Vec2F_Acc
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, array<vec2<f32>>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<vec2<f32>>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%m:subgroup_matrix_left<f16, 8, 8>, %offset:u32, %stride:u32):void {
@@ -7472,7 +7516,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<u32>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%m:subgroup_matrix_left<f16, 8, 8>, %offset:u32, %stride:u32):void {
@@ -7516,7 +7560,7 @@ TEST_F(IR_DecomposeAccessTest, Storage_SubgroupMatrix_F16_RuntimeArray_Vec3F_Acc
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, array<vec3<f32>>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<vec3<f32>>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%m:subgroup_matrix_left<f16, 8, 8>, %offset:u32, %stride:u32):void {
@@ -7533,7 +7577,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<u32>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%m:subgroup_matrix_left<f16, 8, 8>, %offset:u32, %stride:u32):void {
@@ -7577,7 +7621,7 @@ TEST_F(IR_DecomposeAccessTest, Storage_SubgroupMatrix_F16_RuntimeArray_Vec4F_Acc
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<storage, array<vec4<f32>>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<vec4<f32>>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%m:subgroup_matrix_left<f16, 8, 8>, %offset:u32, %stride:u32):void {
@@ -7594,7 +7638,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<storage, array<u32>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%m:subgroup_matrix_left<f16, 8, 8>, %offset:u32, %stride:u32):void {
@@ -7649,7 +7693,7 @@ S = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, S, read_write> = var undef
+  %v:ptr<workgroup, S, read_write> = var
 }
 
 %foo = func(%offset:u32, %stride:u32):void {
@@ -7672,7 +7716,7 @@ S = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u16, 2050>, read_write> = var undef
+  %v:ptr<workgroup, array<u16, 2050>, read_write> = var
 }
 
 %foo = func(%offset:u32, %stride:u32):void {
@@ -7727,7 +7771,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, S, read_write> = var undef
+  %v:ptr<workgroup, S, read_write> = var
 }
 
 %foo = func(%offset:u32, %stride:u32):void {
@@ -7750,7 +7794,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u16, 4100>, read_write> = var undef
+  %v:ptr<workgroup, array<u16, 4100>, read_write> = var
 }
 
 %foo = func(%offset:u32, %stride:u32):void {
@@ -7805,7 +7849,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, S, read_write> = var undef
+  %v:ptr<workgroup, S, read_write> = var
 }
 
 %foo = func(%offset:u32, %stride:u32):void {
@@ -7828,7 +7872,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u16, 8200>, read_write> = var undef
+  %v:ptr<workgroup, array<u16, 8200>, read_write> = var
 }
 
 %foo = func(%offset:u32, %stride:u32):void {
@@ -7883,7 +7927,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, S, read_write> = var undef
+  %v:ptr<workgroup, S, read_write> = var
 }
 
 %foo = func(%offset:u32, %stride:u32):void {
@@ -7906,7 +7950,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u16, 8200>, read_write> = var undef
+  %v:ptr<workgroup, array<u16, 8200>, read_write> = var
 }
 
 %foo = func(%offset:u32, %stride:u32):void {
@@ -7949,7 +7993,7 @@ TEST_F(IR_DecomposeAccessTest, Workgroup_UsedWithSubgroupMatrix_Load_SameType) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<workgroup, array<f32, 1024>, read_write> = var undef
+  %v:ptr<workgroup, array<f32, 1024>, read_write> = var
 }
 
 %foo = func(%offset:u32, %stride:u32):void {
@@ -7995,7 +8039,7 @@ S = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, S, read_write> = var undef
+  %v:ptr<workgroup, S, read_write> = var
 }
 
 %foo = func(%offset:u32, %stride:u32):void {
@@ -8016,7 +8060,7 @@ S = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 1024>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 1024>, read_write> = var
 }
 
 %foo = func(%offset:u32, %stride:u32):void {
@@ -8051,7 +8095,7 @@ TEST_F(IR_DecomposeAccessTest, Workgroup_UsedWithSubgroupMatrix_Store_SameType) 
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<workgroup, array<f32, 1024>, read_write> = var undef
+  %v:ptr<workgroup, array<f32, 1024>, read_write> = var
 }
 
 %foo = func(%offset:u32, %stride:u32, %m:subgroup_matrix_left<f32, 8, 8>):void {
@@ -8097,7 +8141,7 @@ S = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, S, read_write> = var undef
+  %v:ptr<workgroup, S, read_write> = var
 }
 
 %foo = func(%offset:u32, %stride:u32, %m:subgroup_matrix_left<u8, 8, 8>):void {
@@ -8118,7 +8162,7 @@ S = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u32, 1024>, read_write> = var undef
+  %v:ptr<workgroup, array<u32, 1024>, read_write> = var
 }
 
 %foo = func(%offset:u32, %stride:u32, %m:subgroup_matrix_left<u8, 8, 8>):void {
@@ -8163,7 +8207,7 @@ SB = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<immediate, array<u32, 6>, read> = var undef
+  %v:ptr<immediate, array<u32, 6>, read> = var
 }
 
 %foo = @fragment func():void {
@@ -8200,7 +8244,7 @@ TEST_F(IR_DecomposeAccessTest, ImmediateNoDynamicIndices_Vector) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<immediate, vec4<u32>, read> = var undef
+  %v:ptr<immediate, vec4<u32>, read> = var
 }
 
 %foo = func(%idx:u32):void {
@@ -8216,7 +8260,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<immediate, array<u32, 4>, read> = var undef
+  %v:ptr<immediate, array<u32, 4>, read> = var
 }
 
 %foo = func(%idx:u32):void {
@@ -8259,7 +8303,7 @@ TEST_F(IR_DecomposeAccessTest, ImmediateNoDynamicIndices_Matrix) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<immediate, mat2x2<f32>, read> = var undef
+  %v:ptr<immediate, mat2x2<f32>, read> = var
 }
 
 %foo = func(%idx:u32):void {
@@ -8276,7 +8320,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<immediate, array<u32, 4>, read> = var undef
+  %v:ptr<immediate, array<u32, 4>, read> = var
 }
 
 %foo = func(%idx:u32):void {
@@ -8335,7 +8379,7 @@ TEST_F(IR_DecomposeAccessTest, ImmediateNoDynamicIndices_MatrixAndVector) {
 
     auto* src = R"(
 $B1: {  # root
-  %v:ptr<immediate, mat2x2<f32>, read> = var undef
+  %v:ptr<immediate, mat2x2<f32>, read> = var
 }
 
 %foo = func(%idx1:u32, %idx2:u32):void {
@@ -8352,7 +8396,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %v:ptr<immediate, array<u32, 4>, read> = var undef
+  %v:ptr<immediate, array<u32, 4>, read> = var
 }
 
 %foo = func(%idx1:u32, %idx2:u32):void {
@@ -8423,7 +8467,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<immediate, S, read> = var undef
+  %v:ptr<immediate, S, read> = var
 }
 
 %foo = func(%idx1:u32, %idx2:u32):void {
@@ -8447,7 +8491,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<immediate, array<u32, 8>, read> = var undef
+  %v:ptr<immediate, array<u32, 8>, read> = var
 }
 
 %foo = func(%idx1:u32, %idx2:u32):void {
@@ -8518,7 +8562,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<immediate, S, read> = var undef
+  %v:ptr<immediate, S, read> = var
 }
 
 %foo = func(%idx1:u32, %idx2:u32):void {
@@ -8542,7 +8586,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<immediate, array<u32, 8>, read> = var undef
+  %v:ptr<immediate, array<u32, 8>, read> = var
 }
 
 %foo = func(%idx1:u32, %idx2:u32):void {
@@ -8616,7 +8660,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<immediate, S, read> = var undef
+  %v:ptr<immediate, S, read> = var
 }
 
 %foo = func(%idx1:u32, %idx2:u32):void {
@@ -8642,7 +8686,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<immediate, array<u32, 8>, read> = var undef
+  %v:ptr<immediate, array<u32, 8>, read> = var
 }
 
 %foo = func(%idx1:u32, %idx2:u32):void {
@@ -8713,7 +8757,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -8734,7 +8778,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 24>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 24>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -8855,7 +8899,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -8876,7 +8920,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 24>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 24>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -9026,7 +9070,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -9049,7 +9093,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 24>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 24>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -9066,61 +9110,65 @@ $B1: {  # root
     %a:ptr<function, array<vec4<u32>, 2>, read_write> = var array<vec4<u32>, 2>(vec4<u32>(0u))
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %11:bool = gte %idx, 2u
-        if %11 [t: $B7] {  # if_1
+      $B5: {  # body
+        %11:u32 = load %idx
+        %12:bool = gte %11, 2u
+        if %12 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %12:u32 = mul %idx, 16u
-        %13:u32 = add %start_byte_offset, %12
-        %14:ptr<function, vec4<u32>, read_write> = access %a, %idx
-        %15:u32 = div %13, 2u
-        %16:ptr<storage, u16, read_write> = access %v, %15
-        %17:u16 = load %16 @align(16)
-        %18:u32 = add %15, 1u
-        %19:ptr<storage, u16, read_write> = access %v, %18
-        %20:u16 = load %19
-        %21:u32 = add %18, 1u
-        %22:ptr<storage, u16, read_write> = access %v, %21
-        %23:u16 = load %22
-        %24:u32 = add %21, 1u
-        %25:ptr<storage, u16, read_write> = access %v, %24
-        %26:u16 = load %25
-        %27:u32 = add %24, 1u
-        %28:ptr<storage, u16, read_write> = access %v, %27
-        %29:u16 = load %28
-        %30:u32 = add %27, 1u
-        %31:ptr<storage, u16, read_write> = access %v, %30
-        %32:u16 = load %31
-        %33:u32 = add %30, 1u
-        %34:ptr<storage, u16, read_write> = access %v, %33
-        %35:u16 = load %34
-        %36:u32 = add %33, 1u
-        %37:ptr<storage, u16, read_write> = access %v, %36
-        %38:u16 = load %37
-        %39:vec2<u16> = construct %17, %20
-        %40:u32 = bitcast<u32> %39
-        %41:vec2<u16> = construct %23, %26
-        %42:u32 = bitcast<u32> %41
-        %43:vec2<u16> = construct %29, %32
-        %44:u32 = bitcast<u32> %43
-        %45:vec2<u16> = construct %35, %38
-        %46:u32 = bitcast<u32> %45
-        %47:vec4<u32> = construct %40, %42, %44, %46
-        store %14, %47
+        %13:u32 = mul %11, 16u
+        %14:u32 = add %start_byte_offset, %13
+        %15:ptr<function, vec4<u32>, read_write> = access %a, %11
+        %16:u32 = div %14, 2u
+        %17:ptr<storage, u16, read_write> = access %v, %16
+        %18:u16 = load %17 @align(16)
+        %19:u32 = add %16, 1u
+        %20:ptr<storage, u16, read_write> = access %v, %19
+        %21:u16 = load %20
+        %22:u32 = add %19, 1u
+        %23:ptr<storage, u16, read_write> = access %v, %22
+        %24:u16 = load %23
+        %25:u32 = add %22, 1u
+        %26:ptr<storage, u16, read_write> = access %v, %25
+        %27:u16 = load %26
+        %28:u32 = add %25, 1u
+        %29:ptr<storage, u16, read_write> = access %v, %28
+        %30:u16 = load %29
+        %31:u32 = add %28, 1u
+        %32:ptr<storage, u16, read_write> = access %v, %31
+        %33:u16 = load %32
+        %34:u32 = add %31, 1u
+        %35:ptr<storage, u16, read_write> = access %v, %34
+        %36:u16 = load %35
+        %37:u32 = add %34, 1u
+        %38:ptr<storage, u16, read_write> = access %v, %37
+        %39:u16 = load %38
+        %40:vec2<u16> = construct %18, %21
+        %41:u32 = bitcast<u32> %40
+        %42:vec2<u16> = construct %24, %27
+        %43:u32 = bitcast<u32> %42
+        %44:vec2<u16> = construct %30, %33
+        %45:u32 = bitcast<u32> %44
+        %46:vec2<u16> = construct %36, %39
+        %47:u32 = bitcast<u32> %46
+        %48:vec4<u32> = construct %41, %43, %45, %47
+        store %15, %48
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %48:u32 = add %idx, 1u
-        next_iteration %48  # -> $B5
+        %49:u32 = load %idx
+        %50:u32 = add %49, 1u
+        store %idx, %50
+        next_iteration  # -> $B5
       }
     }
-    %49:array<vec4<u32>, 2> = load %a
-    ret %49
+    %51:array<vec4<u32>, 2> = load %a
+    ret %51
   }
 }
 )";
@@ -9155,7 +9203,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -9178,7 +9226,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 24>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 24>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -9194,71 +9242,75 @@ $B1: {  # root
   $B3: {
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %11:bool = gte %idx, 2u
-        if %11 [t: $B7] {  # if_1
+      $B5: {  # body
+        %11:u32 = load %idx
+        %12:bool = gte %11, 2u
+        if %12 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %12:u32 = mul %idx, 16u
-        %13:u32 = add %start_byte_offset, %12
-        %14:vec4<u32> = access %object, %idx
-        %15:u32 = div %13, 2u
-        %16:u32 = access %14, 0u
-        %17:vec2<u16> = bitcast<vec2<u16>> %16
-        %18:u16 = access %17, 0u
-        %19:ptr<storage, u16, read_write> = access %v, %15
-        store %19, %18 @align(16)
-        %20:u32 = add %15, 1u
-        %21:u32 = access %14, 0u
-        %22:vec2<u16> = bitcast<vec2<u16>> %21
-        %23:u16 = access %22, 1u
-        %24:ptr<storage, u16, read_write> = access %v, %20
-        store %24, %23
-        %25:u32 = add %20, 1u
-        %26:u32 = access %14, 1u
-        %27:vec2<u16> = bitcast<vec2<u16>> %26
-        %28:u16 = access %27, 0u
-        %29:ptr<storage, u16, read_write> = access %v, %25
-        store %29, %28
-        %30:u32 = add %25, 1u
-        %31:u32 = access %14, 1u
-        %32:vec2<u16> = bitcast<vec2<u16>> %31
-        %33:u16 = access %32, 1u
-        %34:ptr<storage, u16, read_write> = access %v, %30
-        store %34, %33
-        %35:u32 = add %30, 1u
-        %36:u32 = access %14, 2u
-        %37:vec2<u16> = bitcast<vec2<u16>> %36
-        %38:u16 = access %37, 0u
-        %39:ptr<storage, u16, read_write> = access %v, %35
-        store %39, %38
-        %40:u32 = add %35, 1u
-        %41:u32 = access %14, 2u
-        %42:vec2<u16> = bitcast<vec2<u16>> %41
-        %43:u16 = access %42, 1u
-        %44:ptr<storage, u16, read_write> = access %v, %40
-        store %44, %43
-        %45:u32 = add %40, 1u
-        %46:u32 = access %14, 3u
-        %47:vec2<u16> = bitcast<vec2<u16>> %46
-        %48:u16 = access %47, 0u
-        %49:ptr<storage, u16, read_write> = access %v, %45
-        store %49, %48
-        %50:u32 = add %45, 1u
-        %51:u32 = access %14, 3u
-        %52:vec2<u16> = bitcast<vec2<u16>> %51
-        %53:u16 = access %52, 1u
-        %54:ptr<storage, u16, read_write> = access %v, %50
-        store %54, %53
+        %13:u32 = mul %11, 16u
+        %14:u32 = add %start_byte_offset, %13
+        %15:vec4<u32> = access %object, %11
+        %16:u32 = div %14, 2u
+        %17:u32 = access %15, 0u
+        %18:vec2<u16> = bitcast<vec2<u16>> %17
+        %19:u16 = access %18, 0u
+        %20:ptr<storage, u16, read_write> = access %v, %16
+        store %20, %19 @align(16)
+        %21:u32 = add %16, 1u
+        %22:u32 = access %15, 0u
+        %23:vec2<u16> = bitcast<vec2<u16>> %22
+        %24:u16 = access %23, 1u
+        %25:ptr<storage, u16, read_write> = access %v, %21
+        store %25, %24
+        %26:u32 = add %21, 1u
+        %27:u32 = access %15, 1u
+        %28:vec2<u16> = bitcast<vec2<u16>> %27
+        %29:u16 = access %28, 0u
+        %30:ptr<storage, u16, read_write> = access %v, %26
+        store %30, %29
+        %31:u32 = add %26, 1u
+        %32:u32 = access %15, 1u
+        %33:vec2<u16> = bitcast<vec2<u16>> %32
+        %34:u16 = access %33, 1u
+        %35:ptr<storage, u16, read_write> = access %v, %31
+        store %35, %34
+        %36:u32 = add %31, 1u
+        %37:u32 = access %15, 2u
+        %38:vec2<u16> = bitcast<vec2<u16>> %37
+        %39:u16 = access %38, 0u
+        %40:ptr<storage, u16, read_write> = access %v, %36
+        store %40, %39
+        %41:u32 = add %36, 1u
+        %42:u32 = access %15, 2u
+        %43:vec2<u16> = bitcast<vec2<u16>> %42
+        %44:u16 = access %43, 1u
+        %45:ptr<storage, u16, read_write> = access %v, %41
+        store %45, %44
+        %46:u32 = add %41, 1u
+        %47:u32 = access %15, 3u
+        %48:vec2<u16> = bitcast<vec2<u16>> %47
+        %49:u16 = access %48, 0u
+        %50:ptr<storage, u16, read_write> = access %v, %46
+        store %50, %49
+        %51:u32 = add %46, 1u
+        %52:u32 = access %15, 3u
+        %53:vec2<u16> = bitcast<vec2<u16>> %52
+        %54:u16 = access %53, 1u
+        %55:ptr<storage, u16, read_write> = access %v, %51
+        store %55, %54
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %55:u32 = add %idx, 1u
-        next_iteration %55  # -> $B5
+        %56:u32 = load %idx
+        %57:u32 = add %56, 1u
+        store %idx, %57
+        next_iteration  # -> $B5
       }
     }
     ret
@@ -9296,7 +9348,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -9319,7 +9371,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16, 16>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16, 16>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -9367,7 +9419,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, S, read_write> = var undef
+  %v:ptr<workgroup, S, read_write> = var
 }
 
 %foo = func():void {
@@ -9390,7 +9442,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, array<u16, 16>, read_write> = var undef
+  %v:ptr<workgroup, array<u16, 16>, read_write> = var
 }
 
 %foo = func():void {
@@ -9440,7 +9492,7 @@ S = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -9463,7 +9515,7 @@ S = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -9511,7 +9563,7 @@ S = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {
@@ -9535,7 +9587,7 @@ S = struct @align(4) {
 }
 
 $B1: {  # root
-  %v:ptr<storage, array<u16>, read_write> = var undef @binding_point(0, 0)
+  %v:ptr<storage, array<u16>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():void {

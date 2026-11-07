@@ -31,7 +31,6 @@
 #include <unordered_map>
 
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/transform/array_length_from.h"
 #include "src/tint/lang/core/ir/transform/bgra8unorm_polyfill.h"
 #include "src/tint/lang/core/ir/transform/binary_polyfill.h"
 #include "src/tint/lang/core/ir/transform/binding_remapper.h"
@@ -50,6 +49,7 @@
 #include "src/tint/lang/core/ir/transform/remove_terminator_args.h"
 #include "src/tint/lang/core/ir/transform/remove_uniform_vector_component_loads.h"
 #include "src/tint/lang/core/ir/transform/rename_conflicts.h"
+#include "src/tint/lang/core/ir/transform/replace_array_and_buffer_length.h"
 #include "src/tint/lang/core/ir/transform/robustness.h"
 #include "src/tint/lang/core/ir/transform/signed_integer_polyfill.h"
 #include "src/tint/lang/core/ir/transform/single_entry_point.h"
@@ -64,6 +64,7 @@
 #include "src/tint/lang/glsl/writer/raise/binary_polyfill.h"
 #include "src/tint/lang/glsl/writer/raise/bitcast_polyfill.h"
 #include "src/tint/lang/glsl/writer/raise/builtin_polyfill.h"
+#include "src/tint/lang/glsl/writer/raise/hoist_constant_array_initializers.h"
 #include "src/tint/lang/glsl/writer/raise/offset_first_index.h"
 #include "src/tint/lang/glsl/writer/raise/shader_io.h"
 #include "src/tint/lang/glsl/writer/raise/texture_builtins_from_uniform.h"
@@ -208,7 +209,7 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
                 size_indices[bp] = index;
             }
         }
-        TINT_CHECK_RESULT(core::ir::transform::ArrayLengthFromImmediates(
+        TINT_CHECK_RESULT(core::ir::transform::ReplaceArrayAndBufferLength(
             module, immediate_data_layout, buffer_sizes_array_elements_num, size_indices));
     }
     TINT_CHECK_RESULT(core::ir::transform::BlockDecoratedStructs(module));
@@ -272,6 +273,12 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
         core::ir::transform::ValueToLetConfig cfg;
         cfg.replace_pointer_lets = true;
         TINT_CHECK_RESULT(core::ir::transform::ValueToLet(module, cfg));
+    }
+
+    // Needs to run alongside ValueToLet, after any transform that could introduce an expression
+    // that may need to be explicitly not inlined.
+    if (options.workarounds.hoist_constant_array_initializers) {
+        TINT_CHECK_RESULT(raise::HoistConstantArrayInitializers(module));
     }
 
     return Success;

@@ -43,6 +43,8 @@
 #include "src/tint/lang/core/type/matrix.h"
 #include "src/tint/lang/core/type/pointer.h"
 #include "src/tint/lang/core/type/reference.h"
+#include "src/tint/lang/core/type/scalar.h"
+#include "src/tint/lang/core/type/string.h"
 #include "src/tint/lang/core/type/u32.h"
 #include "src/tint/lang/core/type/u64.h"
 #include "src/tint/lang/core/type/u8.h"
@@ -255,6 +257,7 @@ void Validator::CheckInstruction(const Instruction* inst) {
         [&](const StoreVectorElement* s) { CheckStoreVectorElement(s); },  //
         [&](const Switch* s) { CheckSwitch(s); },                          //
         [&](const Swizzle* s) { CheckSwizzle(s); },                        //
+        [&](const InterpolateString* is) { CheckInterpolateString(is); },  //
         [&](const Terminator* b) { CheckTerminator(b); },                  //
         [&](const Unary* u) { CheckUnary(u); },                            //
         [&](const Override* o) { CheckOverride(o); },                      //
@@ -268,7 +271,8 @@ void Validator::CheckInstruction(const Instruction* inst) {
 }
 
 void Validator::CheckOverride(const Override* o) {
-    if (!CheckResultsAndOperands(o, Override::kNumResults, Override::kNumOperands)) {
+    if (!CheckResultsAndOperandRange(o, Override::kNumResults, Override::kMinOperands,
+                                     Override::kMaxOperands)) {
         return;
     }
 
@@ -301,7 +305,7 @@ void Validator::CheckOverride(const Override* o) {
 }
 
 void Validator::CheckVar(const Var* var) {
-    if (!CheckResultsAndOperands(var, Var::kNumResults, Var::kNumOperands)) {
+    if (!CheckResultsAndOperandRange(var, Var::kNumResults, Var::kMinOperands, Var::kMaxOperands)) {
         return;
     }
 
@@ -599,6 +603,9 @@ void Validator::CheckCoreBuiltinCall(const CoreBuiltinCall* call,
             if (!call->Result()->Type()->UnwrapPtr()->IsHostShareable()) {
                 AddError(call) << call->FriendlyName()
                                << " result store type must be host-shareable";
+            }
+            if (call->Result()->Type()->UnwrapPtr()->Is<core::type::Buffer>()) {
+                AddError(call) << call->FriendlyName() << " result store type must not be a buffer";
             }
         }
 
@@ -1562,6 +1569,24 @@ void Validator::CheckSwizzle(const Swizzle* s) {
         AddError(s) << "result type " << NameOf(result_ty) << " does not match expected type, "
                     << NameOf(expected_ty);
         return;
+    }
+}
+
+void Validator::CheckInterpolateString(const InterpolateString* is) {
+    if (!CheckResultsAndOperandRange(is, InterpolateString::kNumResults,
+                                     InterpolateString::kMinOperands, std::nullopt)) {
+        return;
+    }
+
+    if (!is->Result()->Type()->Is<core::type::String>()) {
+        AddResultError(is, 0) << "result type must be string";
+    }
+
+    for (size_t i = 0; i < is->Operands().Length(); ++i) {
+        auto* ty = is->Operand(i)->Type();
+        if (!ty->IsAnyOf<core::type::Scalar, core::type::Vector, core::type::String>()) {
+            AddError(is, i) << "operand must be a scalar, vector, or string";
+        }
     }
 }
 

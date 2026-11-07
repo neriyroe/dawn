@@ -76,7 +76,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -101,7 +101,7 @@ S_1 = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S_1, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S_1, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -152,7 +152,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -177,7 +177,7 @@ S_1 = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S_1, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S_1, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -229,7 +229,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -254,7 +254,7 @@ S_1 = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S_1, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S_1, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -317,7 +317,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -342,7 +342,7 @@ S_1 = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S_1, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S_1, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -405,7 +405,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -430,7 +430,7 @@ S_1 = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S_1, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S_1, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -484,7 +484,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -509,7 +509,7 @@ S_1 = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S_1, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S_1, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -564,7 +564,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -590,7 +590,7 @@ S_1 = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S_1, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S_1, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -657,7 +657,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -683,7 +683,7 @@ S_1 = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S_1, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S_1, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -749,7 +749,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = func(%m:mat2x3<f32>):void {
@@ -773,7 +773,7 @@ S_1 = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = func(%m:mat2x3<f32>):void {
@@ -826,7 +826,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = func(%m:mat3x3<f32>):void {
@@ -850,7 +850,7 @@ S_1 = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = func(%m:mat3x3<f32>):void {
@@ -904,7 +904,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -928,7 +928,7 @@ S_1 = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -995,7 +995,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1019,7 +1019,7 @@ S_1 = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1085,7 +1085,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1109,7 +1109,7 @@ S_1 = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1162,7 +1162,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1186,7 +1186,7 @@ S_1 = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1239,7 +1239,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1263,7 +1263,7 @@ S_1 = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1323,7 +1323,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1353,7 +1353,7 @@ S_1 = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S_1, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S_1, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1423,7 +1423,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1453,7 +1453,7 @@ S_1 = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S_1, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S_1, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1523,7 +1523,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1553,7 +1553,7 @@ S_1 = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S_1, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S_1, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1621,7 +1621,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1651,7 +1651,7 @@ S_1 = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S_1, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S_1, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1722,7 +1722,7 @@ S = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = func(%m1:mat2x3<f32>, %m2:mat4x2<f32>):void {
@@ -1750,7 +1750,7 @@ S_1 = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = func(%m1:mat2x3<f32>, %m2:mat4x2<f32>):void {
@@ -1814,7 +1814,7 @@ S = struct @align(64) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = func(%m1:mat3x3<f32>, %m2:mat4x4<f32>):void {
@@ -1842,7 +1842,7 @@ S_1 = struct @align(64) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = func(%m1:mat3x3<f32>, %m2:mat4x4<f32>):void {
@@ -1908,7 +1908,7 @@ Outer = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, Outer, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, Outer, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -1944,7 +1944,7 @@ Outer_1 = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, Outer_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, Outer_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -2027,7 +2027,7 @@ Outer = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, Outer, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, Outer, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -2063,7 +2063,7 @@ Outer_1 = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, Outer_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, Outer_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -2170,8 +2170,8 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
-  %ps:ptr<private, S, read_write> = var undef
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
+  %ps:ptr<private, S, read_write> = var
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -2219,8 +2219,8 @@ S_1 = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
-  %ps:ptr<private, S_1, read_write> = var undef
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
+  %ps:ptr<private, S_1, read_write> = var
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -2421,8 +2421,8 @@ S = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
-  %ps:ptr<private, S, read_write> = var undef
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
+  %ps:ptr<private, S, read_write> = var
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -2470,8 +2470,8 @@ S_1 = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
-  %ps:ptr<private, S_1, read_write> = var undef
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
+  %ps:ptr<private, S_1, read_write> = var
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -2659,7 +2659,7 @@ S = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -2684,7 +2684,7 @@ S_1 = struct @align(8) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S_1, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S_1, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -2738,7 +2738,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -2763,7 +2763,7 @@ S_1 = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S_1, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S_1, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -2817,7 +2817,7 @@ S = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -2842,7 +2842,7 @@ S_1 = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -2856,31 +2856,35 @@ $B1: {  # root
 }
 %tint_transpose_row_major_array = func(%8:array<mat3x2<f32>, 4>):array<mat2x3<f32>, 4> {
   $B3: {
-    %9:ptr<function, array<mat2x3<f32>, 4>, read_write> = var undef
+    %9:ptr<function, array<mat2x3<f32>, 4>, read_write> = var
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %11:bool = gte %idx, 4u
-        if %11 [t: $B7] {  # if_1
+      $B5: {  # body
+        %11:u32 = load %idx
+        %12:bool = gte %11, 4u
+        if %12 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %12:mat3x2<f32> = access %8, %idx
-        %13:mat2x3<f32> = transpose %12
-        %14:ptr<function, mat2x3<f32>, read_write> = access %9, %idx
-        store %14, %13
+        %13:mat3x2<f32> = access %8, %11
+        %14:mat2x3<f32> = transpose %13
+        %15:ptr<function, mat2x3<f32>, read_write> = access %9, %11
+        store %15, %14
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %15:u32 = add %idx, 1u
-        next_iteration %15  # -> $B5
+        %16:u32 = load %idx
+        %17:u32 = add %16, 1u
+        store %idx, %17
+        next_iteration  # -> $B5
       }
     }
-    %16:array<mat2x3<f32>, 4> = load %9
-    ret %16
+    %18:array<mat2x3<f32>, 4> = load %9
+    ret %18
   }
 }
 )";
@@ -2924,7 +2928,7 @@ S = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -2949,7 +2953,7 @@ S_1 = struct @align(16) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -2963,31 +2967,35 @@ $B1: {  # root
 }
 %tint_transpose_row_major_array = func(%8:array<mat3x3<f32>, 4>):array<mat3x3<f32>, 4> {
   $B3: {
-    %9:ptr<function, array<mat3x3<f32>, 4>, read_write> = var undef
+    %9:ptr<function, array<mat3x3<f32>, 4>, read_write> = var
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %11:bool = gte %idx, 4u
-        if %11 [t: $B7] {  # if_1
+      $B5: {  # body
+        %11:u32 = load %idx
+        %12:bool = gte %11, 4u
+        if %12 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %12:mat3x3<f32> = access %8, %idx
-        %13:mat3x3<f32> = transpose %12
-        %14:ptr<function, mat3x3<f32>, read_write> = access %9, %idx
-        store %14, %13
+        %13:mat3x3<f32> = access %8, %11
+        %14:mat3x3<f32> = transpose %13
+        %15:ptr<function, mat3x3<f32>, read_write> = access %9, %11
+        store %15, %14
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %15:u32 = add %idx, 1u
-        next_iteration %15  # -> $B5
+        %16:u32 = load %idx
+        %17:u32 = add %16, 1u
+        store %idx, %17
+        next_iteration  # -> $B5
       }
     }
-    %16:array<mat3x3<f32>, 4> = load %9
-    ret %16
+    %18:array<mat3x3<f32>, 4> = load %9
+    ret %18
   }
 }
 )";
@@ -3033,7 +3041,7 @@ S = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -3057,7 +3065,7 @@ S_1 = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -3070,31 +3078,35 @@ $B1: {  # root
 }
 %tint_transpose_row_major_array = func(%6:array<mat2x3<f32>, 4>):array<mat3x2<f32>, 4> {
   $B3: {
-    %7:ptr<function, array<mat3x2<f32>, 4>, read_write> = var undef
+    %7:ptr<function, array<mat3x2<f32>, 4>, read_write> = var
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %9:bool = gte %idx, 4u
-        if %9 [t: $B7] {  # if_1
+      $B5: {  # body
+        %9:u32 = load %idx
+        %10:bool = gte %9, 4u
+        if %10 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %10:mat2x3<f32> = access %6, %idx
-        %11:mat3x2<f32> = transpose %10
-        %12:ptr<function, mat3x2<f32>, read_write> = access %7, %idx
-        store %12, %11
+        %11:mat2x3<f32> = access %6, %9
+        %12:mat3x2<f32> = transpose %11
+        %13:ptr<function, mat3x2<f32>, read_write> = access %7, %9
+        store %13, %12
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %13:u32 = add %idx, 1u
-        next_iteration %13  # -> $B5
+        %14:u32 = load %idx
+        %15:u32 = add %14, 1u
+        store %idx, %15
+        next_iteration  # -> $B5
       }
     }
-    %14:array<mat3x2<f32>, 4> = load %7
-    ret %14
+    %16:array<mat3x2<f32>, 4> = load %7
+    ret %16
   }
 }
 )";
@@ -3140,7 +3152,7 @@ S = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -3164,7 +3176,7 @@ S_1 = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -3177,31 +3189,35 @@ $B1: {  # root
 }
 %tint_transpose_row_major_array = func(%6:array<mat3x3<f32>, 4>):array<mat3x3<f32>, 4> {
   $B3: {
-    %7:ptr<function, array<mat3x3<f32>, 4>, read_write> = var undef
+    %7:ptr<function, array<mat3x3<f32>, 4>, read_write> = var
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %9:bool = gte %idx, 4u
-        if %9 [t: $B7] {  # if_1
+      $B5: {  # body
+        %9:u32 = load %idx
+        %10:bool = gte %9, 4u
+        if %10 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %10:mat3x3<f32> = access %6, %idx
-        %11:mat3x3<f32> = transpose %10
-        %12:ptr<function, mat3x3<f32>, read_write> = access %7, %idx
-        store %12, %11
+        %11:mat3x3<f32> = access %6, %9
+        %12:mat3x3<f32> = transpose %11
+        %13:ptr<function, mat3x3<f32>, read_write> = access %7, %9
+        store %13, %12
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %13:u32 = add %idx, 1u
-        next_iteration %13  # -> $B5
+        %14:u32 = load %idx
+        %15:u32 = add %14, 1u
+        store %idx, %15
+        next_iteration  # -> $B5
       }
     }
-    %14:array<mat3x3<f32>, 4> = load %7
-    ret %14
+    %16:array<mat3x3<f32>, 4> = load %7
+    ret %16
   }
 }
 )";
@@ -3267,7 +3283,7 @@ S = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -3305,7 +3321,7 @@ S_1 = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -3336,131 +3352,147 @@ $B1: {  # root
 }
 %tint_transpose_row_major_array = func(%24:array<array<mat3x2<f32>, 4>, 5>):array<array<mat2x3<f32>, 4>, 5> {
   $B3: {
-    %25:ptr<function, array<array<mat2x3<f32>, 4>, 5>, read_write> = var undef
+    %25:ptr<function, array<array<mat2x3<f32>, 4>, 5>, read_write> = var
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %27:bool = gte %idx, 5u
-        if %27 [t: $B7] {  # if_1
+      $B5: {  # body
+        %27:u32 = load %idx
+        %28:bool = gte %27, 5u
+        if %28 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %28:array<mat3x2<f32>, 4> = access %24, %idx
-        %29:array<mat2x3<f32>, 4> = call %tint_transpose_row_major_array_3, %28
-        %31:ptr<function, array<mat2x3<f32>, 4>, read_write> = access %25, %idx
-        store %31, %29
+        %29:array<mat3x2<f32>, 4> = access %24, %27
+        %30:array<mat2x3<f32>, 4> = call %tint_transpose_row_major_array_3, %29
+        %32:ptr<function, array<mat2x3<f32>, 4>, read_write> = access %25, %27
+        store %32, %30
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %32:u32 = add %idx, 1u
-        next_iteration %32  # -> $B5
+        %33:u32 = load %idx
+        %34:u32 = add %33, 1u
+        store %idx, %34
+        next_iteration  # -> $B5
       }
     }
-    %33:array<array<mat2x3<f32>, 4>, 5> = load %25
-    ret %33
+    %35:array<array<mat2x3<f32>, 4>, 5> = load %25
+    ret %35
   }
 }
-%tint_transpose_row_major_array_3 = func(%34:array<mat3x2<f32>, 4>):array<mat2x3<f32>, 4> {  # %tint_transpose_row_major_array_3: 'tint_transpose_row_major_array'
+%tint_transpose_row_major_array_3 = func(%36:array<mat3x2<f32>, 4>):array<mat2x3<f32>, 4> {  # %tint_transpose_row_major_array_3: 'tint_transpose_row_major_array'
   $B8: {
-    %35:ptr<function, array<mat2x3<f32>, 4>, read_write> = var undef
+    %37:ptr<function, array<mat2x3<f32>, 4>, read_write> = var
     loop [i: $B9, b: $B10, c: $B11] {  # loop_2
       $B9: {  # initializer
-        next_iteration 0u  # -> $B10
+        %idx_1:ptr<function, u32, read_write> = var 0u  # %idx_1: 'idx'
+        next_iteration  # -> $B10
       }
-      $B10 (%idx_1:u32): {  # body
-        %37:bool = gte %idx_1, 4u
-        if %37 [t: $B12] {  # if_2
+      $B10: {  # body
+        %39:u32 = load %idx_1
+        %40:bool = gte %39, 4u
+        if %40 [t: $B12] {  # if_2
           $B12: {  # true
             exit_loop  # loop_2
           }
         }
-        %38:mat3x2<f32> = access %34, %idx_1
-        %39:mat2x3<f32> = transpose %38
-        %40:ptr<function, mat2x3<f32>, read_write> = access %35, %idx_1
-        store %40, %39
+        %41:mat3x2<f32> = access %36, %39
+        %42:mat2x3<f32> = transpose %41
+        %43:ptr<function, mat2x3<f32>, read_write> = access %37, %39
+        store %43, %42
         continue  # -> $B11
       }
       $B11: {  # continuing
-        %41:u32 = add %idx_1, 1u
-        next_iteration %41  # -> $B10
+        %44:u32 = load %idx_1
+        %45:u32 = add %44, 1u
+        store %idx_1, %45
+        next_iteration  # -> $B10
       }
     }
-    %42:array<mat2x3<f32>, 4> = load %35
-    ret %42
+    %46:array<mat2x3<f32>, 4> = load %37
+    ret %46
   }
 }
-%tint_transpose_row_major_array_1 = func(%43:array<array<mat2x3<f32>, 4>, 5>):array<array<mat3x2<f32>, 4>, 5> {  # %tint_transpose_row_major_array_1: 'tint_transpose_row_major_array'
+%tint_transpose_row_major_array_1 = func(%47:array<array<mat2x3<f32>, 4>, 5>):array<array<mat3x2<f32>, 4>, 5> {  # %tint_transpose_row_major_array_1: 'tint_transpose_row_major_array'
   $B13: {
-    %44:ptr<function, array<array<mat3x2<f32>, 4>, 5>, read_write> = var undef
+    %48:ptr<function, array<array<mat3x2<f32>, 4>, 5>, read_write> = var
     loop [i: $B14, b: $B15, c: $B16] {  # loop_3
       $B14: {  # initializer
-        next_iteration 0u  # -> $B15
+        %idx_2:ptr<function, u32, read_write> = var 0u  # %idx_2: 'idx'
+        next_iteration  # -> $B15
       }
-      $B15 (%idx_2:u32): {  # body
-        %46:bool = gte %idx_2, 5u
-        if %46 [t: $B17] {  # if_3
+      $B15: {  # body
+        %50:u32 = load %idx_2
+        %51:bool = gte %50, 5u
+        if %51 [t: $B17] {  # if_3
           $B17: {  # true
             exit_loop  # loop_3
           }
         }
-        %47:array<mat2x3<f32>, 4> = access %43, %idx_2
-        %48:array<mat3x2<f32>, 4> = call %tint_transpose_row_major_array_2, %47
-        %49:ptr<function, array<mat3x2<f32>, 4>, read_write> = access %44, %idx_2
-        store %49, %48
+        %52:array<mat2x3<f32>, 4> = access %47, %50
+        %53:array<mat3x2<f32>, 4> = call %tint_transpose_row_major_array_2, %52
+        %54:ptr<function, array<mat3x2<f32>, 4>, read_write> = access %48, %50
+        store %54, %53
         continue  # -> $B16
       }
       $B16: {  # continuing
-        %50:u32 = add %idx_2, 1u
-        next_iteration %50  # -> $B15
+        %55:u32 = load %idx_2
+        %56:u32 = add %55, 1u
+        store %idx_2, %56
+        next_iteration  # -> $B15
       }
     }
-    %51:array<array<mat3x2<f32>, 4>, 5> = load %44
-    ret %51
+    %57:array<array<mat3x2<f32>, 4>, 5> = load %48
+    ret %57
   }
 }
-%tint_transpose_row_major_array_2 = func(%52:array<mat2x3<f32>, 4>):array<mat3x2<f32>, 4> {  # %tint_transpose_row_major_array_2: 'tint_transpose_row_major_array'
+%tint_transpose_row_major_array_2 = func(%58:array<mat2x3<f32>, 4>):array<mat3x2<f32>, 4> {  # %tint_transpose_row_major_array_2: 'tint_transpose_row_major_array'
   $B18: {
-    %53:ptr<function, array<mat3x2<f32>, 4>, read_write> = var undef
+    %59:ptr<function, array<mat3x2<f32>, 4>, read_write> = var
     loop [i: $B19, b: $B20, c: $B21] {  # loop_4
       $B19: {  # initializer
-        next_iteration 0u  # -> $B20
+        %idx_3:ptr<function, u32, read_write> = var 0u  # %idx_3: 'idx'
+        next_iteration  # -> $B20
       }
-      $B20 (%idx_3:u32): {  # body
-        %55:bool = gte %idx_3, 4u
-        if %55 [t: $B22] {  # if_4
+      $B20: {  # body
+        %61:u32 = load %idx_3
+        %62:bool = gte %61, 4u
+        if %62 [t: $B22] {  # if_4
           $B22: {  # true
             exit_loop  # loop_4
           }
         }
-        %56:mat2x3<f32> = access %52, %idx_3
-        %57:mat3x2<f32> = transpose %56
-        %58:ptr<function, mat3x2<f32>, read_write> = access %53, %idx_3
-        store %58, %57
+        %63:mat2x3<f32> = access %58, %61
+        %64:mat3x2<f32> = transpose %63
+        %65:ptr<function, mat3x2<f32>, read_write> = access %59, %61
+        store %65, %64
         continue  # -> $B21
       }
       $B21: {  # continuing
-        %59:u32 = add %idx_3, 1u
-        next_iteration %59  # -> $B20
+        %66:u32 = load %idx_3
+        %67:u32 = add %66, 1u
+        store %idx_3, %67
+        next_iteration  # -> $B20
       }
     }
-    %60:array<mat3x2<f32>, 4> = load %53
-    ret %60
+    %68:array<mat3x2<f32>, 4> = load %59
+    ret %68
   }
 }
-%tint_store_row_major_column = func(%61:ptr<storage, mat3x2<f32>, read_write>, %62:u32, %63:vec3<f32>):void {
+%tint_store_row_major_column = func(%69:ptr<storage, mat3x2<f32>, read_write>, %70:u32, %71:vec3<f32>):void {
   $B23: {
-    %64:f32 = access %63, 0u
-    %65:ptr<storage, vec2<f32>, read_write> = access %61, 0u
-    store_vector_element %65, %62, %64
-    %66:f32 = access %63, 1u
-    %67:ptr<storage, vec2<f32>, read_write> = access %61, 1u
-    store_vector_element %67, %62, %66
-    %68:f32 = access %63, 2u
-    %69:ptr<storage, vec2<f32>, read_write> = access %61, 2u
-    store_vector_element %69, %62, %68
+    %72:f32 = access %71, 0u
+    %73:ptr<storage, vec2<f32>, read_write> = access %69, 0u
+    store_vector_element %73, %70, %72
+    %74:f32 = access %71, 1u
+    %75:ptr<storage, vec2<f32>, read_write> = access %69, 1u
+    store_vector_element %75, %70, %74
+    %76:f32 = access %71, 2u
+    %77:ptr<storage, vec2<f32>, read_write> = access %69, 2u
+    store_vector_element %77, %70, %76
     ret
   }
 }
@@ -3511,7 +3543,7 @@ S = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -3539,7 +3571,7 @@ S_1 = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -3557,60 +3589,68 @@ $B1: {  # root
 }
 %tint_transpose_row_major_array = func(%11:array<array<mat3x3<f32>, 4>, 5>):array<array<mat3x3<f32>, 4>, 5> {
   $B3: {
-    %12:ptr<function, array<array<mat3x3<f32>, 4>, 5>, read_write> = var undef
+    %12:ptr<function, array<array<mat3x3<f32>, 4>, 5>, read_write> = var
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %14:bool = gte %idx, 5u
-        if %14 [t: $B7] {  # if_1
+      $B5: {  # body
+        %14:u32 = load %idx
+        %15:bool = gte %14, 5u
+        if %15 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %15:array<mat3x3<f32>, 4> = access %11, %idx
-        %16:array<mat3x3<f32>, 4> = call %tint_transpose_row_major_array_1, %15
-        %18:ptr<function, array<mat3x3<f32>, 4>, read_write> = access %12, %idx
-        store %18, %16
+        %16:array<mat3x3<f32>, 4> = access %11, %14
+        %17:array<mat3x3<f32>, 4> = call %tint_transpose_row_major_array_1, %16
+        %19:ptr<function, array<mat3x3<f32>, 4>, read_write> = access %12, %14
+        store %19, %17
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %19:u32 = add %idx, 1u
-        next_iteration %19  # -> $B5
+        %20:u32 = load %idx
+        %21:u32 = add %20, 1u
+        store %idx, %21
+        next_iteration  # -> $B5
       }
     }
-    %20:array<array<mat3x3<f32>, 4>, 5> = load %12
-    ret %20
+    %22:array<array<mat3x3<f32>, 4>, 5> = load %12
+    ret %22
   }
 }
-%tint_transpose_row_major_array_1 = func(%21:array<mat3x3<f32>, 4>):array<mat3x3<f32>, 4> {  # %tint_transpose_row_major_array_1: 'tint_transpose_row_major_array'
+%tint_transpose_row_major_array_1 = func(%23:array<mat3x3<f32>, 4>):array<mat3x3<f32>, 4> {  # %tint_transpose_row_major_array_1: 'tint_transpose_row_major_array'
   $B8: {
-    %22:ptr<function, array<mat3x3<f32>, 4>, read_write> = var undef
+    %24:ptr<function, array<mat3x3<f32>, 4>, read_write> = var
     loop [i: $B9, b: $B10, c: $B11] {  # loop_2
       $B9: {  # initializer
-        next_iteration 0u  # -> $B10
+        %idx_1:ptr<function, u32, read_write> = var 0u  # %idx_1: 'idx'
+        next_iteration  # -> $B10
       }
-      $B10 (%idx_1:u32): {  # body
-        %24:bool = gte %idx_1, 4u
-        if %24 [t: $B12] {  # if_2
+      $B10: {  # body
+        %26:u32 = load %idx_1
+        %27:bool = gte %26, 4u
+        if %27 [t: $B12] {  # if_2
           $B12: {  # true
             exit_loop  # loop_2
           }
         }
-        %25:mat3x3<f32> = access %21, %idx_1
-        %26:mat3x3<f32> = transpose %25
-        %27:ptr<function, mat3x3<f32>, read_write> = access %22, %idx_1
-        store %27, %26
+        %28:mat3x3<f32> = access %23, %26
+        %29:mat3x3<f32> = transpose %28
+        %30:ptr<function, mat3x3<f32>, read_write> = access %24, %26
+        store %30, %29
         continue  # -> $B11
       }
       $B11: {  # continuing
-        %28:u32 = add %idx_1, 1u
-        next_iteration %28  # -> $B10
+        %31:u32 = load %idx_1
+        %32:u32 = add %31, 1u
+        store %idx_1, %32
+        next_iteration  # -> $B10
       }
     }
-    %29:array<mat3x3<f32>, 4> = load %22
-    ret %29
+    %33:array<mat3x3<f32>, 4> = load %24
+    ret %33
   }
 }
 )";
@@ -3674,7 +3714,7 @@ S = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -3712,7 +3752,7 @@ S_1 = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -3743,73 +3783,81 @@ $B1: {  # root
 }
 %tint_transpose_row_major_array = func(%23:array<array<mat3x3<f32>, 4>, 5>):array<array<mat3x3<f32>, 4>, 5> {
   $B3: {
-    %24:ptr<function, array<array<mat3x3<f32>, 4>, 5>, read_write> = var undef
+    %24:ptr<function, array<array<mat3x3<f32>, 4>, 5>, read_write> = var
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %26:bool = gte %idx, 5u
-        if %26 [t: $B7] {  # if_1
+      $B5: {  # body
+        %26:u32 = load %idx
+        %27:bool = gte %26, 5u
+        if %27 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %27:array<mat3x3<f32>, 4> = access %23, %idx
-        %28:array<mat3x3<f32>, 4> = call %tint_transpose_row_major_array_1, %27
-        %29:ptr<function, array<mat3x3<f32>, 4>, read_write> = access %24, %idx
-        store %29, %28
+        %28:array<mat3x3<f32>, 4> = access %23, %26
+        %29:array<mat3x3<f32>, 4> = call %tint_transpose_row_major_array_1, %28
+        %30:ptr<function, array<mat3x3<f32>, 4>, read_write> = access %24, %26
+        store %30, %29
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %30:u32 = add %idx, 1u
-        next_iteration %30  # -> $B5
+        %31:u32 = load %idx
+        %32:u32 = add %31, 1u
+        store %idx, %32
+        next_iteration  # -> $B5
       }
     }
-    %31:array<array<mat3x3<f32>, 4>, 5> = load %24
-    ret %31
+    %33:array<array<mat3x3<f32>, 4>, 5> = load %24
+    ret %33
   }
 }
-%tint_transpose_row_major_array_1 = func(%32:array<mat3x3<f32>, 4>):array<mat3x3<f32>, 4> {  # %tint_transpose_row_major_array_1: 'tint_transpose_row_major_array'
+%tint_transpose_row_major_array_1 = func(%34:array<mat3x3<f32>, 4>):array<mat3x3<f32>, 4> {  # %tint_transpose_row_major_array_1: 'tint_transpose_row_major_array'
   $B8: {
-    %33:ptr<function, array<mat3x3<f32>, 4>, read_write> = var undef
+    %35:ptr<function, array<mat3x3<f32>, 4>, read_write> = var
     loop [i: $B9, b: $B10, c: $B11] {  # loop_2
       $B9: {  # initializer
-        next_iteration 0u  # -> $B10
+        %idx_1:ptr<function, u32, read_write> = var 0u  # %idx_1: 'idx'
+        next_iteration  # -> $B10
       }
-      $B10 (%idx_1:u32): {  # body
-        %35:bool = gte %idx_1, 4u
-        if %35 [t: $B12] {  # if_2
+      $B10: {  # body
+        %37:u32 = load %idx_1
+        %38:bool = gte %37, 4u
+        if %38 [t: $B12] {  # if_2
           $B12: {  # true
             exit_loop  # loop_2
           }
         }
-        %36:mat3x3<f32> = access %32, %idx_1
-        %37:mat3x3<f32> = transpose %36
-        %38:ptr<function, mat3x3<f32>, read_write> = access %33, %idx_1
-        store %38, %37
+        %39:mat3x3<f32> = access %34, %37
+        %40:mat3x3<f32> = transpose %39
+        %41:ptr<function, mat3x3<f32>, read_write> = access %35, %37
+        store %41, %40
         continue  # -> $B11
       }
       $B11: {  # continuing
-        %39:u32 = add %idx_1, 1u
-        next_iteration %39  # -> $B10
+        %42:u32 = load %idx_1
+        %43:u32 = add %42, 1u
+        store %idx_1, %43
+        next_iteration  # -> $B10
       }
     }
-    %40:array<mat3x3<f32>, 4> = load %33
-    ret %40
+    %44:array<mat3x3<f32>, 4> = load %35
+    ret %44
   }
 }
-%tint_store_row_major_column = func(%41:ptr<storage, mat3x3<f32>, read_write>, %42:u32, %43:vec3<f32>):void {
+%tint_store_row_major_column = func(%45:ptr<storage, mat3x3<f32>, read_write>, %46:u32, %47:vec3<f32>):void {
   $B13: {
-    %44:f32 = access %43, 0u
-    %45:ptr<storage, vec3<f32>, read_write> = access %41, 0u
-    store_vector_element %45, %42, %44
-    %46:f32 = access %43, 1u
-    %47:ptr<storage, vec3<f32>, read_write> = access %41, 1u
-    store_vector_element %47, %42, %46
-    %48:f32 = access %43, 2u
-    %49:ptr<storage, vec3<f32>, read_write> = access %41, 2u
-    store_vector_element %49, %42, %48
+    %48:f32 = access %47, 0u
+    %49:ptr<storage, vec3<f32>, read_write> = access %45, 0u
+    store_vector_element %49, %46, %48
+    %50:f32 = access %47, 1u
+    %51:ptr<storage, vec3<f32>, read_write> = access %45, 1u
+    store_vector_element %51, %46, %50
+    %52:f32 = access %47, 2u
+    %53:ptr<storage, vec3<f32>, read_write> = access %45, 2u
+    store_vector_element %53, %46, %52
     ret
   }
 }
@@ -3868,7 +3916,7 @@ S = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -3902,7 +3950,7 @@ S_1 = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -4007,7 +4055,7 @@ S = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -4041,7 +4089,7 @@ S_1 = struct @align(32) {
 }
 
 $B1: {  # root
-  %s:ptr<storage, S_1, read_write> = var undef @binding_point(0, 0)
+  %s:ptr<storage, S_1, read_write> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -4600,7 +4648,7 @@ S = struct @align(64) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -4627,7 +4675,7 @@ S_1 = struct @align(64) {
 }
 
 $B1: {  # root
-  %s:ptr<uniform, S_1, read> = var undef @binding_point(0, 0)
+  %s:ptr<uniform, S_1, read> = var @binding_point(0, 0)
 }
 
 %f = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -4813,8 +4861,8 @@ Uniforms = struct @align(16) {
 }
 
 $B1: {  # root
-  %u:ptr<uniform, Uniforms, read> = var undef @binding_point(0, 0)
-  %out_pos:ptr<private, vec4<f32>, read_write> = var undef
+  %u:ptr<uniform, Uniforms, read> = var @binding_point(0, 0)
+  %out_pos:ptr<private, vec4<f32>, read_write> = var
 }
 
 %main_inner = func():void {
@@ -4841,8 +4889,8 @@ Uniforms_1 = struct @align(16) {
 }
 
 $B1: {  # root
-  %u:ptr<uniform, Uniforms_1, read> = var undef @binding_point(0, 0)
-  %out_pos:ptr<private, vec4<f32>, read_write> = var undef
+  %u:ptr<uniform, Uniforms_1, read> = var @binding_point(0, 0)
+  %out_pos:ptr<private, vec4<f32>, read_write> = var
 }
 
 %main_inner = func():void {

@@ -62,6 +62,7 @@
 #include "src/tint/lang/core/ir/switch.h"
 #include "src/tint/lang/core/ir/swizzle.h"
 #include "src/tint/lang/core/ir/terminate_invocation.h"
+#include "src/tint/lang/core/ir/undef.h"
 #include "src/tint/lang/core/ir/unreachable.h"
 #include "src/tint/lang/core/ir/user_call.h"
 #include "src/tint/lang/core/ir/validator/validate.h"
@@ -337,8 +338,10 @@ class Printer : public tint::TextGenerator {
 
         for (auto* inst : *ir_.root_block) {
             tint::Switch(
-                inst,  //
-                [&](core::ir::Var* v) { EmitGlobalVar(v); },
+                inst,                                         //
+                [&](core::ir::Var* v) { EmitGlobalVar(v); },  //
+                [&](core::ir::Let* l) { EmitLet(l); },        //
+                [&](core::ir::Construct*) { /* inlined */ },
 
                 TINT_ICE_ON_NO_MATCH);
         }
@@ -655,6 +658,10 @@ class Printer : public tint::TextGenerator {
         TINT_IR_ASSERT(ir_, !l->Result()->Type()->Is<core::type::Pointer>());
 
         auto out = Line();
+
+        if (current_block_ == ir_.root_block) {
+            out << "const ";
+        }
 
         // TODO(dsinclair): Investigate using `const` here as well, the AST printer doesn't emit
         //                  const with a let, but we should be able to.
@@ -1100,14 +1107,18 @@ class Printer : public tint::TextGenerator {
         auto space = ptr->AddressSpace();
 
         EmitTypeAndName(out, var->Result()->Type(), NameOf(var->Result(), add_stage_prefix));
-        if (var->Initializer()) {
+
+        auto* init = var->Initializer();
+        if (!init) {
+            // No initializer means implicit zero-initialization.
+            if (space == core::AddressSpace::kPrivate || space == core::AddressSpace::kFunction) {
+                out << " = ";
+                TINT_IR_ASSERT(ir_, ptr);
+                EmitZeroValue(out, ptr->StoreType());
+            }
+        } else if (!init->Is<core::ir::Undef>()) {
             out << " = ";
-            EmitValue(out, var->Initializer());
-        } else if (space == core::AddressSpace::kPrivate ||
-                   space == core::AddressSpace::kFunction) {
-            TINT_IR_ASSERT(ir_, ptr);
-            out << " = ";
-            EmitZeroValue(out, ptr->UnwrapPtr());
+            EmitValue(out, init);
         }
         out << ";";
     }

@@ -38,17 +38,17 @@
 
 namespace dawn::native {
 
-ErrorData ErrorData::Create(InternalErrorType type,
-                            std::string message,
-                            const char* file,
-                            const char* function,
-                            int line) {
-    ErrorData error(type, std::move(message));
-    error.AppendBacktrace(file, function, line);
+std::unique_ptr<ErrorData> ErrorData::Create(InternalErrorType type,
+                                             std::string message,
+                                             const char* file,
+                                             const char* function,
+                                             int line) {
+    std::unique_ptr<ErrorData> error = std::make_unique<ErrorData>(type, std::move(message));
+    error->AppendBacktrace(file, function, line);
 
     auto [var, present] = GetEnvironmentVar("DAWN_DEBUG_BREAK_ON_ERROR");
     if (present && !var.empty() && var != "0") {
-        ErrorLog() << error.GetMessage();
+        ErrorLog() << error->GetMessage();
         DAWN_FORCE_CRASH();
     }
     return error;
@@ -107,7 +107,7 @@ std::string ErrorData::GetFormattedMessage() const {
     ss << mMessage << "\n";
 
     if (!mContexts.empty()) {
-        for (auto context : mContexts) {
+        for (const auto& context : mContexts) {
             ss << " - While " << context << "\n";
         }
     }
@@ -123,14 +123,14 @@ std::string ErrorData::GetFormattedMessage() const {
 
     if (!mDebugGroups.empty()) {
         ss << "\nDebug group stack:\n";
-        for (auto label : mDebugGroups) {
+        for (const auto& label : mDebugGroups) {
             ss << " > \"" << label << "\"\n";
         }
     }
 
     if (!mBackendMessages.empty()) {
         ss << "\nBackend messages:\n";
-        for (auto message : mBackendMessages) {
+        for (const auto& message : mBackendMessages) {
             ss << " * " << message << "\n";
         }
     }

@@ -38,7 +38,7 @@
 
 namespace dawn::native::metal {
 
-ResultOrError<NSPRef<id<MTLRenderPipelineState>>> MeshPipeline::Initialize(
+ResultOrUnknownError<NSPRef<id<MTLRenderPipelineState>>> MeshPipeline::Initialize(
     RenderPipeline* pipeline,
     MTLRenderPipelineDescriptor* rasterDescriptor) {
     if (@available(macOS 26.0, iOS 26.0, tvOS 26.0, *)) {

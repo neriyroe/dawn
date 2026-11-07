@@ -49,7 +49,7 @@
 
 namespace dawn::native::utils {
 
-ResultOrValError<Ref<ShaderModuleBase>> CreateShaderModule(
+ResultOrUnknownError<Ref<ShaderModuleBase>> CreateShaderModule(
     DeviceBase* device,
     const char* source,
     const std::vector<tint::wgsl::Extension>& internalExtensions) {
@@ -202,7 +202,6 @@ ResultOrError<Ref<BindGroupBase>> MakeBindGroup(
     BindGroupDescriptor descriptor;
     descriptor.layout = layout.Get();
     descriptor.entries = entries;
-
     return device->CreateBindGroup(&descriptor, mode);
 }
 

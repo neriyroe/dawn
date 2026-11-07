@@ -382,7 +382,7 @@ Ref<RenderPipeline> RenderPipeline::CreateUninitialized(
     return AcquireRef(new RenderPipeline(device, descriptor));
 }
 
-MaybeError RenderPipeline::InitializeImpl() {
+MaybeUnknownError RenderPipeline::InitializeImpl() {
     if (UsesVertexIndex() || UsesInstanceIndex()) {
         // firstVertex and firstInstance are allocated together.
         mImmediateMask |= GetImmediateBlockBits(offsetof(RenderImmediates, firstIndexOffset),

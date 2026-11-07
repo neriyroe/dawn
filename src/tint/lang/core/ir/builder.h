@@ -32,6 +32,7 @@
 
 #include "src/tint/lang/core/constant/scalar.h"  // IWYU pragma: export
 #include "src/tint/lang/core/constant/splat.h"   // IWYU pragma: export
+#include "src/tint/lang/core/constant/string.h"  // IWYU pragma: export
 #include "src/tint/lang/core/ir/access.h"
 #include "src/tint/lang/core/ir/block_param.h"
 #include "src/tint/lang/core/ir/break_if.h"
@@ -53,6 +54,7 @@
 #include "src/tint/lang/core/ir/function_param.h"
 #include "src/tint/lang/core/ir/if.h"
 #include "src/tint/lang/core/ir/instruction_result.h"
+#include "src/tint/lang/core/ir/interpolate_string.h"
 #include "src/tint/lang/core/ir/let.h"
 #include "src/tint/lang/core/ir/load.h"
 #include "src/tint/lang/core/ir/load_vector_element.h"
@@ -69,6 +71,7 @@
 #include "src/tint/lang/core/ir/switch.h"
 #include "src/tint/lang/core/ir/swizzle.h"
 #include "src/tint/lang/core/ir/terminate_invocation.h"
+#include "src/tint/lang/core/ir/undef.h"
 #include "src/tint/lang/core/ir/unreachable.h"
 #include "src/tint/lang/core/ir/unused.h"
 #include "src/tint/lang/core/ir/user_call.h"
@@ -84,6 +87,7 @@
 #include "src/tint/lang/core/type/memory_view.h"
 #include "src/tint/lang/core/type/pointer.h"       // IWYU pragma: export
 #include "src/tint/lang/core/type/reference.h"     // IWYU pragma: export
+#include "src/tint/lang/core/type/string.h"        // IWYU pragma: export
 #include "src/tint/lang/core/type/swizzle_view.h"  // IWYU pragma: export
 #include "src/tint/lang/core/type/type.h"          // IWYU pragma: export
 #include "src/tint/lang/core/type/u16.h"           // IWYU pragma: export
@@ -408,6 +412,11 @@ class Builder {
         return Constant(ConstantValue(v));
     }
 
+    /// Creates a ir::Constant for a string
+    /// @param v the value
+    /// @returns the new constant
+    ir::Constant* Constant(std::string_view v) { return Constant(ConstantValue(v)); }
+
     /// Creates a new invalid ir::Constant
     /// @returns the new constant
     ir::Constant* InvalidConstant() { return Constant(ir.constant_values.Invalid()); }
@@ -463,6 +472,13 @@ class Builder {
     template <typename BOOL>
         requires(std::is_same_v<BOOL, bool>)
     const core::constant::Value* ConstantValue(BOOL v) {
+        return ir.constant_values.Get(v);
+    }
+
+    /// Creates a core::constant::Value for a string
+    /// @param v the value
+    /// @returns the new constant
+    const core::constant::Value* ConstantValue(std::string_view v) {
         return ir.constant_values.Get(v);
     }
 
@@ -2014,6 +2030,26 @@ class Builder {
         return Swizzle(type, obj_val, Vector<uint32_t, 4>(indices));
     }
 
+    /// Creates an interpolate string instruction with an existing instruction result
+    /// @param result the instruction result to use
+    /// @param operands the operands to interpolate
+    /// @returns the instruction
+    template <typename... ARGS>
+    ir::InterpolateString* InterpolateStringWithResult(ir::InstructionResult* result,
+                                                       ARGS&&... operands) {
+        auto values = Values(std::forward<ARGS>(operands)...);
+        return Append(ir.CreateInstruction<ir::InterpolateString>(result, values));
+    }
+
+    /// Creates an interpolate string instruction
+    /// @param operands the operands to interpolate
+    /// @returns the instruction
+    template <typename... ARGS>
+    ir::InterpolateString* InterpolateString(ARGS&&... operands) {
+        auto* res = InstructionResult(ir.Types().Get<core::type::String>());
+        return InterpolateStringWithResult(res, std::forward<ARGS>(operands)...);
+    }
+
     /// Name names the value or instruction with @p name
     /// @param name the new name for the value or instruction
     /// @param object the value or instruction
@@ -2065,6 +2101,11 @@ class Builder {
         return InstructionResult(type);
     }
 
+    /// Creates an undef value
+    /// @param type the return type
+    /// @returns the value
+    ir::Undef* Undef(const core::type::Type* type) { return ir.CreateValue<ir::Undef>(type); }
+
     /// Create a ranged loop with a callback to build the loop body.
     /// @param start the first loop index
     /// @param end one past the last loop index
@@ -2076,15 +2117,21 @@ class Builder {
         auto* end_value = Value(std::forward<END>(end));
         auto* step_value = Value(std::forward<STEP>(step));
 
+        // The loop index is held in a function variable rather than in a block parameter of the
+        // loop body. A block parameter becomes an OpPhi in SPIR-V, and loops with that shape hang
+        // the GPU on some Mali drivers (see https://crbug.com/568850691).
         auto* loop = Loop();
-        auto* idx = BlockParam("idx", start_value->Type());
-        loop->Body()->SetParams({idx});
+        ir::Var* idx_var = nullptr;
         Append(loop->Initializer(), [&] {
             // Start the loop with `idx = start`.
-            NextIteration(loop, start_value);
+            idx_var = Var("idx", ir.Types().ptr(core::AddressSpace::kFunction, start_value->Type(),
+                                                core::Access::kReadWrite));
+            idx_var->SetInitializer(start_value);
+            NextIteration(loop);
         });
         Append(loop->Body(), [&] {
             // Loop until `idx == end`.
+            auto* idx = Load(idx_var)->Result();
             auto* breakif = If(GreaterThanEqual(idx, end_value));
             Append(breakif->True(), [&] {  //
                 ExitLoop(loop);
@@ -2096,8 +2143,9 @@ class Builder {
         });
         Append(loop->Continuing(), [&] {
             // Update the index with `idx += step` and go to the next iteration.
-            auto* new_idx = Add(idx, step_value);
-            NextIteration(loop, new_idx);
+            auto* idx = Load(idx_var)->Result();
+            Store(idx_var, Add(idx, step_value));
+            NextIteration(loop);
         });
     }
 

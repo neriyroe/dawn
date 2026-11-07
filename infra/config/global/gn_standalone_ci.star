@@ -77,6 +77,7 @@ gpu.ci.linux_builder(
                 "dawn_android",
                 "dawn_node",
                 "dawn_wasm",
+                "checkout_v8",
             ],
         ),
         chromium_config = builder_config.chromium_config(
@@ -117,6 +118,7 @@ gpu.ci.linux_builder(
                 "dawn_android",
                 "dawn_node",
                 "dawn_wasm",
+                "checkout_v8",
             ],
         ),
         chromium_config = builder_config.chromium_config(
@@ -156,6 +158,7 @@ gpu.ci.linux_builder(
             apply_configs = [
                 "dawn_node",
                 "dawn_wasm",
+                "checkout_v8",
             ],
         ),
         chromium_config = builder_config.chromium_config(
@@ -198,6 +201,7 @@ gpu.ci.linux_builder(
                 "dawn_node",
                 "dawn_wasm",
                 "checkout_litert_lm",
+                "checkout_v8",
             ],
         ),
         chromium_config = builder_config.chromium_config(
@@ -360,6 +364,7 @@ gpu.ci.mac_builder(
                 "dawn_node",
                 "dawn_wasm",
                 "checkout_litert_lm",
+                "checkout_v8",
             ],
         ),
         chromium_config = builder_config.chromium_config(
@@ -400,6 +405,7 @@ gpu.ci.mac_builder(
             apply_configs = [
                 "dawn_node",
                 "dawn_wasm",
+                "checkout_v8",
             ],
         ),
         chromium_config = builder_config.chromium_config(
@@ -440,6 +446,7 @@ gpu.ci.mac_builder(
             apply_configs = [
                 "dawn_node",
                 "dawn_wasm",
+                "checkout_v8",
             ],
         ),
         chromium_config = builder_config.chromium_config(
@@ -479,6 +486,7 @@ gpu.ci.windows_builder(
             config = "dawn",
             apply_configs = [
                 "dawn_node",
+                "checkout_v8",
             ],
         ),
         chromium_config = builder_config.chromium_config(
@@ -519,6 +527,7 @@ gpu.ci.windows_builder(
             config = "dawn",
             apply_configs = [
                 "dawn_node",
+                "checkout_v8",
             ],
         ),
         chromium_config = builder_config.chromium_config(
@@ -560,6 +569,7 @@ gpu.ci.windows_builder(
             config = "dawn",
             apply_configs = [
                 "dawn_node",
+                "checkout_v8",
             ],
         ),
         chromium_config = builder_config.chromium_config(
@@ -600,6 +610,7 @@ gpu.ci.windows_builder(
             config = "dawn",
             apply_configs = [
                 "dawn_node",
+                "checkout_v8",
             ],
         ),
         chromium_config = builder_config.chromium_config(
@@ -642,6 +653,7 @@ gpu.ci.windows_builder(
             config = "dawn",
             apply_configs = [
                 "dawn_node",
+                "checkout_v8",
             ],
         ),
         chromium_config = builder_config.chromium_config(
@@ -685,6 +697,7 @@ gpu.ci.windows_builder(
             apply_configs = [
                 "dawn_node",
                 "checkout_litert_lm",
+                "checkout_v8",
             ],
         ),
         chromium_config = builder_config.chromium_config(
@@ -1726,20 +1739,6 @@ ci.thin_tester(
     targets = targets.bundle(
         targets = [
             "real_hardware_win_gtests",
-            # TODO(crbug.com/565837005): Temporarily enable WARP on this real
-            # hardware configuration because GCE does not have developer mode enabled.
-            targets.bundle(
-                targets = [
-                    "dawn_end2end_warp_tests",
-                ],
-                mixins = [
-                    targets.mixin(
-                        args = [
-                            "--assert-developer-mode",
-                        ],
-                    ),
-                ],
-            ),
         ],
         mixins = [
             "win11_amd_rx_5500_xt_stable",
@@ -1927,9 +1926,7 @@ ci.thin_tester(
         run_tests_serially = True,
     ),
     targets = targets.bundle(
-        targets = [
-            "real_hardware_win_gtests",
-        ],
+        targets = [],
         mixins = [
             "win10_nvidia_gtx_1660_experimental",
         ],
@@ -1939,10 +1936,10 @@ ci.thin_tester(
         os_type = targets.os_type.WINDOWS,
     ),
     # Uncomment this entry when this experimental tester is actually in use.
-    console_view_entry = consoles.console_view_entry(
-        category = "win|test|clang|exp|x64",
-        short_name = "1660",
-    ),
+    # console_view_entry = consoles.console_view_entry(
+    #     category = "win|test|clang|exp|x64",
+    #     short_name = "1660",
+    # ),
     list_view = "exp",
 )
 

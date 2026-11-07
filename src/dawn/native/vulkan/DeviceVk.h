@@ -106,7 +106,7 @@ class Device final : public DeviceBase {
     // Dawn Native API
 
     MaybeValError ValidateTextureWrappingVulkanImage(const ExternalImageDescriptorVk* descriptor);
-    ResultOrError<Ref<TextureBase>> CreateTextureWrappingVulkanImage(
+    ResultOrUnknownError<Ref<TextureBase>> CreateTextureWrappingVulkanImage(
         const ExternalImageDescriptorVk* descriptor,
         ExternalMemoryHandle memoryHandle,
         const std::vector<ExternalSemaphoreHandle>& waitHandles);
@@ -169,6 +169,16 @@ class Device final : public DeviceBase {
     VulkanRenderPassType GetRenderPassType() const { return mRenderPassType; }
     VulkanFramebufferFetchMode GetFramebufferFetchMode() const { return mFramebufferFetchMode; }
 
+    // WebGPU allows creating bind groups with destroyed buffers, textures, or views of destroyed
+    // resources, while Vulkan requires valid handles in vkUpdateDescriptorSets. When a Buffer,
+    // TextureView, or TexelBufferView is destroyed (or created from an already-destroyed resource),
+    // its mHandle is set to one of these shared device placeholders and its mOwnsHandle flag is
+    // false. GetHandle() asserts mOwnsHandle so non-bindgroup commands cannot accidentally use a
+    // placeholder, while BindGroup creation uses GetHandleOrPlaceholder().
+    VkBuffer GetPlaceholderBufferHandle() const;
+    VkBufferView GetPlaceholderTexelBufferViewHandle() const;
+    VkImageView GetPlaceholderTextureViewHandle(const Format& format) const;
+
   private:
     Device(AdapterBase* adapter,
            const UnpackedPtr<DeviceDescriptor>& descriptor,
@@ -211,9 +221,9 @@ class Device final : public DeviceBase {
     void InitializeComputePipelineAsyncImpl(Ref<CreateComputePipelineAsyncEvent> event) override;
     void InitializeRenderPipelineAsyncImpl(Ref<CreateRenderPipelineAsyncEvent> event) override;
 
-    ResultOrError<Ref<SharedTextureMemoryBase>> ImportSharedTextureMemoryImpl(
+    ResultOrUnknownError<Ref<SharedTextureMemoryBase>> ImportSharedTextureMemoryImpl(
         UnpackedPtr<SharedTextureMemoryDescriptor> unpacked) override;
-    ResultOrError<Ref<SharedFenceBase>> ImportSharedFenceImpl(
+    ResultOrUnknownError<Ref<SharedFenceBase>> ImportSharedFenceImpl(
         UnpackedPtr<SharedFenceDescriptor> unpacked) override;
 
     ResultOrError<VulkanDeviceKnobs> CreateDevice(VkPhysicalDevice vkPhysicalDevice);
@@ -263,6 +273,13 @@ class Device final : public DeviceBase {
 
     VulkanRenderPassType mRenderPassType = VulkanRenderPassType::CreateRenderPass;
     VulkanFramebufferFetchMode mFramebufferFetchMode = VulkanFramebufferFetchMode::kDisabled;
+
+    MaybeError InitializePlaceholderResources();
+
+    Ref<Buffer> mPlaceholderBuffer;
+    Ref<TexelBufferView> mPlaceholderTexelBufferView;
+    Ref<TextureView> mPlaceholderColorTextureView;
+    Ref<TextureView> mPlaceholderDepthStencilTextureView;
 
     MaybeError ImportExternalImage(const ExternalImageDescriptorVk* descriptor,
                                    ExternalMemoryHandle memoryHandle,

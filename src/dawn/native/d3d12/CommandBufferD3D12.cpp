@@ -922,36 +922,28 @@ class VertexBufferTracker {
     PerVertexBuffer<D3D12_VERTEX_BUFFER_VIEW> mD3D12BufferViews = {};
 };
 
-// Coalesces consecutive DrawIndirect commands into a single ExecuteIndirect call. The caller
-// flushes the batch before recording any command that would break render-pass command ordering.
+// Coalesces consecutive DrawIndirect and DrawIndexedIndirect commands into a single ExecuteIndirect
+// call. The caller flushes the batch before recording any command that would break render-pass
+// command ordering.
 class IndirectDrawBatcher {
   public:
-    explicit IndirectDrawBatcher(CommandRecordingContext* commandContext)
-        : mCommandContext(commandContext) {}
+    IndirectDrawBatcher(CommandRecordingContext* commandContext,
+                        std::vector<uint32_t>* batchCountsForTesting)
+        : mCommandContext(commandContext), mBatchCountsForTesting(batchCountsForTesting) {}
 
-    void Add(const CommandSignature& signature,
-             Buffer* buffer,
-             uint64_t bufferOffset,
-             const BufferBase* sourceBuffer,
-             uint64_t sourceBufferOffset) {
+    void Add(const CommandSignature& signature, Buffer* buffer, uint64_t bufferOffset) {
         // Dawn frontend indirect draw validation in EncodeIndirectDrawValidationCommands() packs
         // validated arguments from multiple draws into one internal output buffer. Require both
         // the validated arguments and their original source arguments to be consecutive before
         // combining them.
         const bool isAdjacent =
             mCount != 0 && mSignature == signature && mBuffer == buffer &&
-            bufferOffset ==
-                mBufferFirstOffset + static_cast<uint64_t>(mCount) * signature.byteStride &&
-            mSourceBuffer == sourceBuffer &&
-            sourceBufferOffset ==
-                mSourceBufferFirstOffset + static_cast<uint64_t>(mCount) * kDrawIndirectSize;
+            bufferOffset == mFirstDrawOffset + static_cast<uint64_t>(mCount) * signature.byteStride;
         if (!isAdjacent) {
             Flush();
             mSignature = signature;
             mBuffer = buffer;
-            mBufferFirstOffset = bufferOffset;
-            mSourceBuffer = sourceBuffer;
-            mSourceBufferFirstOffset = sourceBufferOffset;
+            mFirstDrawOffset = bufferOffset;
         }
         ++mCount;
     }
@@ -963,12 +955,13 @@ class IndirectDrawBatcher {
         // ExecuteIndirect consumes mCount tightly strided commands starting at the first draw.
         mCommandContext->GetCommandList()->ExecuteIndirect(mSignature.signature.Get(), mCount,
                                                            mBuffer->GetD3D12Resource(),
-                                                           mBufferFirstOffset, nullptr, 0);
+                                                           mFirstDrawOffset, nullptr, 0);
+        if (mBatchCountsForTesting != nullptr) {
+            mBatchCountsForTesting->push_back(mCount);
+        }
         mSignature = {};
         mBuffer = nullptr;
-        mBufferFirstOffset = 0;  // Offset of the start of the batch.
-        mSourceBuffer = nullptr;
-        mSourceBufferFirstOffset = 0;  // Offset of the start of the batch.
+        mFirstDrawOffset = 0;  // Offset in mBuffer of the start of the batch.
         mCount = 0;
     }
 
@@ -976,10 +969,9 @@ class IndirectDrawBatcher {
     raw_ptr<CommandRecordingContext> mCommandContext;
     CommandSignature mSignature;
     raw_ptr<Buffer> mBuffer = nullptr;
-    uint64_t mBufferFirstOffset = 0;
-    raw_ptr<const BufferBase> mSourceBuffer = nullptr;
-    uint64_t mSourceBufferFirstOffset = 0;
+    uint64_t mFirstDrawOffset = 0;
     uint32_t mCount = 0;
+    raw_ptr<std::vector<uint32_t>> mBatchCountsForTesting = nullptr;
 };
 
 MaybeError EnsureResolveTargetInitialized(CommandRecordingContext* commandContext,
@@ -1863,11 +1855,12 @@ MaybeError CommandBuffer::RecordRenderPass(CommandRecordingContext* commandConte
     RenderPipeline* lastPipeline = nullptr;
     VertexBufferTracker vertexBufferTracker = {};
     ImmediateTracker<RenderImmediatesTracker> immediates = {};
-    IndirectDrawBatcher indirectDrawBatcher(commandContext);
+    IndirectDrawBatcher indirectDrawBatcher(
+        commandContext, mRecordIndirectDrawBatches ? &mIndirectDrawBatchCounts : nullptr);
 
     auto EncodeRenderBundleCommand = [&](CommandIterator* iter, Command type) -> MaybeError {
         // Flush before recording a different command.
-        if (type != Command::DrawIndirect) {
+        if (type != Command::DrawIndirect && type != Command::DrawIndexedIndirect) {
             indirectDrawBatcher.Flush();
         }
         switch (type) {
@@ -1911,9 +1904,7 @@ MaybeError CommandBuffer::RecordRenderPass(CommandRecordingContext* commandConte
                 DAWN_ASSERT(indirectBuffer != nullptr);
 
                 indirectDrawBatcher.Add(lastPipeline->GetDrawIndirectCommandSignature(),
-                                        indirectBuffer, validatedDraw.indirectOffset,
-                                        validatedDraw.sourceIndirectBuffer.Get(),
-                                        validatedDraw.sourceIndirectOffset);
+                                        indirectBuffer, validatedDraw.indirectOffset);
                 break;
             }
 
@@ -1940,10 +1931,8 @@ MaybeError CommandBuffer::RecordRenderPass(CommandRecordingContext* commandConte
                 Buffer* indirectBuffer = ToBackend(validatedDraw.indirectBuffer.Get());
                 DAWN_ASSERT(indirectBuffer != nullptr);
 
-                ID3D12CommandSignature* signature =
-                    lastPipeline->GetDrawIndexedIndirectCommandSignature().signature.Get();
-                commandList->ExecuteIndirect(signature, 1, indirectBuffer->GetD3D12Resource(),
-                                             validatedDraw.indirectOffset, nullptr, 0);
+                indirectDrawBatcher.Add(lastPipeline->GetDrawIndexedIndirectCommandSignature(),
+                                        indirectBuffer, validatedDraw.indirectOffset);
                 break;
             }
 
@@ -2106,7 +2095,7 @@ MaybeError CommandBuffer::RecordRenderPass(CommandRecordingContext* commandConte
     Command type;
     while (mCommands.NextCommandId(&type)) {
         // Flush before recording a different command.
-        if (type != Command::DrawIndirect) {
+        if (type != Command::DrawIndirect && type != Command::DrawIndexedIndirect) {
             indirectDrawBatcher.Flush();
         }
         switch (type) {

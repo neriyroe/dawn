@@ -36,6 +36,7 @@
 #include "src/dawn/native/SharedFence.h"
 #include "src/dawn/native/dawn_platform.h"
 #include "src/utils/compiler.h"
+#include "src/utils/heap_array.h"
 
 namespace dawn::native {
 
@@ -55,9 +56,10 @@ class ErrorSharedTextureMemory : public SharedTextureMemoryBase {
                                   const UnpackedPtr<BeginAccessDescriptor>& descriptor) override {
         DAWN_UNREACHABLE();
     }
-    ResultOrError<FenceAndSignalValue> EndAccessImpl(TextureBase* texture,
-                                                     ExecutionSerial lastUsageSerial,
-                                                     UnpackedPtr<EndAccessState>& state) override {
+    ResultOrUnknownError<FenceAndSignalValue> EndAccessImpl(
+        TextureBase* texture,
+        ExecutionSerial lastUsageSerial,
+        UnpackedPtr<EndAccessState>& state) override {
         DAWN_UNREACHABLE();
     }
     void DestroyImpl(DestroyReason reason) override {}
@@ -238,8 +240,8 @@ void APISharedTextureMemoryEndAccessStateFreeMembers(WGPUSharedTextureMemoryEndA
     for (SharedFenceBase* fence : state->fences) {
         fence->APIRelease();
     }
-    delete[] state->fences.data();
-    delete[] state->signaledValues.data();
+    DeleteAllocationFromHeapArray(state->fences.data());
+    DeleteAllocationFromHeapArray(state->signaledValues.data());
 }
 
 }  // namespace dawn::native

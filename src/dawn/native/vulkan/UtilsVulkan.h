@@ -134,7 +134,9 @@ VkShaderStageFlagBits VulkanShaderStage(SingleShaderStage stage);
 VkPipelineStageFlags VulkanShaderPipelineStages(wgpu::ShaderStage stages);
 
 VkAttachmentLoadOp VulkanAttachmentLoadOp(wgpu::LoadOp op);
-VkAttachmentStoreOp VulkanAttachmentStoreOp(wgpu::StoreOp op);
+VkAttachmentStoreOp VulkanAttachmentStoreOp(const Device* device,
+                                            wgpu::StoreOp op,
+                                            bool isReadOnly);
 
 TexelExtent3D ComputeTextureCopyExtent(const TextureCopy& textureCopy,
                                        const TexelExtent3D& copySize);

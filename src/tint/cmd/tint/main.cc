@@ -60,6 +60,7 @@
 #include "src/tint/utils/text/string.h"
 #include "src/tint/utils/text/styled_text.h"
 #include "src/tint/utils/text/styled_text_printer.h"
+#include "src/utils/numeric.h"
 
 #if TINT_BUILD_WGSL_READER
 #include "src/tint/lang/wgsl/reader/program_to_ir/program_to_ir.h"
@@ -157,6 +158,7 @@ struct Options {
     bool ir_roundtrip = false;
 
     bool treat_samplers_as_filtering = false;
+    bool treat_textures_as_unfilterable = false;
 
 #if TINT_BUILD_SPV_READER
     tint::spirv::reader::Options spirv_reader_options;
@@ -189,6 +191,7 @@ struct Options {
     std::string fxc_path;
     std::string dxc_path;
     tint::hlsl::validate::HlslShaderModel hlsl_shader_model = kMinShaderModelForDXC;
+    std::vector<tint::BindingPoint> ignored_by_robustness_transform;
     tint::hlsl::writer::PixelLocalOptions pixel_local_options;
 #endif  // TINT_BUILD_HLSL_WRITER
 
@@ -380,6 +383,12 @@ R32Sint, R32Uint, R32Float.
 Valid values are 6.0, 6.2, 6.4, 6.6 and 6.10)",
         hlsl_shader_model_enum_names, Default{tint::hlsl::validate::HlslShaderModel::kSM_6_0});
     TINT_DEFER(opts->hlsl_shader_model = *hlsl_shader_model.value);
+
+    auto& bindings_ignored = options.Add<StringOption>(
+        "bindings-ignored",
+        R"(Bindings to ignore in the robustness transform, as space-separated group,binding pairs.
+For example: "0,1 2,3".)",
+        Default{""});
 #endif  // TINT_BUILD_HLSL_WRITER
 
 #if TINT_BUILD_HLSL_WRITER || TINT_BUILD_MSL_WRITER
@@ -457,6 +466,11 @@ violations that may be produced)",
         Default{false});
     TINT_DEFER(opts->treat_samplers_as_filtering = *treat_samplers_as_filtering.value);
 
+    auto& treat_textures_as_unfilterable = options.Add<BoolOption>(
+        "treat-textures-as-unfilterable",
+        "Set the ResourceType for any bindful texture as unfilterable", Default{false});
+    TINT_DEFER(opts->treat_textures_as_unfilterable = *treat_textures_as_unfilterable.value);
+
 #if TINT_BUILD_SPV_WRITER
     auto& use_storage_input_output_16 =
         options.Add<BoolOption>("use-storage-input-output-16",
@@ -517,6 +531,11 @@ When specified, automatically enables MSL validation)",
         "argument-buffer",
         R"(Mapping for an argument buffer, format is GROUP=ARGUMENT_BUFFER_ID, comma separated)");
 
+    auto& arg_buffer_binding = options.Add<StringOption>(
+        "argument-buffer-binding",
+        R"(Mapping for argument buffer struct members, format is GROUP.BINDING[:ARRAY_SIZE][=PLACEHOLDER_TYPE], comma separated)",
+        Alias{"argument-buffer-member"});
+
     auto& dynamic_buffer = options.Add<StringOption>(
         "dynamic-offset-buffer",
         R"(Mapping for a dynamic offset buffer, format is GROUP=DYNAMIC_BUFFER_ID, comma separated))");
@@ -535,6 +554,7 @@ When specified, automatically enables MSL validation)",
         EnumName(tint::msl::validate::MslVersion::kMsl_2_4, "2.4"),
         EnumName(tint::msl::validate::MslVersion::kMsl_3_2, "3.2"),
         EnumName(tint::msl::validate::MslVersion::kMsl_4_0, "4.0"),
+        EnumName(tint::msl::validate::MslVersion::kMsl_4_1, "4.1"),
     };
     auto& msl_version = options.Add<EnumOption<tint::msl::validate::MslVersion>>(
         "msl-version", R"(Specify the MSL version.
@@ -714,6 +734,36 @@ Options:
 
 #endif
 
+#if TINT_BUILD_HLSL_WRITER
+    if (bindings_ignored.value.has_value() && !bindings_ignored.value->empty()) {
+        for (auto binding_text : tint::Split(*bindings_ignored.value, " ")) {
+            auto parts = tint::Split(binding_text, ",");
+            if (parts.Length() != 2) {
+                std::cerr << "A binding point requires a 'group,binding' pair for "
+                          << bindings_ignored.name << ".\n";
+                return false;
+            }
+
+            auto group = tint::strconv::ParseUint32(parts[0]);
+            if (group != tint::Success) {
+                std::cerr << "Invalid group index for " << bindings_ignored.name << ": " << parts[0]
+                          << "\n";
+                return false;
+            }
+
+            auto binding_index = tint::strconv::ParseUint32(parts[1]);
+            if (binding_index != tint::Success) {
+                std::cerr << "Invalid binding index for " << bindings_ignored.name << ": "
+                          << parts[1] << "\n";
+                return false;
+            }
+
+            opts->ignored_by_robustness_transform.emplace_back(
+                tint::BindingPoint{group.Get(), binding_index.Get()});
+        }
+    }
+#endif  // TINT_BUILD_HLSL_WRITER
+
 #if TINT_BUILD_MSL_WRITER
     if (arg_buffer.value.has_value()) {
         for (auto ab : tint::Split(*arg_buffer.value, ",")) {
@@ -738,6 +788,81 @@ Options:
                 opts->group_to_argument_buffer_info.insert({group, {}});
             }
             opts->group_to_argument_buffer_info[group].id = idx;
+        }
+    }
+
+    if (arg_buffer_binding.value.has_value()) {
+        auto parse_resource_type = [](std::string_view name) -> tint::Result<tint::ResourceType> {
+            for (uint32_t i = dawn::to_underlying(tint::EnumRange<tint::ResourceType>::kMin);
+                 i <= dawn::to_underlying(tint::EnumRange<tint::ResourceType>::kMax); ++i) {
+                auto type = static_cast<tint::ResourceType>(i);
+                if (tint::ToString(type) == name) {
+                    return type;
+                }
+            }
+            return tint::Failure{"unknown ResourceType '" + std::string(name) + "'"};
+        };
+
+        for (auto val : tint::Split(*arg_buffer_binding.value, ",")) {
+            tint::ResourceType placeholder_type = tint::ResourceType::kEmpty;
+            std::string_view bp_str = val;
+            if (auto eq_idx = val.find("="); eq_idx != std::string_view::npos) {
+                bp_str = val.substr(0, eq_idx);
+                auto type_str = val.substr(eq_idx + 1);
+                auto res = parse_resource_type(type_str);
+                if (res != tint::Success) {
+                    std::cerr << "Invalid placeholder type for " << arg_buffer_binding.Name()
+                              << ": " << res.Failure() << "\n";
+                    return false;
+                }
+                placeholder_type = res.Get();
+            }
+
+            uint32_t array_size = 1;
+            if (auto colon_idx = bp_str.find(":"); colon_idx != std::string_view::npos) {
+                auto size_str = bp_str.substr(colon_idx + 1);
+                bp_str = bp_str.substr(0, colon_idx);
+                auto size_res = tint::strconv::ParseUint32(size_str);
+                if (size_res != tint::Success) {
+                    std::cerr << "Invalid array size for " << arg_buffer_binding.Name() << ": "
+                              << size_str << "\n";
+                    return false;
+                }
+                array_size = size_res.Get();
+            }
+
+            auto bind_point = tint::Split(bp_str, ".");
+            if (bind_point.Length() != 2) {
+                std::cerr << "argument-buffer-binding values must be of the form "
+                             "GROUP.BINDING[:ARRAY_SIZE][=PLACEHOLDER_TYPE]\n";
+                return false;
+            }
+
+            auto group_res = tint::strconv::ParseUint32(bind_point[0]);
+            if (group_res != tint::Success) {
+                std::cerr << "Invalid group for " << arg_buffer_binding.Name() << ": "
+                          << bind_point[0] << "\n";
+                return false;
+            }
+            auto binding_res = tint::strconv::ParseUint32(bind_point[1]);
+            if (binding_res != tint::Success) {
+                std::cerr << "Invalid binding for " << arg_buffer_binding.Name() << ": "
+                          << bind_point[1] << "\n";
+                return false;
+            }
+
+            uint32_t group = group_res.Get();
+            uint32_t binding = binding_res.Get();
+
+            if (!opts->group_to_argument_buffer_info.contains(group)) {
+                opts->group_to_argument_buffer_info.insert({group, {}});
+            }
+            opts->group_to_argument_buffer_info[group].struct_members.push_back(
+                tint::msl::writer::ArgumentBufferInfo::MemberInfo{
+                    .id = binding,
+                    .array_size = array_size,
+                    .placeholder_type = placeholder_type,
+                });
         }
     }
 
@@ -1037,7 +1162,7 @@ std::string Disassemble(const std::vector<uint32_t>& data) {
     gen_options.bindings =
         tint::GenerateBindings(ir, options.ep_name, false, false, options.ycbcr_bindings);
     gen_options.resource_table = tint::core::ir::transform::GenerateResourceTableConfig(
-        ir, options.treat_samplers_as_filtering);
+        ir, options.treat_samplers_as_filtering, options.treat_textures_as_unfilterable);
 
     // Enable the Vulkan Memory Model if needed.
     for (auto* ty : ir.Types()) {
@@ -1214,8 +1339,8 @@ tint::msl::writer::ArrayLengthOptions GenerateArrayLengthFromConstants(tint::cor
     gen_options.bindings = tint::GenerateBindings(
         ir, options.ep_name, !options.use_argument_buffers, !options.use_argument_buffers);
     gen_options.resource_table = tint::core::ir::transform::GenerateResourceTableConfig(
-        ir, options.treat_samplers_as_filtering);
-    gen_options.immediate_binding_point = tint::BindingPoint{.group = 0u, .binding = 30u};
+        ir, options.treat_samplers_as_filtering, options.treat_textures_as_unfilterable);
+    gen_options.immediate_binding_point = 30u;
     gen_options.extensions.disable_demote_to_helper = options.disable_demote_to_helper;
     gen_options.use_argument_buffers = options.use_argument_buffers;
     gen_options.group_to_argument_buffer_info = options.group_to_argument_buffer_info;
@@ -1299,6 +1424,7 @@ tint::msl::writer::ArrayLengthOptions GenerateArrayLengthFromConstants(tint::cor
     }
     gen_options.entry_point_name = options.ep_name;
     gen_options.disable_robustness = !options.enable_robustness;
+    gen_options.ignored_by_robustness_transform = options.ignored_by_robustness_transform;
     gen_options.disable_workgroup_init = options.disable_workgroup_init;
     gen_options.pixel_local = options.pixel_local_options;
     gen_options.extensions.polyfill_dot_4x8_packed =
@@ -1309,7 +1435,7 @@ tint::msl::writer::ArrayLengthOptions GenerateArrayLengthFromConstants(tint::cor
                                    : tint::hlsl::writer::Options::Compiler::kDXC_2021;
     gen_options.bindings = tint::GenerateBindings(ir, options.ep_name, false, false);
     gen_options.resource_table = tint::core::ir::transform::GenerateResourceTableConfig(
-        ir, options.treat_samplers_as_filtering);
+        ir, options.treat_samplers_as_filtering, options.treat_textures_as_unfilterable);
 
     auto entry_point = inspector.GetEntryPoint(options.ep_name);
 
@@ -1534,7 +1660,11 @@ tint::msl::writer::ArrayLengthOptions GenerateArrayLengthFromConstants(tint::cor
 bool DumpIR([[maybe_unused]] const tint::Program& program,
             [[maybe_unused]] const Options& options) {
 #if TINT_BUILD_WGSL_READER
-    auto result = tint::wgsl::reader::ProgramToLoweredIR(program);
+    tint::wgsl::reader::IROptions ir_options{
+        .dump_ir_when_validating = options.dump_ir,
+        .enable_validation_asserts = options.enable_ir_validation_asserts,
+    };
+    auto result = tint::wgsl::reader::ProgramToLoweredIR(program, std::move(ir_options));
     if (result != tint::Success) {
         std::cerr << "Failed to build IR from program: " << result.Failure() << "\n";
         return false;

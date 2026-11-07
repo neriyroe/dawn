@@ -31,9 +31,11 @@
 
 #include "src/dawn/common/MatchVariant.h"
 #include "src/dawn/native/Device.h"
+#include "src/dawn/native/TintUtils.h"
 #include "src/dawn/native/metal/BindGroupMTL.h"
 #include "src/dawn/native/metal/DeviceMTL.h"
 #include "src/dawn/native/metal/UtilsMetal.h"
+#include "tint/tint.h"
 
 namespace dawn::native::metal {
 
@@ -55,15 +57,19 @@ BindGroupLayout::BindGroupLayout(DeviceBase* device,
     // Pool to free MTLArgumentDescriptor and NSArray.
     @autoreleasepool {
         std::vector<MTLArgumentDescriptor*> descriptors;
-        for (BindingIndex bindingIndex{0u}; bindingIndex < GetBindingCount(); ++bindingIndex) {
+        for (BindingIndex bindingIndex : Range(GetBindingCount())) {
             auto& bindingInfo = GetBindingInfo(bindingIndex);
+            if (bindingInfo.indexInArray != BindingIndex{0u}) {
+                // Skip binding_array elements after the first one.
+                continue;
+            }
 
             MTLArgumentDescriptor* desc = [MTLArgumentDescriptor argumentDescriptor];
             desc.index = ToMTLArgumentBufferIndex(bindingIndex);
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated"
-            desc.access = MTLArgumentAccessReadOnly;
-#pragma clang diagnostic pop
+            desc.arrayLength = uint32_t{bindingInfo.arraySize};
+            // This appears to be the access mode for a slot of memory in the argbuf itself.
+            // We never modify the argbuf from the GPU, so it's ReadOnly.
+            desc.access = MTLBindingAccessReadOnly;
 
             // TODO(crbug.com/363031535): Handle more then uniform/storage.  (e.g. samplers,
             // textures, etc.)
@@ -77,18 +83,25 @@ BindGroupLayout::BindGroupLayout(DeviceBase* device,
                     // Metal backend.
                     DAWN_UNREACHABLE();
                 },
-                [&](const TextureBindingInfo&) { desc.dataType = MTLDataTypeTexture; },
-                [&](const StorageTextureBindingInfo&) { desc.dataType = MTLDataTypeTexture; },
+                [&](const TextureBindingInfo& layout) {
+                    desc.dataType = MTLDataTypeTexture;
+                    desc.textureType =
+                        MetalTextureViewType(layout.viewDimension, layout.multisampled);
+                },
+                [&](const StorageTextureBindingInfo& layout) {
+                    desc.dataType = MTLDataTypeTexture;
+                    desc.textureType = MetalTextureViewType(layout.viewDimension, false);
+                },
                 [&](const TexelBufferBindingInfo&) { DAWN_UNREACHABLE(); },
-                [](const InputAttachmentBindingInfo&) { DAWN_UNREACHABLE(); },
-                [](const ExternalTextureBindingInfo&) { DAWN_UNREACHABLE(); });
+                [&](const InputAttachmentBindingInfo&) { DAWN_UNREACHABLE(); },
+                [&](const ExternalTextureBindingInfo&) { DAWN_UNREACHABLE(); });
 
             descriptors.push_back(desc);
         }
 
         if (!descriptors.empty()) {
             NSArray* ary = [NSArray arrayWithObjects:descriptors.data() count:descriptors.size()];
-            mArgumentEncoder = AcquireNSPRef(
+            mArgumentEncoder->Acquire(
                 [ToBackend(device)->GetMTLDevice() newArgumentEncoderWithArguments:ary]);
         }
     }
@@ -110,8 +123,33 @@ void BindGroupLayout::ReduceMemoryUsage() {
     mBindGroupAllocator->DeleteEmptySlabs();
 }
 
-NSPRef<id<MTLArgumentEncoder>> BindGroupLayout::GetArgumentEncoder() const {
+MutexProtected<NSPRef<id<MTLArgumentEncoder>>>& BindGroupLayout::GetArgumentEncoder() {
     return mArgumentEncoder;
+}
+
+void BindGroupLayout::FillTintArgumentBufferInfo(
+    tint::msl::writer::ArgumentBufferInfo& info) const {
+    uint32_t curDynamicOffset = 0;
+
+    for (const BindingIndex bindingIndex : Range(GetBindingCount())) {
+        const BindingInfo& bindingInfo = GetBindingInfo(bindingIndex);
+        if (bindingInfo.indexInArray > BindingIndex{0u}) {
+            // Skip binding_array elements after the first one.
+            continue;
+        }
+
+        if (const auto* binding = std::get_if<BufferBindingInfo>(&bindingInfo.bindingLayout)) {
+            if (binding->hasDynamicOffset) {
+                info.binding_info_to_offset_index.insert(
+                    {uint32_t(bindingIndex), curDynamicOffset++});
+            }
+        }
+        info.struct_members.push_back({
+            .id = uint32_t{bindingIndex},
+            .array_size = uint32_t{bindingInfo.arraySize},
+            .placeholder_type = dawn::native::BindingLayoutToResourceType(GetDevice(), bindingInfo),
+        });
+    }
 }
 
 }  // namespace dawn::native::metal

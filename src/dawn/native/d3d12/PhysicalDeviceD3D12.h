@@ -28,6 +28,7 @@
 #ifndef SRC_DAWN_NATIVE_D3D12_PHYSICALDEVICED3D12_H_
 #define SRC_DAWN_NATIVE_D3D12_PHYSICALDEVICED3D12_H_
 
+#include <span>
 #include <vector>
 
 #include "src/dawn/native/PhysicalDevice.h"
@@ -47,8 +48,7 @@ class PhysicalDevice : public d3d::PhysicalDevice {
 
     // PhysicalDeviceBase Implementation
     bool SupportsExternalImages() const override;
-    bool SupportsFeatureLevel(wgpu::FeatureLevel featureLevel,
-                              InstanceBase* instance) const override;
+    bool SupportsFeatureLevel(wgpu::FeatureLevel featureLevel) const override;
 
     // Get the applied shader model version under the given adapter or device toggle state, which
     // may be lower than the shader model reported in mDeviceInfo.
@@ -62,6 +62,14 @@ class PhysicalDevice : public d3d::PhysicalDevice {
 
     std::vector<SubgroupMatrixConfig> EnumerateSubgroupMatrixConfigs(
         const TogglesState& toggles) const;
+#ifdef DAWN_USE_AGILITY_SDK
+    // Exposed for unit tests.
+    static std::vector<SubgroupMatrixConfig> EnumerateSubgroupMatrixConfigs(
+        std::span<const D3D12_LINEAR_ALGEBRA_WAVE_MATRIX_MULTIPLY_ENUMERATION_ENTRY> entries,
+        uint32_t vendorId,
+        uint32_t deviceId,
+        bool supportsShaderF16);
+#endif  // DAWN_USE_AGILITY_SDK
 
   private:
     using Base = d3d::PhysicalDevice;

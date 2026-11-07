@@ -54,6 +54,11 @@
 namespace dawn {
 namespace {
 
+using ::testing::AssertionFailure;
+using ::testing::AssertionResult;
+using ::testing::AssertionSuccess;
+using ::testing::HasSubstr;
+
 template <typename Step>
 class LockStep {
   public:
@@ -269,6 +274,7 @@ TEST_P(MultithreadTests, Buffers_MapInParallel) {
 TEST_P(MultithreadTests, MapUnmapDestroyInParallel) {
     constexpr uint32_t kDataSize = 1000;
     std::vector<uint32_t> myData;
+    myData.reserve(kDataSize);
     for (uint32_t i = 0; i < kDataSize; ++i) {
         myData.push_back(i);
     }
@@ -305,6 +311,7 @@ TEST_P(MultithreadTests, MapUnmapDestroyInParallel) {
 TEST_P(MultithreadTests, MapUnmapMultipleCyclesInParallel) {
     constexpr uint32_t kDataSize = 1000;
     std::vector<uint32_t> myData;
+    myData.reserve(kDataSize);
     for (uint32_t i = 0; i < kDataSize; ++i) {
         myData.push_back(i);
     }
@@ -622,6 +629,10 @@ TEST_P(MultithreadTests, T2BThenDestroyTexture) {
 
 // Test that copy a texture to a buffer then map that buffer in parallel works.
 TEST_P(MultithreadTests, T2BThenMapInParallel) {
+    // TODO(crbug.com/459848483): Flaky mapping failures on Windows Qualcomm with D3D11
+    // backend validation.
+    DAWN_SUPPRESS_TEST_IF(IsWindows() && IsQualcomm() && IsD3D11() && IsBackendValidationEnabled());
+
     constexpr uint32_t kTextureSize = 512;
     constexpr wgpu::TextureFormat kTextureFormat = wgpu::TextureFormat::RGBA8Unorm;
     constexpr uint32_t kBytesPerPixel = 4;
@@ -719,7 +730,7 @@ TEST_P(MultithreadTests, CreateShaderModuleInParallel) {
                           const wgpu::CompilationInfo* info) {
                 ASSERT_EQ(wgpu::CompilationInfoRequestStatus::Success, status);
                 for (size_t i = 0; i < info->messageCount; ++i) {
-                    EXPECT_THAT(info->messages[i].message, testing::HasSubstr("unreachable"));
+                    EXPECT_THAT(info->messages[i].message, HasSubstr("unreachable"));
                     EXPECT_EQ(info->messages[i].lineNum, 5u + sourceIndex);
                 }
             });
@@ -1145,6 +1156,10 @@ TEST_P(MultithreadTests, SetLabelInParallel) {
     // TODO(crbug.com/451928481): multithread support in GL is incomplete
     DAWN_SUPPRESS_TEST_IF(IsOpenGL() || IsOpenGLES());
 
+    // TODO(crbug.com/571358852): Validation shard exited during this test on Windows Qualcomm
+    // D3D12.
+    DAWN_SUPPRESS_TEST_IF(IsWindows() && IsQualcomm() && IsD3D12() && IsBackendValidationEnabled());
+
     constexpr uint32_t kNumThreads = 20;
     constexpr uint32_t kSize = 1;
 
@@ -1245,8 +1260,7 @@ TEST_P(MultithreadTests, SetLabelAndValidationInParallel) {
                                             wgpu::StringView message) {
                                  EXPECT_EQ(status, wgpu::PopErrorScopeStatus::Success);
                                  EXPECT_EQ(type, wgpu::ErrorType::Validation);
-                                 EXPECT_THAT(std::string(message),
-                                             testing::HasSubstr("ThreadBuffer"));
+                                 EXPECT_THAT(std::string(message), HasSubstr("ThreadBuffer"));
                                  errorThrown = true;
                              });
 
@@ -2132,17 +2146,16 @@ class TimestampExpectation : public detail::Expectation {
     ~TimestampExpectation() override = default;
 
     // Expect the timestamp results are greater than 0.
-    testing::AssertionResult Check(const void* data, size_t size) override {
+    AssertionResult Check(const void* data, size_t size) override {
         DAWN_ASSERT(size % sizeof(uint64_t) == 0);
         const uint64_t* timestamps = static_cast<const uint64_t*>(data);
         for (size_t i = 0; i < size / sizeof(uint64_t); i++) {
             if (timestamps[i] == 0) {
-                return testing::AssertionFailure()
-                       << "Expected data[" << i << "] to be greater than 0.\n";
+                return AssertionFailure() << "Expected data[" << i << "] to be greater than 0.\n";
             }
         }
 
-        return testing::AssertionSuccess();
+        return AssertionSuccess();
     }
 };
 
@@ -2181,9 +2194,6 @@ class MultithreadTimestampQueryTests : public MultithreadTests {
 TEST_P(MultithreadTimestampQueryTests, ResolveQuerySets_InParallel) {
     // TODO(crbug.com/451389800): [Capture] implement query set.
     DAWN_SUPPRESS_TEST_IF(IsCaptureReplayCheckingEnabled());
-
-    // TODO (530541262): Investigate failure on macOS 26 M2.
-    DAWN_SUPPRESS_TEST_IF(IsMetal() && IsApple());
 
     constexpr uint32_t kQueryCount = 2;
     constexpr uint32_t kNumThreads = 10;

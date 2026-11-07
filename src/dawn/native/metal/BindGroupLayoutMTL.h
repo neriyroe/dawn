@@ -30,10 +30,16 @@
 
 #import <Metal/Metal.h>
 
+#include <vector>
+
 #include "src/dawn/common/MutexProtected.h"
 #include "src/dawn/common/NSRef.h"
 #include "src/dawn/common/SlabAllocator.h"
 #include "src/dawn/native/BindGroupLayoutInternal.h"
+
+namespace tint::msl::writer {
+struct ArgumentBufferInfo;
+}
 
 namespace dawn::native::metal {
 
@@ -50,7 +56,8 @@ class BindGroupLayout final : public BindGroupLayoutInternalBase {
     void DeallocateBindGroup(BindGroup* bindGroup);
     void ReduceMemoryUsage() override;
 
-    NSPRef<id<MTLArgumentEncoder>> GetArgumentEncoder() const;
+    MutexProtected<NSPRef<id<MTLArgumentEncoder>>>& GetArgumentEncoder();
+    void FillTintArgumentBufferInfo(tint::msl::writer::ArgumentBufferInfo& info) const;
 
   private:
     BindGroupLayout(DeviceBase* device, const UnpackedPtr<BindGroupLayoutDescriptor>& descriptor);
@@ -58,7 +65,8 @@ class BindGroupLayout final : public BindGroupLayoutInternalBase {
 
     MutexProtected<SlabAllocator<BindGroup>> mBindGroupAllocator;
 
-    NSPRef<id<MTLArgumentEncoder>> mArgumentEncoder;
+    // MTLArgumentEncoder is stateful, mutex prevents multiple CreateBindGroups from conflicting.
+    MutexProtected<NSPRef<id<MTLArgumentEncoder>>> mArgumentEncoder;
 };
 
 }  // namespace dawn::native::metal

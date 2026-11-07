@@ -36,6 +36,7 @@
 #include "src/dawn/common/Ref.h"
 #include "src/dawn/common/WeakRefSupport.h"
 #include "src/dawn/common/ityp_vector.h"
+#include "src/dawn/native/Buffer.h"
 #include "src/dawn/native/Error.h"
 #include "src/dawn/native/Forward.h"
 #include "src/dawn/native/IntegerTypes.h"
@@ -190,8 +191,8 @@ class ResourceTableBase : public ApiObjectBase, public WeakRefSupport<ResourceTa
         // headers local.
         tint::ResourceType typeId = tint::ResourceType(0);
         ExecutionSerial availableAfter = kBeginningOfGPUTime;
-        bool dirty = false;
-        bool resourceDirty = false;  // resourceDirty implies dirty.
+        bool metadataDirty = false;
+        bool resourceDirty = false;  // resourceDirty implies metadataDirty.
         bool visible = false;        // Applies to textures
     };
     ityp::vector<ResourceTableSlot, SlotState> mSlots;

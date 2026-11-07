@@ -27,6 +27,7 @@
 
 #include "src/tint/lang/msl/writer/raise/argument_buffers.h"
 
+#include "src/tint/api/common/resource_type.h"
 #include "src/tint/lang/core/fluent_types.h"
 #include "src/tint/lang/core/ir/transform/helper_test.h"
 #include "src/tint/lang/core/type/binding_array.h"
@@ -57,7 +58,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, NoArgumentBuffers) {
     auto* src = R"(
 %foo = @fragment func():void {
   $B1: {
-    %v:ptr<function, i32, read_write> = var undef
+    %v:ptr<function, i32, read_write> = var
     %3:i32 = load %v
     ret
   }
@@ -88,8 +89,8 @@ TEST_F(MslWriter_ArgumentBuffersTest, Private_NoChange) {
 
     auto* src = R"(
 $B1: {  # root
-  %a:ptr<private, i32, read_write> = var undef
-  %b:ptr<private, i32, read_write> = var undef
+  %a:ptr<private, i32, read_write> = var
+  %b:ptr<private, i32, read_write> = var
 }
 
 %foo = @fragment func():void {
@@ -106,8 +107,8 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %a:ptr<private, i32, read_write> = var undef
-  %b:ptr<private, i32, read_write> = var undef
+  %a:ptr<private, i32, read_write> = var
+  %b:ptr<private, i32, read_write> = var
 }
 
 %foo = @fragment func():void {
@@ -142,8 +143,8 @@ TEST_F(MslWriter_ArgumentBuffersTest, Workgroup_NoChange) {
 
     auto* src = R"(
 $B1: {  # root
-  %a:ptr<workgroup, i32, read_write> = var undef
-  %b:ptr<workgroup, i32, read_write> = var undef
+  %a:ptr<workgroup, i32, read_write> = var
+  %b:ptr<workgroup, i32, read_write> = var
 }
 
 %foo = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -160,8 +161,8 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %a:ptr<workgroup, i32, read_write> = var undef
-  %b:ptr<workgroup, i32, read_write> = var undef
+  %a:ptr<workgroup, i32, read_write> = var
+  %b:ptr<workgroup, i32, read_write> = var
 }
 
 %foo = @compute @workgroup_size(1u, 1u, 1u) func():void {
@@ -206,9 +207,9 @@ TEST_F(MslWriter_ArgumentBuffersTest, Storage) {
 
     auto* src = R"(
 $B1: {  # root
-  %a:ptr<storage, i32, read> = var undef @binding_point(1, 2)
-  %b:ptr<storage, u32, read_write> = var undef @binding_point(3, 4)
-  %c:ptr<storage, f32, read_write> = var undef @binding_point(3, 2)
+  %a:ptr<storage, i32, read> = var @binding_point(1, 2)
+  %b:ptr<storage, u32, read_write> = var @binding_point(3, 4)
+  %c:ptr<storage, f32, read_write> = var @binding_point(3, 2)
 }
 
 %foo = @fragment func():void {
@@ -264,10 +265,12 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
         .group_to_argument_buffer_info = {{1,
                                            ArgumentBufferInfo{
                                                .id = 20,
+                                               .struct_members = {{.id = 2}},
                                            }},
                                           {3,
                                            ArgumentBufferInfo{
                                                .id = 30,
+                                               .struct_members = {{.id = 2}, {.id = 4}},
                                            }}},
     };
     Run(ArgumentBuffers, cfg);
@@ -293,8 +296,8 @@ TEST_F(MslWriter_ArgumentBuffersTest, Uniform) {
 
     auto* src = R"(
 $B1: {  # root
-  %a:ptr<uniform, i32, read> = var undef @binding_point(1, 2)
-  %b:ptr<uniform, i32, read> = var undef @binding_point(3, 4)
+  %a:ptr<uniform, i32, read> = var @binding_point(1, 2)
+  %b:ptr<uniform, i32, read> = var @binding_point(3, 4)
 }
 
 %foo = @fragment func():void {
@@ -335,10 +338,12 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
         .group_to_argument_buffer_info = {{1,
                                            ArgumentBufferInfo{
                                                .id = 20,
+                                               .struct_members = {{.id = 2}},
                                            }},
                                           {3,
                                            ArgumentBufferInfo{
                                                .id = 30,
+                                               .struct_members = {{.id = 4}},
                                            }}},
     };
     Run(ArgumentBuffers, cfg);
@@ -365,8 +370,8 @@ TEST_F(MslWriter_ArgumentBuffersTest, HandleTypes) {
 
     auto* src = R"(
 $B1: {  # root
-  %t:ptr<handle, texture_2d<f32>, read> = var undef @binding_point(1, 2)
-  %s:ptr<handle, sampler, read> = var undef @binding_point(3, 4)
+  %t:ptr<handle, texture_2d<f32>, read> = var @binding_point(1, 2)
+  %s:ptr<handle, sampler, read> = var @binding_point(3, 4)
 }
 
 %foo = @fragment func():void {
@@ -405,10 +410,12 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
         .group_to_argument_buffer_info = {{1,
                                            ArgumentBufferInfo{
                                                .id = 20,
+                                               .struct_members = {{.id = 2}},
                                            }},
                                           {3,
                                            ArgumentBufferInfo{
                                                .id = 30,
+                                               .struct_members = {{.id = 4}},
                                            }}},
     };
     Run(ArgumentBuffers, cfg);
@@ -435,8 +442,8 @@ TEST_F(MslWriter_ArgumentBuffersTest, HandleTypes_BindingArray) {
 
     auto* src = R"(
 $B1: {  # root
-  %t:ptr<handle, binding_array<texture_2d<f32>, 3>, read> = var undef @binding_point(1, 2)
-  %s:ptr<handle, sampler, read> = var undef @binding_point(3, 4)
+  %t:ptr<handle, binding_array<texture_2d<f32>, 3>, read> = var @binding_point(1, 2)
+  %s:ptr<handle, sampler, read> = var @binding_point(3, 4)
 }
 
 %foo = @fragment func():void {
@@ -477,10 +484,12 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
         .group_to_argument_buffer_info = {{1,
                                            ArgumentBufferInfo{
                                                .id = 20,
+                                               .struct_members = {{.id = 2, .array_size = 3}},
                                            }},
                                           {3,
                                            ArgumentBufferInfo{
                                                .id = 30,
+                                               .struct_members = {{.id = 4}},
                                            }}},
     };
     Run(ArgumentBuffers, cfg);
@@ -509,9 +518,9 @@ TEST_F(MslWriter_ArgumentBuffersTest, MultipleAddressSpaces) {
 
     auto* src = R"(
 $B1: {  # root
-  %a:ptr<uniform, i32, read> = var undef @binding_point(1, 2)
-  %b:ptr<storage, i32, read_write> = var undef @binding_point(3, 4)
-  %c:ptr<private, i32, read_write> = var undef
+  %a:ptr<uniform, i32, read> = var @binding_point(1, 2)
+  %b:ptr<storage, i32, read_write> = var @binding_point(3, 4)
+  %c:ptr<private, i32, read_write> = var
 }
 
 %foo = @fragment func():void {
@@ -538,7 +547,7 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
 }
 
 $B1: {  # root
-  %c:ptr<private, i32, read_write> = var undef
+  %c:ptr<private, i32, read_write> = var
 }
 
 %foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
@@ -563,10 +572,12 @@ $B1: {  # root
         .group_to_argument_buffer_info = {{1,
                                            ArgumentBufferInfo{
                                                .id = 20,
+                                               .struct_members = {{.id = 2}},
                                            }},
                                           {3,
                                            ArgumentBufferInfo{
                                                .id = 30,
+                                               .struct_members = {{.id = 4}},
                                            }}},
     };
     Run(ArgumentBuffers, cfg);
@@ -596,8 +607,8 @@ TEST_F(MslWriter_ArgumentBuffersTest, EntryPointHasExistingParameters) {
 
     auto* src = R"(
 $B1: {  # root
-  %a:ptr<storage, i32, read> = var undef @binding_point(1, 2)
-  %b:ptr<storage, i32, read_write> = var undef @binding_point(3, 4)
+  %a:ptr<storage, i32, read> = var @binding_point(1, 2)
+  %b:ptr<storage, i32, read_write> = var @binding_point(3, 4)
 }
 
 %foo = @fragment func(%param:i32 [@location(1), @interpolate(flat)]):void {
@@ -643,10 +654,12 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
         .group_to_argument_buffer_info = {{1,
                                            ArgumentBufferInfo{
                                                .id = 20,
+                                               .struct_members = {{.id = 2}},
                                            }},
                                           {3,
                                            ArgumentBufferInfo{
                                                .id = 30,
+                                               .struct_members = {{.id = 4}},
                                            }}},
     };
     Run(ArgumentBuffers, cfg);
@@ -678,8 +691,8 @@ TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionThatUsesVars_NoArgs) {
 
     auto* src = R"(
 $B1: {  # root
-  %a:ptr<storage, i32, read> = var undef @binding_point(1, 2)
-  %b:ptr<storage, i32, read_write> = var undef @binding_point(3, 4)
+  %a:ptr<storage, i32, read> = var @binding_point(1, 2)
+  %b:ptr<storage, i32, read_write> = var @binding_point(3, 4)
 }
 
 %foo = func():void {
@@ -734,10 +747,12 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
         .group_to_argument_buffer_info = {{1,
                                            ArgumentBufferInfo{
                                                .id = 20,
+                                               .struct_members = {{.id = 2}},
                                            }},
                                           {3,
                                            ArgumentBufferInfo{
                                                .id = 30,
+                                               .struct_members = {{.id = 4}},
                                            }}},
     };
     Run(ArgumentBuffers, cfg);
@@ -771,8 +786,8 @@ TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionThatUsesVars_WithExistingParam
 
     auto* src = R"(
 $B1: {  # root
-  %a:ptr<storage, i32, read> = var undef @binding_point(1, 2)
-  %b:ptr<storage, i32, read_write> = var undef @binding_point(3, 4)
+  %a:ptr<storage, i32, read> = var @binding_point(1, 2)
+  %b:ptr<storage, i32, read_write> = var @binding_point(3, 4)
 }
 
 %foo = func(%param:i32):void {
@@ -829,10 +844,12 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
         .group_to_argument_buffer_info = {{1,
                                            ArgumentBufferInfo{
                                                .id = 20,
+                                               .struct_members = {{.id = 2}},
                                            }},
                                           {3,
                                            ArgumentBufferInfo{
                                                .id = 30,
+                                               .struct_members = {{.id = 4}},
                                            }}},
     };
     Run(ArgumentBuffers, cfg);
@@ -868,8 +885,8 @@ TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionThatUsesVars_HandleTypes) {
 
     auto* src = R"(
 $B1: {  # root
-  %t:ptr<handle, texture_2d<f32>, read> = var undef @binding_point(1, 2)
-  %s:ptr<handle, sampler, read> = var undef @binding_point(3, 4)
+  %t:ptr<handle, texture_2d<f32>, read> = var @binding_point(1, 2)
+  %s:ptr<handle, sampler, read> = var @binding_point(3, 4)
 }
 
 %foo = func(%param:i32):vec4<f32> {
@@ -920,10 +937,12 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
         .group_to_argument_buffer_info = {{1,
                                            ArgumentBufferInfo{
                                                .id = 20,
+                                               .struct_members = {{.id = 2}},
                                            }},
                                           {3,
                                            ArgumentBufferInfo{
                                                .id = 30,
+                                               .struct_members = {{.id = 4}},
                                            }}},
     };
     Run(ArgumentBuffers, cfg);
@@ -959,8 +978,8 @@ TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionThatUsesVars_HandleTypes_Bindi
 
     auto* src = R"(
 $B1: {  # root
-  %t:ptr<handle, binding_array<texture_2d<f32>, 3>, read> = var undef @binding_point(1, 2)
-  %s:ptr<handle, sampler, read> = var undef @binding_point(3, 4)
+  %t:ptr<handle, binding_array<texture_2d<f32>, 3>, read> = var @binding_point(1, 2)
+  %s:ptr<handle, sampler, read> = var @binding_point(3, 4)
 }
 
 %foo = func(%param:i32):vec4<f32> {
@@ -1013,10 +1032,12 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
         .group_to_argument_buffer_info = {{1,
                                            ArgumentBufferInfo{
                                                .id = 20,
+                                               .struct_members = {{.id = 2, .array_size = 3}},
                                            }},
                                           {3,
                                            ArgumentBufferInfo{
                                                .id = 30,
+                                               .struct_members = {{.id = 4}},
                                            }}},
     };
     Run(ArgumentBuffers, cfg);
@@ -1049,8 +1070,8 @@ TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionThatUsesVars_OutOfOrder) {
 
     auto* src = R"(
 $B1: {  # root
-  %a:ptr<storage, i32, read> = var undef @binding_point(1, 2)
-  %b:ptr<storage, i32, read_write> = var undef @binding_point(3, 4)
+  %a:ptr<storage, i32, read> = var @binding_point(1, 2)
+  %b:ptr<storage, i32, read_write> = var @binding_point(3, 4)
 }
 
 %main = @fragment func():void {
@@ -1105,10 +1126,12 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
         .group_to_argument_buffer_info = {{1,
                                            ArgumentBufferInfo{
                                                .id = 20,
+                                               .struct_members = {{.id = 2}},
                                            }},
                                           {3,
                                            ArgumentBufferInfo{
                                                .id = 30,
+                                               .struct_members = {{.id = 4}},
                                            }}},
     };
     Run(ArgumentBuffers, cfg);
@@ -1140,8 +1163,8 @@ TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionThatDoesNotUseVars) {
 
     auto* src = R"(
 $B1: {  # root
-  %a:ptr<storage, i32, read> = var undef @binding_point(1, 2)
-  %b:ptr<storage, i32, read_write> = var undef @binding_point(3, 4)
+  %a:ptr<storage, i32, read> = var @binding_point(1, 2)
+  %b:ptr<storage, i32, read_write> = var @binding_point(3, 4)
 }
 
 %foo = func():i32 {
@@ -1199,10 +1222,12 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
         .group_to_argument_buffer_info = {{1,
                                            ArgumentBufferInfo{
                                                .id = 20,
+                                               .struct_members = {{.id = 2}},
                                            }},
                                           {3,
                                            ArgumentBufferInfo{
                                                .id = 30,
+                                               .struct_members = {{.id = 4}},
                                            }}},
     };
     Run(ArgumentBuffers, cfg);
@@ -1239,8 +1264,8 @@ TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionWithOnlyTransitiveUses) {
 
     auto* src = R"(
 $B1: {  # root
-  %a:ptr<storage, i32, read> = var undef @binding_point(1, 2)
-  %b:ptr<storage, i32, read_write> = var undef @binding_point(3, 4)
+  %a:ptr<storage, i32, read> = var @binding_point(1, 2)
+  %b:ptr<storage, i32, read_write> = var @binding_point(3, 4)
 }
 
 %bar = func():i32 {
@@ -1313,10 +1338,12 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
         .group_to_argument_buffer_info = {{1,
                                            ArgumentBufferInfo{
                                                .id = 20,
+                                               .struct_members = {{.id = 2}},
                                            }},
                                           {3,
                                            ArgumentBufferInfo{
                                                .id = 30,
+                                               .struct_members = {{.id = 4}},
                                            }}},
     };
     Run(ArgumentBuffers, cfg);
@@ -1355,8 +1382,8 @@ TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionWithOnlyTransitiveUses_OutOfOr
 
     auto* src = R"(
 $B1: {  # root
-  %a:ptr<storage, i32, read> = var undef @binding_point(1, 2)
-  %b:ptr<storage, i32, read_write> = var undef @binding_point(3, 4)
+  %a:ptr<storage, i32, read> = var @binding_point(1, 2)
+  %b:ptr<storage, i32, read_write> = var @binding_point(3, 4)
 }
 
 %foo = func():i32 {
@@ -1429,10 +1456,12 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
         .group_to_argument_buffer_info = {{1,
                                            ArgumentBufferInfo{
                                                .id = 20,
+                                               .struct_members = {{.id = 2}},
                                            }},
                                           {3,
                                            ArgumentBufferInfo{
                                                .id = 30,
+                                               .struct_members = {{.id = 4}},
                                            }}},
     };
     Run(ArgumentBuffers, cfg);
@@ -1471,9 +1500,9 @@ TEST_F(MslWriter_ArgumentBuffersTest, VarsWithNoNames) {
 
     auto* src = R"(
 $B1: {  # root
-  %1:ptr<uniform, i32, read> = var undef @binding_point(1, 2)
-  %2:ptr<storage, i32, read_write> = var undef @binding_point(3, 4)
-  %3:ptr<private, i32, read_write> = var undef
+  %1:ptr<uniform, i32, read> = var @binding_point(1, 2)
+  %2:ptr<storage, i32, read_write> = var @binding_point(3, 4)
+  %3:ptr<private, i32, read_write> = var
 }
 
 %foo = func():i32 {
@@ -1504,15 +1533,15 @@ $B1: {  # root
 
     auto* expect = R"(
 tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
-  tint_symbol:ptr<uniform, i32, read> @offset(0), @binding_point(1, 2)
+  unnamed:ptr<uniform, i32, read> @offset(0), @binding_point(1, 2)
 }
 
 tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
-  tint_symbol_1:ptr<storage, i32, read_write> @offset(0), @binding_point(3, 4)
+  unnamed_1:ptr<storage, i32, read_write> @offset(0), @binding_point(3, 4)
 }
 
 $B1: {  # root
-  %1:ptr<private, i32, read_write> = var undef
+  %1:ptr<private, i32, read_write> = var
 }
 
 %foo = func(%3:ptr<uniform, i32, read>):i32 {
@@ -1550,10 +1579,12 @@ $B1: {  # root
         .group_to_argument_buffer_info = {{1,
                                            ArgumentBufferInfo{
                                                .id = 20,
+                                               .struct_members = {{.id = 2}},
                                            }},
                                           {3,
                                            ArgumentBufferInfo{
                                                .id = 30,
+                                               .struct_members = {{.id = 4}},
                                            }}},
     };
     Run(ArgumentBuffers, cfg);
@@ -1587,9 +1618,9 @@ TEST_F(MslWriter_ArgumentBuffersTest, SkipBuffers) {
 
     auto* src = R"(
 $B1: {  # root
-  %a:ptr<storage, i32, read> = var undef @binding_point(1, 2)
-  %b:ptr<storage, u32, read_write> = var undef @binding_point(3, 4)
-  %c:ptr<storage, f32, read_write> = var undef @binding_point(3, 2)
+  %a:ptr<storage, i32, read> = var @binding_point(1, 2)
+  %b:ptr<storage, u32, read_write> = var @binding_point(3, 4)
+  %c:ptr<storage, f32, read_write> = var @binding_point(3, 2)
 }
 
 %foo = @fragment func():void {
@@ -1619,7 +1650,7 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
 }
 
 $B1: {  # root
-  %b:ptr<storage, u32, read_write> = var undef @binding_point(3, 4)
+  %b:ptr<storage, u32, read_write> = var @binding_point(3, 4)
 }
 
 %foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
@@ -1647,10 +1678,12 @@ $B1: {  # root
         .group_to_argument_buffer_info = {{1,
                                            ArgumentBufferInfo{
                                                .id = 20,
+                                               .struct_members = {{.id = 2}},
                                            }},
                                           {3,
                                            ArgumentBufferInfo{
                                                .id = 30,
+                                               .struct_members = {{.id = 2}},
                                            }}},
     };
 
@@ -1674,7 +1707,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, DynamicOffset) {
 
     auto* src = R"(
 $B1: {  # root
-  %a:ptr<storage, i32, read_write> = var undef @binding_point(1, 2)
+  %a:ptr<storage, i32, read_write> = var @binding_point(1, 2)
 }
 
 %foo = @fragment func():void {
@@ -1716,6 +1749,7 @@ tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
         .id = 2,
         .dynamic_buffer_id = 3,
         .binding_info_to_offset_index = {{2, 3}},
+        .struct_members = {{.id = 2}},
     };
 
     ArgumentBuffersConfig cfg{};
@@ -1740,7 +1774,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, NoDynamicOffset) {
 
     auto* src = R"(
 $B1: {  # root
-  %a:ptr<storage, i32, read_write> = var undef @binding_point(1, 2)
+  %a:ptr<storage, i32, read_write> = var @binding_point(1, 2)
 }
 
 %foo = @fragment func():void {
@@ -1774,6 +1808,7 @@ tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
 
     ArgumentBufferInfo info{
         .id = 2,
+        .struct_members = {{.id = 2}},
     };
 
     ArgumentBuffersConfig cfg{};
@@ -1803,8 +1838,8 @@ TEST_F(MslWriter_ArgumentBuffersTest, DynamicOffsetOnNonBufferType) {
 
     auto* src = R"(
 $B1: {  # root
-  %a:ptr<storage, f32, read_write> = var undef @binding_point(1, 2)
-  %b:ptr<handle, texture_2d<f32>, read> = var undef @binding_point(1, 3)
+  %a:ptr<storage, f32, read_write> = var @binding_point(1, 2)
+  %b:ptr<handle, texture_2d<f32>, read> = var @binding_point(1, 3)
 }
 
 %foo = @fragment func():void {
@@ -1823,12 +1858,383 @@ $B1: {  # root
         .id = 2,
         .dynamic_buffer_id = 3,
         .binding_info_to_offset_index = {{3, 4}},
+        .struct_members = {{.id = 2}, {.id = 3}},
     };
     ArgumentBuffersConfig cfg{};
     cfg.group_to_argument_buffer_info.insert({1, info});
     auto result = ArgumentBuffers(mod, cfg);
-    EXPECT_NE(result, Success);
+    ASSERT_NE(result, Success);
     EXPECT_EQ(result.Failure().reason, "dynamic offset supplied for non-buffer type");
+}
+
+TEST_F(MslWriter_ArgumentBuffersTest, UnusedBindingsInConfig) {
+    auto* t = ty.sampled_texture(core::type::TextureDimension::k2d, ty.f32());
+    auto* var_tex = b.Var("t", ty.ptr<handle>(t));
+    var_tex->SetBindingPoint(1, 1);
+    auto* var_buf = b.Var("buf", ty.ptr<storage, i32, core::Access::kReadWrite>());
+    var_buf->SetBindingPoint(2, 1);
+    mod.root_block->Append(var_tex);
+    mod.root_block->Append(var_buf);
+
+    auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    b.Append(func->Block(), [&] {
+        auto* load_buf = b.Load(var_buf);
+        b.Store(var_buf, b.Add(load_buf, 1_i));
+        b.Return(func);
+    });
+
+    auto* src = R"(
+$B1: {  # root
+  %t:ptr<handle, texture_2d<f32>, read> = var @binding_point(1, 1)
+  %buf:ptr<storage, i32, read_write> = var @binding_point(2, 1)
+}
+
+%foo = @fragment func():void {
+  $B2: {
+    %4:i32 = load %buf
+    %5:i32 = add %4, 1i
+    store %buf, %5
+    ret
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
+  placeholder:sampler_comparison @offset(0), @binding_point(1, 0)
+  t:texture_2d<f32> @offset(0), @binding_point(1, 1)
+  placeholder_1:texture_cube<f32> @offset(0), @binding_point(1, 2)
+  placeholder_2:texture_storage_1d<r32sint, read_write> @offset(0), @binding_point(1, 3)
+}
+
+tint_arg_buffer_struct_2 = struct @align(1), @core.explicit_layout {
+  placeholder_3:ptr<storage, i32, read> @offset(0), @binding_point(2, 0)
+  buf:ptr<storage, i32, read_write> @offset(0), @binding_point(2, 1)
+}
+
+%foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_2:ptr<uniform, tint_arg_buffer_struct_2, read> [@binding_point(0, 30)]):void {
+  $B1: {
+    %4:tint_arg_buffer_struct_2 = load %tint_arg_buffer_2
+    %5:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
+    %6:ptr<storage, i32, read_write> = access %4, 1u
+    %7:i32 = load %6
+    %8:i32 = add %7, 1i
+    %9:ptr<storage, i32, read_write> = access %4, 1u
+    store %9, %8
+    ret
+  }
+}
+)";
+
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info{
+            {1,
+             ArgumentBufferInfo{
+                 .id = 20,
+                 .struct_members =
+                     {
+                         {.id = 0, .placeholder_type = tint::ResourceType::kSampler_comparison},
+                         {.id = 1},
+                         {.id = 2,
+                          .placeholder_type = tint::ResourceType::kTextureCube_f32_filterable},
+                         {.id = 3,
+                          .placeholder_type = tint::ResourceType::kTextureStorage1d_i32_read_write},
+                     },
+             }},
+            {2,
+             ArgumentBufferInfo{
+                 .id = 30,
+                 .struct_members =
+                     {
+                         {.id = 0, .placeholder_type = tint::ResourceType::kReadOnlyStorageBuffer},
+                         {.id = 1},
+                     },
+             }},
+        },
+    };
+    Run(ArgumentBuffers, cfg);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(MslWriter_ArgumentBuffersTest, MissingGroupInConfig) {
+    auto* var_a = b.Var("a", ty.ptr<storage, f32, core::Access::kReadWrite>());
+    var_a->SetBindingPoint(1, 4);
+    mod.root_block->Append(var_a);
+
+    auto* var_b = b.Var("b", ty.ptr<uniform, i32>());
+    var_b->SetBindingPoint(1, 2);
+    mod.root_block->Append(var_b);
+
+    auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    b.Append(func->Block(), [&] { b.Return(func); });
+
+    ArgumentBuffersConfig cfg{};
+    auto result = ArgumentBuffers(mod, cfg);
+    ASSERT_NE(result, Success);
+    EXPECT_EQ(
+        result.Failure().reason,
+        "ArgumentBuffersConfig is missing entries: [group: 1, binding: 2] [group: 1, binding: 4]");
+}
+
+TEST_F(MslWriter_ArgumentBuffersTest, MissingBindingInConfig) {
+    auto* var_a = b.Var("a", ty.ptr<storage, f32, core::Access::kReadWrite>());
+    var_a->SetBindingPoint(1, 2);
+    mod.root_block->Append(var_a);
+
+    auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    b.Append(func->Block(), [&] { b.Return(func); });
+
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info{{1, ArgumentBufferInfo{.id = 20, .struct_members = {}}}},
+    };
+    auto result = ArgumentBuffers(mod, cfg);
+    ASSERT_NE(result, Success);
+    EXPECT_EQ(result.Failure().reason,
+              "ArgumentBuffersConfig is missing entries: [group: 1, binding: 2]");
+}
+
+TEST_F(MslWriter_ArgumentBuffersTest, MissingPlaceholderTypeInConfig) {
+    auto* var_a = b.Var("a", ty.ptr<storage, f32, core::Access::kReadWrite>());
+    var_a->SetBindingPoint(1, 2);
+    mod.root_block->Append(var_a);
+
+    auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    b.Append(func->Block(), [&] { b.Return(func); });
+
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info{
+            {1,
+             ArgumentBufferInfo{
+                 .id = 20,
+                 .struct_members = {{.id = 0}, {.id = 2}},
+             }},
+        },
+    };
+    auto result = ArgumentBuffers(mod, cfg);
+    ASSERT_NE(result, Success);
+    EXPECT_EQ(result.Failure().reason,
+              "ArgumentBuffersConfig entry for [group: 1, binding: 0] is missing placeholder_type");
+}
+
+TEST_F(MslWriter_ArgumentBuffersTest, BindingArraySize1) {
+    auto* texture_type = ty.sampled_texture(core::type::TextureDimension::k2d, ty.f32());
+    // WGSL defines a binding_array, but the config is ambivalent (1 may or may not be an array).
+    auto* var_t = b.Var("t", ty.ptr<handle>(ty.binding_array(texture_type, 1u)));
+    var_t->SetBindingPoint(1, 2);
+    mod.root_block->Append(var_t);
+
+    auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    b.Append(func->Block(), [&] {
+        auto* load_t = b.Load(b.Access(ty.ptr<handle>(texture_type), var_t, 0_i));
+        b.Call<vec4<f32>>(core::BuiltinFn::kTextureLoad, load_t, b.Zero<vec2u>(), 0_u);
+        b.Return(func);
+    });
+
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info{
+            {1,
+             ArgumentBufferInfo{
+                 .id = 20,
+                 .struct_members =
+                     {
+                         {.id = 2, .array_size = 1},
+                     },
+             }},
+        },
+    };
+    Run(ArgumentBuffers, cfg);
+
+    auto* expect = R"(
+tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
+  t:binding_array<texture_2d<f32>, 1> @offset(0), @binding_point(1, 2)
+}
+
+%foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)]):void {
+  $B1: {
+    %3:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
+    %4:binding_array<texture_2d<f32>, 1> = access %3, 0u
+    %5:texture_2d<f32> = access %4, 0i
+    %6:vec4<f32> = textureLoad %5, vec2<u32>(0u), 0u
+    ret
+  }
+}
+)";
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(MslWriter_ArgumentBuffersTest, BindingArrayOversizedInConfig) {
+    // Shader defines an array with 2 elements, but config has 4 elements, so there will be 2
+    // placeholders.
+    auto* texture_type = ty.sampled_texture(core::type::TextureDimension::k2d, ty.f32());
+    auto* var_t = b.Var("t", ty.ptr<handle>(ty.binding_array(texture_type, 2u)));
+    var_t->SetBindingPoint(1, 2);
+    mod.root_block->Append(var_t);
+
+    auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    b.Append(func->Block(), [&] {
+        auto* load_t = b.Load(b.Access(ty.ptr<handle>(texture_type), var_t, 0_i));
+        b.Call<vec4<f32>>(core::BuiltinFn::kTextureLoad, load_t, b.Zero<vec2u>(), 0_u);
+        b.Return(func);
+    });
+
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info{
+            {1,
+             ArgumentBufferInfo{
+                 .id = 20,
+                 .struct_members =
+                     {
+                         {.id = 2,
+                          .array_size = 4,
+                          .placeholder_type = tint::ResourceType::kTexture2d_f32_filterable},
+                     },
+             }},
+        },
+    };
+    Run(ArgumentBuffers, cfg);
+
+    auto* expect = R"(
+tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
+  t:binding_array<texture_2d<f32>, 2> @offset(0), @binding_point(1, 2)
+  placeholder:binding_array<texture_2d<f32>, 2> @offset(0), @binding_point(1, 4)
+}
+
+%foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)]):void {
+  $B1: {
+    %3:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
+    %4:binding_array<texture_2d<f32>, 2> = access %3, 0u
+    %5:texture_2d<f32> = access %4, 0i
+    %6:vec4<f32> = textureLoad %5, vec2<u32>(0u), 0u
+    ret
+  }
+}
+)";
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(MslWriter_ArgumentBuffersTest, ArraySizeZeroInConfig) {
+    auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    b.Append(func->Block(), [&] { b.Return(func); });
+
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info{
+            {1,
+             ArgumentBufferInfo{
+                 .id = 20,
+                 .struct_members =
+                     {
+                         {.id = 2, .array_size = 0},
+                     },
+             }},
+        },
+    };
+    auto result = ArgumentBuffers(mod, cfg);
+    ASSERT_NE(result, Success);
+    EXPECT_EQ(result.Failure().reason,
+              "ArgumentBuffersConfig entry for [group: 1, binding: 2] has array_size of 0");
+}
+
+TEST_F(MslWriter_ArgumentBuffersTest, ArraySizeSmallerThanWgslBindingArray) {
+    auto* texture_type = ty.sampled_texture(core::type::TextureDimension::k2d, ty.f32());
+    auto* var_t = b.Var("t", ty.ptr<handle>(ty.binding_array(texture_type, 3u)));
+    var_t->SetBindingPoint(1, 2);
+    mod.root_block->Append(var_t);
+
+    auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    b.Append(func->Block(), [&] { b.Return(func); });
+
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info{
+            {1,
+             ArgumentBufferInfo{
+                 .id = 20,
+                 .struct_members =
+                     {
+                         {.id = 2, .array_size = 2},
+                     },
+             }},
+        },
+    };
+    auto result = ArgumentBuffers(mod, cfg);
+    ASSERT_NE(result, Success);
+    EXPECT_EQ(result.Failure().reason,
+              "ArgumentBuffersConfig entry for [group: 1, binding: 2] has array_size (2) smaller "
+              "than WGSL binding count (3)");
+}
+
+TEST_F(MslWriter_ArgumentBuffersTest, OverlappingArraySizeInConfig) {
+    auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    b.Append(func->Block(), [&] { b.Return(func); });
+
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info{
+            {1,
+             ArgumentBufferInfo{
+                 .id = 20,
+                 .struct_members =
+                     {
+                         {.id = 1,
+                          .array_size = 3,
+                          .placeholder_type = tint::ResourceType::kTexture2d_f32_filterable},
+                         {.id = 2,
+                          .array_size = 1,
+                          .placeholder_type = tint::ResourceType::kTexture2d_f32_filterable},
+                     },
+             }},
+        },
+    };
+    auto result = ArgumentBuffers(mod, cfg);
+    ASSERT_NE(result, Success);
+    EXPECT_EQ(result.Failure().reason,
+              "Found duplicate binding point in argument buffer config: [group: 1, binding: 2]");
+}
+
+TEST_F(MslWriter_ArgumentBuffersTest, ArraySizeOverflowInConfig) {
+    auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    b.Append(func->Block(), [&] { b.Return(func); });
+
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info{
+            {1,
+             ArgumentBufferInfo{
+                 .id = 20,
+                 .struct_members =
+                     {
+                         {.id = 1, .array_size = 0xffffffff},
+                     },
+             }},
+        },
+    };
+    auto result = ArgumentBuffers(mod, cfg);
+    ASSERT_NE(result, Success);
+    EXPECT_EQ(result.Failure().reason,
+              "ArgumentBuffersConfig entry for [group: 1, binding: 1] has array_size (4294967295) "
+              "that overflows uint32_t");
+}
+
+TEST_F(MslWriter_ArgumentBuffersTest, PlaceholderArrayNonSampledTextureInConfig) {
+    auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    b.Append(func->Block(), [&] { b.Return(func); });
+
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info{
+            {1,
+             ArgumentBufferInfo{
+                 .id = 20,
+                 .struct_members =
+                     {
+                         {.id = 0,
+                          .array_size = 2,
+                          .placeholder_type = tint::ResourceType::kReadOnlyStorageBuffer},
+                     },
+             }},
+        },
+    };
+    auto result = ArgumentBuffers(mod, cfg);
+    ASSERT_NE(result, Success);
+    EXPECT_EQ(result.Failure().reason, "binding_array element type must be a sampled texture type");
 }
 
 }  // namespace

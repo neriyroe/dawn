@@ -37,6 +37,7 @@
 #include "src/dawn/native/Adapter.h"
 #include "src/dawn/native/BindGroupLayout.h"
 #include "src/dawn/native/CacheRequest.h"
+#include "src/dawn/native/ResourceTableDefaultResources.h"
 #include "src/dawn/native/Serializable.h"
 #include "src/dawn/native/TintUtils.h"
 #include "src/dawn/native/metal/BindGroupLayoutMTL.h"
@@ -168,52 +169,26 @@ std::unordered_map<uint32_t, tint::msl::writer::ArgumentBufferInfo> GenerateArgu
 
     std::unordered_map<uint32_t, tint::msl::writer::ArgumentBufferInfo> info = {};
 
-    uint32_t curBufferIdx = kArgumentBufferSlotMax;
     for (BindGroupIndex group : layout->GetBindGroupLayoutsMask()) {
         const BindGroupLayout* bgl = ToBackend(layout->GetBindGroupLayout(group));
 
-        // Note, both of these buffer index values need to match up to the value set in the
-        // CommandBufferMTL #argument-buffer-and-dynamic-offsets-buffer-indices
-        uint32_t argumentBufferIdx = curBufferIdx--;
-        // TODO(crbug.com/363031535): The dynamic offsets should all be in a single grouping
-        // which is in the immediates buffer.
-        std::optional<uint32_t> dynamicOffsetsBufferIdx = std::nullopt;
-        if (uint32_t(bgl->GetDynamicBufferCount()) > 0u) {
-            dynamicOffsetsBufferIdx = curBufferIdx--;
-        }
+        uint32_t argumentBufferIdx, dynamicOffsetsBufferIdx;
+        std::tie(argumentBufferIdx, dynamicOffsetsBufferIdx) =
+            BindGroupSlotToArgumentBufferID(group);
 
-        tint::msl::writer::ArgumentBufferInfo argBufferInfo = {
+        tint::msl::writer::ArgumentBufferInfo argumentBufferInfo{
             .id = argumentBufferIdx,
             .dynamic_buffer_id = dynamicOffsetsBufferIdx,
         };
+        bgl->FillTintArgumentBufferInfo(argumentBufferInfo);
 
-        uint32_t curDynamicOffset = 0;
-
-        for (BindingIndex bindingIndex : Range(bgl->GetBindingCount())) {
-            const BindingInfo& bindingInfo = bgl->GetBindingInfo(bindingIndex);
-
-            MatchVariant(
-                bindingInfo.bindingLayout,  //
-                [&](const BufferBindingInfo& binding) {
-                    if (binding.hasDynamicOffset) {
-                        argBufferInfo.binding_info_to_offset_index.insert(
-                            {uint32_t{bindingIndex}, curDynamicOffset++});
-                    }
-                },
-                [&](const SamplerBindingInfo& bindingInfo) {},
-                [&](const StaticSamplerBindingInfo& bindingInfo) {},
-                [&](const TextureBindingInfo& bindingInfo) {}, [](const TexelBufferBindingInfo&) {},
-                [&](const StorageTextureBindingInfo& bindingInfo) {},
-                [](const InputAttachmentBindingInfo&) { DAWN_UNREACHABLE(); },
-                [](const ExternalTextureBindingInfo&) { DAWN_UNREACHABLE(); });
-        }
-        info.insert({static_cast<uint32_t>(group), argBufferInfo});
+        info.insert({static_cast<uint32_t>(group), argumentBufferInfo});
     }
 
     return info;
 }
 
-ResultOrError<CacheResult<MslCompilation>> TranslateToMSL(
+ResultOrUnknownError<CacheResult<MslCompilation>> TranslateToMSL(
     DeviceBase* device,
     const ProgrammableStage& programmableStage,
     SingleShaderStage stage,
@@ -225,21 +200,20 @@ ResultOrError<CacheResult<MslCompilation>> TranslateToMSL(
     const ImmediateMask& pipelineImmediateMask) {
     bool useArgumentBuffers = device->IsToggleEnabled(Toggle::MetalUseArgumentBuffers);
 
-    tint::Bindings bindings =
-        GenerateBindingRemapping(layout, stage, [&](BindGroupIndex group, BindingIndex index) {
-            if (useArgumentBuffers) {
-                return tint::BindingPoint{
-                    .group = uint32_t{group},
-                    .binding = ToMTLArgumentBufferIndex(index),
-                };
-            } else {
-                return tint::BindingPoint{
-                    .group = 0,
-                    .binding = layout->GetBindingIndexInfo(stage)[group][index],
-                };
-            }
-        });
+    auto ToMSLBindPoint = [&](BindGroupIndex group, BindingIndex index) -> tint::BindingPoint {
+        if (useArgumentBuffers) {
+            return tint::BindingPoint{
+                .group = uint32_t{group},
+                .binding = ToMTLArgumentBufferIndex(index),
+            };
+        }
+        return tint::BindingPoint{
+            .group = 0,
+            .binding = layout->GetBindingIndexInfo(stage)[group][index],
+        };
+    };
 
+    tint::Bindings bindings = GenerateBindingRemapping(layout, stage, ToMSLBindPoint);
     tint::msl::writer::ArrayLengthOptions arrayLengthFromConstants =
         GenerateArrayLengthOptions(layout, stage);
 
@@ -293,6 +267,17 @@ ResultOrError<CacheResult<MslCompilation>> TranslateToMSL(
         }
     }
 
+    std::optional<tint::ResourceTableConfig> resourceTableConfig = std::nullopt;
+    if (layout->UsesResourceTable()) {
+        auto bindingTypeOrder = ResourceTableDefaultResources::GetOrder();
+        resourceTableConfig = tint::ResourceTableConfig{
+            .resource_table_binding = tint::BindingPoint(0, kResourceTableBindingSlot),
+            .storage_buffer_binding = tint::BindingPoint(0, kResourceTableStorageSlot),
+            .default_binding_type_order = {bindingTypeOrder.begin(), bindingTypeOrder.end()},
+            .binding_to_resource_type = GenerateBindingToResourceType(layout, ToMSLBindPoint),
+        };
+    }
+
     MslCompilationRequest req = {};
     req.stage = stage;
     req.shaderModuleHash = programmableStage.module->GetHash();
@@ -319,10 +304,11 @@ ResultOrError<CacheResult<MslCompilation>> TranslateToMSL(
     req.tintOptions.emit_vertex_point_size =
         stage == SingleShaderStage::Vertex &&
         renderPipeline->GetPrimitiveTopology() == wgpu::PrimitiveTopology::PointList;
-    req.tintOptions.immediate_binding_point = tint::BindingPoint{0, kImmediateBlockBufferSlot};
+    req.tintOptions.immediate_binding_point = kImmediateBlockBufferSlot;
     req.tintOptions.array_length_from_constants = std::move(arrayLengthFromConstants);
     req.tintOptions.pixel_local_attachments = std::move(pixelLocalAttachments);
     req.tintOptions.bindings = std::move(bindings);
+    req.tintOptions.resource_table = std::move(resourceTableConfig);
     req.tintOptions.vertex_pulling_config = std::move(vertexPullingTransformConfig);
 
     // Set internal immediate offsets
@@ -382,7 +368,7 @@ ResultOrError<CacheResult<MslCompilation>> TranslateToMSL(
     auto compilationLease = device->GetBlobCache()->AcquireCompilation(cacheKey);
     DAWN_TRY_LOAD_OR_RUN(
         mslCompilation, device, std::move(cacheKey), std::move(req), MslCompilation::FromValidatedBlob,
-        [](MslCompilationRequest r) -> ResultOrError<MslCompilation> {
+        [](MslCompilationRequest r) -> ResultOrUnknownError<MslCompilation> {
             TRACE_EVENT(DAWN_TRACE_CATEGORY(), "tint::msl::writer::Generate");
             // Requires Tint Program here right before actual using.
             auto shaderModule = r.inputProgram.UnsafeGetValue();
@@ -496,13 +482,13 @@ ResultOrError<CacheResult<MslCompilation>> TranslateToMSL(
 
 }  // namespace
 
-MaybeError ShaderModule::CreateFunction(SingleShaderStage stage,
-                                        const ProgrammableStage& programmableStage,
-                                        const PipelineLayout* layout,
-                                        const ImmediateMask& pipelineImmediateMask,
-                                        ShaderModule::MetalFunctionData* out,
-                                        uint32_t sampleMask,
-                                        const RenderPipeline* renderPipeline) {
+MaybeUnknownError ShaderModule::CreateFunction(SingleShaderStage stage,
+                                               const ProgrammableStage& programmableStage,
+                                               const PipelineLayout* layout,
+                                               const ImmediateMask& pipelineImmediateMask,
+                                               ShaderModule::MetalFunctionData* out,
+                                               uint32_t sampleMask,
+                                               const RenderPipeline* renderPipeline) {
     TRACE_EVENT(DAWN_TRACE_CATEGORY(), "metal::ShaderModule::CreateFunction", "label",
                 utils::GetLabelForTrace(GetLabel()));
 

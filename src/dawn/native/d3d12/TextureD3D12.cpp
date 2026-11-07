@@ -444,7 +444,6 @@ MaybeError Texture::SynchronizeTextureBeforeUse(CommandRecordingContext* command
     if (mKeyedMutex != nullptr) {
         DAWN_TRY(commandContext->AcquireKeyedMutex(mKeyedMutex));
     }
-    mLastSharedTextureMemoryUsageSerial = queue->GetPendingCommandSerial();
     return {};
 }
 
@@ -645,6 +644,9 @@ void Texture::HandleTransitionSpecialCases(CommandRecordingContext* commandConte
     // See CommandRecordingContext::ExecuteCommandList.
     if (mResourceAllocation.GetInfo().mMethod == AllocationMethod::kExternal) {
         commandContext->AddToSharedTextureList(this);
+        // Track the usage of the texture immediately so that we know the texture was used in the
+        // current access even before the commands are actually submitted.
+        mLastSharedTextureMemoryUsageSerial = GetDevice()->GetQueue()->GetPendingCommandSerial();
     }
 }
 

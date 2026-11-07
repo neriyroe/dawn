@@ -32,7 +32,6 @@
 
 #include "src/tint/api/common/binding_point.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/transform/array_length_from.h"
 #include "src/tint/lang/core/ir/transform/binary_polyfill.h"
 #include "src/tint/lang/core/ir/transform/binding_remapper.h"
 #include "src/tint/lang/core/ir/transform/builtin_polyfill.h"
@@ -50,6 +49,7 @@
 #include "src/tint/lang/core/ir/transform/remove_continue_in_switch.h"
 #include "src/tint/lang/core/ir/transform/remove_terminator_args.h"
 #include "src/tint/lang/core/ir/transform/rename_conflicts.h"
+#include "src/tint/lang/core/ir/transform/replace_array_and_buffer_length.h"
 #include "src/tint/lang/core/ir/transform/robustness.h"
 #include "src/tint/lang/core/ir/transform/signed_integer_polyfill.h"
 #include "src/tint/lang/core/ir/transform/single_entry_point.h"
@@ -194,7 +194,7 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
 
     TINT_CHECK_RESULT(core::ir::transform::MultiplanarExternalTexture(module, multiplanar_map));
 
-    TINT_CHECK_RESULT(core::ir::transform::ArrayLengthFromImmediates(
+    TINT_CHECK_RESULT(core::ir::transform::ReplaceArrayAndBufferLength(
         module, immediate_data_layout, buffer_sizes_array_elements_num,
         array_length_from_constants.bindpoint_to_size_index));
 
@@ -234,15 +234,11 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
 
     TINT_CHECK_RESULT(raise::SimdBallot(module));
 
-    // ArgumentBuffers must come before ModuleScopeVars
+    // ArgumentBuffers must come before ChangeImmediateToUniform and ModuleScopeVars
     if (options.use_argument_buffers) {
         raise::ArgumentBuffersConfig cfg{
             .group_to_argument_buffer_info = std::move(options.group_to_argument_buffer_info),
         };
-
-        if (options.immediate_binding_point) {
-            cfg.skip_bindings.insert(options.immediate_binding_point.value());
-        }
 
         if (options.vertex_pulling_config) {
             auto group = options.vertex_pulling_config->pulling_group;
@@ -267,9 +263,12 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
 
     // ChangeImmediateToUniform must come before ModuleScopeVars
     {
-        core::ir::transform::ChangeImmediateToUniformConfig config = {
-            .immediate_binding_point = options.immediate_binding_point,
-        };
+        core::ir::transform::ChangeImmediateToUniformConfig config;
+        // ChangeImmediateToUniform is a shared IR transform that takes a BindingPoint, and MSL
+        // represents entry-point buffer indices in the IR as BindingPoint{0, buffer_idx}.
+        if (options.immediate_binding_point) {
+            config.immediate_binding_point = BindingPoint{0, *options.immediate_binding_point};
+        }
         TINT_CHECK_RESULT(core::ir::transform::ChangeImmediateToUniform(module, config));
     }
 

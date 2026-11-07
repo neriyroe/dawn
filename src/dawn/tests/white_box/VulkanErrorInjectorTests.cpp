@@ -163,7 +163,7 @@ TEST_P(VulkanErrorInjectorTests, UploadMemoryFallsBackOnlyAfterOutOfMemory) {
         if (result.IsError()) {
             auto error = result.AcquireError();
             EXPECT_EQ(errorIndex, 1u) << error->GetFormattedMessage();
-            EXPECT_EQ(error->GetType(), InternalErrorType::Internal);
+            EXPECT_EQ(error->GetType(), InternalErrorType::Unrecoverable);
         } else {
             ResourceMemoryAllocation allocation = result.AcquireSuccess();
             EXPECT_EQ(errorIndex, 0u);
@@ -172,6 +172,19 @@ TEST_P(VulkanErrorInjectorTests, UploadMemoryFallsBackOnlyAfterOutOfMemory) {
             allocator->Deallocate(&allocation);
         }
     }
+}
+
+TEST_P(VulkanErrorInjectorTests, InjectErrorOnCreateDevice) {
+    wgpu::DeviceDescriptor deviceDesc = {};
+
+    ExhaustiveErrorInjection([&](ErrorInjectionPhase phase) {
+        wgpu::Device testDevice = adapter.CreateDevice(&deviceDesc);
+        if (phase == ErrorInjectionPhase::InjectError) {
+            EXPECT_EQ(testDevice, nullptr);
+        } else {
+            EXPECT_NE(testDevice, nullptr);
+        }
+    });
 }
 
 DAWN_INSTANTIATE_TEST(VulkanErrorInjectorTests, VulkanBackend());

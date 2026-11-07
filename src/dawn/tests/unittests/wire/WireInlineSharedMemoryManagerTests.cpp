@@ -44,7 +44,10 @@
 namespace dawn::wire {
 namespace {
 
-class InlineSharedMemoryManagerTest : public testing::Test {
+using ::testing::ElementsAreArray;
+using ::testing::Test;
+
+class InlineSharedMemoryManagerTest : public Test {
   protected:
     void SetUp() override {
 #if !DAWN_PLATFORM_IS(WINDOWS) && !DAWN_PLATFORM_IS(LINUX) && !DAWN_PLATFORM_IS(APPLE)
@@ -285,7 +288,7 @@ TEST_F(ClientInlineMemoryTransferServiceTest, SharedMemoryHandle_DataIsSharedDir
     ASSERT_NE(nullptr, acquired.Get());
     std::span<std::byte> acquiredData = acquired->GetMappedSpan();
     ASSERT_EQ(kSize, acquiredData.size());
-    EXPECT_THAT(acquiredData, testing::ElementsAreArray(kExpectedData));
+    EXPECT_THAT(acquiredData, ElementsAreArray(kExpectedData));
 }
 
 // With `MemoryHandleUse::MappedAtCreationData` the service falls back to a staging-buffer-backed
@@ -312,7 +315,7 @@ TEST_F(ClientInlineMemoryTransferServiceTest, StagingHandle_SerializeDataUpdate)
     handle->SerializeDataUpdate(std::span<volatile std::byte>(serialized.data(), serialized.size()),
                                 0u, kSize);
 
-    EXPECT_THAT(serialized, testing::ElementsAreArray(kExpectedData));
+    EXPECT_THAT(serialized, ElementsAreArray(kExpectedData));
 }
 
 // Tests for the server-side `InlineMemoryTransferService` created with a non-null
@@ -373,7 +376,7 @@ TEST_F(ServerInlineMemoryTransferServiceTest, DeserializeDataUpdate_CopiesShared
     EXPECT_TRUE(pair.serverHandle->DeserializeDataUpdate(
         std::span<const std::byte>(), 0u, kSize,
         std::span<std::byte>(target.data(), target.size())));
-    EXPECT_THAT(target, testing::ElementsAreArray(kExpectedData));
+    EXPECT_THAT(target, ElementsAreArray(kExpectedData));
 }
 
 // Test that serializing a data update copies the data into the shared memory.
@@ -385,7 +388,7 @@ TEST_F(ServerInlineMemoryTransferServiceTest, SerializeDataUpdate_CopiesDataInto
     pair.serverHandle->SerializeDataUpdate(std::span<volatile std::byte>(), 0u, kSize, data);
 
     std::span<std::byte> clientData = pair.clientHandle->GetData();
-    EXPECT_THAT(clientData, testing::ElementsAreArray(kExpectedData));
+    EXPECT_THAT(clientData, ElementsAreArray(kExpectedData));
 }
 
 }  // namespace

@@ -43,10 +43,34 @@ if (checkout_v8 && dawn_node) {
     # Private: EventLoop.h only forward declares the V8 types it holds pointers
     # to, so a consumer that never runs a task needs none of this.
     include_dirs = [ "${dawn_root}/third_party/v8/src/include" ]
-    deps = [ "//third_party/v8/src:v8" ]
+    deps = [
+      "${dawn_root}/src/utils",
+      "//third_party/v8/src:v8",
+    ]
 
     # Public because EventLoop::Task is an absl::AnyInvocable.
     public_deps = [ "${dawn_abseil_dir}:absl" ]
+  }
+
+  config("file_bundle_public_config") {
+    include_dirs = [ "${dawn_root}" ]
+  }
+
+  source_set("file_bundle") {
+    sources = [
+      "FileBundle.cpp",
+      "FileBundle.h",
+    ]
+
+    public_configs = [ ":file_bundle_public_config" ]
+
+    # Public because FileBundle.h includes absl::flat_hash_map, dawn::Result and
+    # minizip's unzip.h.
+    public_deps = [
+      "${dawn_abseil_dir}:absl",
+      "${dawn_root}/src/dawn/common",
+      "//third_party/zlib:minizip",
+    ]
   }
 
   config("polyfills_public_config") {
@@ -67,10 +91,15 @@ if (checkout_v8 && dawn_node) {
     public_configs = [ ":polyfills_public_config" ]
 
     # Public because RegisterPolyfills() takes an EventLoop, so a caller needs
-    # the complete type.
-    public_deps = [ ":event_loop" ]
+    # the complete type. Also forwards dawn_node_interop since Polyfills.cpp
+    # includes "src/dawn/node/interop/NodeAPI.h".
+    public_deps = [
+      ":event_loop",
+      "${dawn_root}/src/dawn/node:dawn_node_interop",
+    ]
 
     deps = [
+      ":file_bundle",
       "${dawn_root}/src/dawn/common",
       "${dawn_root}/src/dawn/node/napi_v8",
       "//third_party/v8/src:v8",

@@ -391,10 +391,8 @@ ResultOrError<SwapChain::Config> SwapChain::ChooseConfig(
         }
     }
     if (!formatIsSupported) {
-        return DAWN_UNRECOVERABLE_ERROR(
-            absl::StrFormat("Vulkan SwapChain does not support %s with color space %d.",
-                            config.wgpuFormat,
-                            static_cast<int>(config.colorSpace)));
+        return DAWN_UNRECOVERABLE_ERROR("Vulkan SwapChain does not support %s with color space %d.",
+                                        config.wgpuFormat, static_cast<int>(config.colorSpace));
     }
 
     // Only the identity transform is supported for now.
@@ -734,9 +732,9 @@ void SwapChain::DetachFromSurfaceImpl() {
     }
 }
 
-ResultOrError<VkSurfaceKHR> CreateVulkanSurface(InstanceBase* instance,
-                                                const PhysicalDevice* physicalDevice,
-                                                const Surface* surface) {
+ResultOrUnknownError<VkSurfaceKHR> CreateVulkanSurface(InstanceBase* instance,
+                                                       const PhysicalDevice* physicalDevice,
+                                                       const Surface* surface) {
     // May not be used in the platform-specific switches below.
     [[maybe_unused]] const VulkanGlobalInfo& info =
         physicalDevice->GetVulkanInstance()->GetGlobalInfo();

@@ -246,7 +246,6 @@ class ImportedTextureBase : public Texture {
     //   can happen before initialization, or after destruction.
     enum class ExternalState { PendingAcquire, Acquired, EagerlyTransitioned, Released };
     ExternalState mExternalState = ExternalState::Released;
-    ExternalState mLastExternalState = ExternalState::Released;
 
     // The layouts to use for the queue ownership transfer barrier when a texture is used the first
     // time after being imported. The layouts must match the ones from the queue ownership transfer
@@ -269,7 +268,7 @@ class ImportedTextureBase : public Texture {
 // A texture created from an VkImage that references an external memory object.
 class ExternalVkImageTexture final : public ImportedTextureBase {
   public:
-    static ResultOrError<Ref<ExternalVkImageTexture>> Create(
+    static ResultOrUnknownError<Ref<ExternalVkImageTexture>> Create(
         Device* device,
         const ExternalImageDescriptorVk* descriptor,
         const UnpackedPtr<TextureDescriptor>& textureDescriptor,
@@ -281,17 +280,17 @@ class ExternalVkImageTexture final : public ImportedTextureBase {
                                   VkDeviceMemory externalMemoryAllocation,
                                   std::vector<VkSemaphore> waitSemaphores);
 
-    MaybeError ExportExternalTexture(VkImageLayout desiredLayout,
-                                     ExternalSemaphoreHandle* handle,
-                                     VkImageLayout* releasedOldLayout,
-                                     VkImageLayout* releasedNewLayout);
+    MaybeUnknownError ExportExternalTexture(VkImageLayout desiredLayout,
+                                            ExternalSemaphoreHandle* handle,
+                                            VkImageLayout* releasedOldLayout,
+                                            VkImageLayout* releasedNewLayout);
 
     MaybeError OnBeforeSubmit(CommandRecordingContext* context) override;
 
   private:
     using ImportedTextureBase::ImportedTextureBase;
-    MaybeError Initialize(const ExternalImageDescriptorVk* descriptor,
-                          external_memory::Service* externalMemoryService);
+    MaybeUnknownError Initialize(const ExternalImageDescriptorVk* descriptor,
+                                 external_memory::Service* externalMemoryService);
     void DestroyImpl(DestroyReason reason) override;
 
     VkDeviceMemory mExternalAllocation = VK_NULL_HANDLE;
@@ -329,7 +328,9 @@ class TextureView final : public TextureViewBase, public WeakRefSupport<TextureV
         uint64_t textureViewId,
         const UnpackedPtr<TextureViewDescriptor>& descriptor);
     VkImageView GetHandle() const;
+    VkImageView GetHandleOrPlaceholder() const;
     VkImageView GetHandleForBGRA8UnormStorage() const;
+    VkImageView GetHandleForBGRA8UnormStorageOrPlaceholder() const;
 
     ResultOrError<VkImageView> GetOrCreate2DViewOn3D(uint32_t depthSlice = 0u);
 
@@ -358,6 +359,9 @@ class TextureView final : public TextureViewBase, public WeakRefSupport<TextureV
 
     VkImageView mHandle = VK_NULL_HANDLE;
     VkImageView mHandleForBGRA8UnormStorage = VK_NULL_HANDLE;
+    // True if mHandle (and mHandleForBGRA8UnormStorage) is owned by this object rather than a
+    // shared Device placeholder.
+    bool mOwnsHandle = false;
     VkSamplerYcbcrConversion mSamplerYCbCrConversion = VK_NULL_HANDLE;
     bool mIsYCbCrFilterable = false;
     std::vector<VkImageView> mHandlesFor2DViewOn3D;

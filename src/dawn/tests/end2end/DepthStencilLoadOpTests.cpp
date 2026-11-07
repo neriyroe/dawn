@@ -35,6 +35,8 @@
 namespace dawn {
 namespace {
 
+using ::testing::ValuesIn;
+
 using Format = wgpu::TextureFormat;
 enum class Check {
     CopyStencil,
@@ -200,8 +202,6 @@ class DepthStencilLoadOpTests : public DawnTestWithParams<DepthStencilLoadOpTest
     bool mIsFormatSupported = false;
 };
 
-}  // anonymous namespace
-
 // Check that clearing a mip level works at all.
 TEST_P(DepthStencilLoadOpTests, ClearMip0) {
     // TODO(crbug.com/519296892): Produces incorrect result on Pixel 10.
@@ -258,7 +258,8 @@ TEST_P(DepthStencilLoadOpTests, ClearBothMip1Then0) {
     DAWN_SUPPRESS_TEST_IF(IsApple() && GetParam().mFormat == wgpu::TextureFormat::Depth16Unorm);
 
     // TODO(42242119): fail on Qualcomm Adreno X1.
-    DAWN_SUPPRESS_TEST_IF(IsD3D11() && IsQualcomm());
+    DAWN_SUPPRESS_TEST_IF(IsD3D11() && IsQualcomm() &&
+                          GetDriverVersion() < gpu_info::DriverVersion({31, 0, 170, 0}));
 
     wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
     encoder.BeginRenderPass(&renderPassDescriptors[1]).End();
@@ -269,8 +270,6 @@ TEST_P(DepthStencilLoadOpTests, ClearBothMip1Then0) {
     CheckMipLevel(0u);
     CheckMipLevel(1u);
 }
-
-namespace {
 
 auto GenerateParam() {
     auto params1 = MakeParamGenerator<DepthStencilLoadOpTestParams>(
@@ -298,7 +297,7 @@ auto GenerateParam() {
 
 INSTANTIATE_TEST_SUITE_P(,
                          DepthStencilLoadOpTests,
-                         ::testing::ValuesIn(GenerateParam()),
+                         ValuesIn(GenerateParam()),
                          DawnTestBase::PrintToStringParamName("DepthStencilLoadOpTests"));
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(DepthStencilLoadOpTests);
 

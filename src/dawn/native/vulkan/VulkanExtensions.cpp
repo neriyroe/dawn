@@ -146,8 +146,10 @@ static constexpr std::array<DeviceExtInfo, kDeviceExtCount> sDeviceExtInfos{{
     // Promoted in 1.4
     {DeviceExt::PipelineRobustness, "VK_EXT_pipeline_robustness"},
     {DeviceExt::Maintenance5, "VK_KHR_maintenance5"},
+    {DeviceExt::LoadStoreOpNone, "VK_KHR_load_store_op_none"},
 
     // Not promoted to core in any version
+    {DeviceExt::Maintenance9, "VK_KHR_maintenance9"},
     {DeviceExt::DepthClipEnable, "VK_EXT_depth_clip_enable"},
     {DeviceExt::ImageDrmFormatModifier, "VK_EXT_image_drm_format_modifier"},
     {DeviceExt::Swapchain, "VK_KHR_swapchain"},
@@ -163,6 +165,8 @@ static constexpr std::array<DeviceExtInfo, kDeviceExtCount> sDeviceExtInfos{{
     {DeviceExt::MaximalReconvergence, "VK_KHR_shader_maximal_reconvergence"},
     {DeviceExt::SubgroupUniformControlFlow, "VK_KHR_shader_subgroup_uniform_control_flow"},
     {DeviceExt::MeshShader, "VK_EXT_mesh_shader"},
+    {DeviceExt::LoadStoreOpNoneEXT, "VK_EXT_load_store_op_none"},
+    {DeviceExt::RenderPassStoreOpsQCOM, "VK_QCOM_render_pass_store_ops"},
 
     {DeviceExt::ExternalMemoryAndroidHardwareBuffer,
      "VK_ANDROID_external_memory_android_hardware_buffer"},
@@ -214,6 +218,9 @@ DeviceExtSet EnsureDependencies(const DeviceExtSet& advertisedExts,
             // Happy extensions don't need anybody else!
             case DeviceExt::ImageFormatList:
             case DeviceExt::DrawIndirectCount:
+            case DeviceExt::LoadStoreOpNone:
+            case DeviceExt::LoadStoreOpNoneEXT:
+            case DeviceExt::RenderPassStoreOpsQCOM:
             // Extensions which only depend on Vulkan 1.1
             case DeviceExt::DriverProperties:
             case DeviceExt::ShaderFloat16Int8:
@@ -222,6 +229,7 @@ DeviceExtSet EnsureDependencies(const DeviceExtSet& advertisedExts,
             case DeviceExt::ZeroInitializeWorkgroupMemory:
             case DeviceExt::DemoteToHelperInvocation:
             case DeviceExt::Maintenance4:
+            case DeviceExt::Maintenance9:
             case DeviceExt::PipelineRobustness:
             case DeviceExt::Robustness2:
             case DeviceExt::SubgroupSizeControl:

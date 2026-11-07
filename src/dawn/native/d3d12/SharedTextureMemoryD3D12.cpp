@@ -180,7 +180,7 @@ MaybeValError SharedTextureMemory::BeginAccessImpl(
     return {};
 }
 
-ResultOrError<FenceAndSignalValue> SharedTextureMemory::EndAccessImpl(
+ResultOrUnknownError<FenceAndSignalValue> SharedTextureMemory::EndAccessImpl(
     TextureBase* texture,
     ExecutionSerial lastUsageSerial,
     UnpackedPtr<EndAccessState>& state) {

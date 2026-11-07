@@ -380,6 +380,14 @@ void RequestSwapchainInterposer(VulkanSwapchainInterposer hook) {
     MutableSwapchainInterposer() = hook;
 }
 
+RequestAdapterOptionsVulkanUUIDs::RequestAdapterOptionsVulkanUUIDs() {
+    sType = wgpu::SType::RequestAdapterOptionsVulkanUUIDs;
+}
+
+AdapterPropertiesVulkanUUIDs::AdapterPropertiesVulkanUUIDs() {
+    sType = wgpu::SType::AdapterPropertiesVulkanUUIDs;
+}
+
 #if DAWN_PLATFORM_IS(LINUX)
 ExternalImageDescriptorOpaqueFD::ExternalImageDescriptorOpaqueFD()
     : ExternalImageDescriptorFD(ExternalImageType::OpaqueFD) {}

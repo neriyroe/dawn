@@ -95,7 +95,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %buffer:ptr<workgroup, MyStruct, read_write> = var undef
+  %buffer:ptr<workgroup, MyStruct, read_write> = var
 }
 
 %foo = func(%value:MyStruct):void {
@@ -135,7 +135,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %buffer:ptr<private, MyStruct, read_write> = var undef
+  %buffer:ptr<private, MyStruct, read_write> = var
 }
 
 %foo = func(%value:MyStruct):void {
@@ -175,7 +175,7 @@ MyStruct = struct @align(16) {
 
 %foo = func(%value:MyStruct):void {
   $B1: {
-    %buffer:ptr<function, MyStruct, read_write> = var undef
+    %buffer:ptr<function, MyStruct, read_write> = var
     store %buffer, %value
     ret
   }
@@ -213,7 +213,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %buffer:ptr<storage, MyStruct, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, MyStruct, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:MyStruct):void {
@@ -249,7 +249,7 @@ TEST_F(IR_PreservePaddingTest, NoModify_MatrixWithoutPadding) {
 
     auto* src = R"(
 $B1: {  # root
-  %buffer:ptr<storage, mat4x4<f32>, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, mat4x4<f32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:mat4x4<f32>):void {
@@ -285,7 +285,7 @@ TEST_F(IR_PreservePaddingTest, NoModify_ArrayWithoutPadding) {
 
     auto* src = R"(
 $B1: {  # root
-  %buffer:ptr<storage, array<vec4<f32>, 4>, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, array<vec4<f32>, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:array<vec4<f32>, 4>):void {
@@ -320,7 +320,7 @@ TEST_F(IR_PreservePaddingTest, NoModify_Vec3) {
 
     auto* src = R"(
 $B1: {  # root
-  %buffer:ptr<storage, vec3<f32>, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, vec3<f32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:vec3<f32>):void {
@@ -360,7 +360,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %buffer:ptr<storage, MyStruct, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, MyStruct, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func():MyStruct {
@@ -402,7 +402,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %buffer:ptr<storage, MyStruct, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, MyStruct, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:MyStruct):void {
@@ -421,7 +421,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %buffer:ptr<storage, MyStruct, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, MyStruct, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:MyStruct):void {
@@ -472,7 +472,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %buffer:ptr<storage, MyStruct, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, MyStruct, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:MyStruct):void {
@@ -492,7 +492,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %buffer:ptr<storage, MyStruct, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, MyStruct, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:MyStruct):void {
@@ -553,7 +553,7 @@ Outer = struct @align(16) {
 }
 
 $B1: {  # root
-  %buffer:ptr<storage, Outer, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, Outer, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:Outer):void {
@@ -577,7 +577,7 @@ Outer = struct @align(16) {
 }
 
 $B1: {  # root
-  %buffer:ptr<storage, Outer, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, Outer, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:Outer):void {
@@ -639,7 +639,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %buffer:ptr<storage, array<MyStruct, 4>, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, array<MyStruct, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:array<MyStruct, 4>):void {
@@ -658,7 +658,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %buffer:ptr<storage, array<MyStruct, 4>, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, array<MyStruct, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:array<MyStruct, 4>):void {
@@ -671,23 +671,27 @@ $B1: {  # root
   $B3: {
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %9:bool = gte %idx, 4u
-        if %9 [t: $B7] {  # if_1
+      $B5: {  # body
+        %9:u32 = load %idx
+        %10:bool = gte %9, 4u
+        if %10 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %10:ptr<storage, MyStruct, read_write> = access %target, %idx
-        %11:MyStruct = access %value_param, %idx
-        %12:void = call %tint_store_and_preserve_padding_1, %10, %11
+        %11:ptr<storage, MyStruct, read_write> = access %target, %9
+        %12:MyStruct = access %value_param, %9
+        %13:void = call %tint_store_and_preserve_padding_1, %11, %12
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %14:u32 = add %idx, 1u
-        next_iteration %14  # -> $B5
+        %15:u32 = load %idx
+        %16:u32 = add %15, 1u
+        store %idx, %16
+        next_iteration  # -> $B5
       }
     }
     ret
@@ -695,12 +699,12 @@ $B1: {  # root
 }
 %tint_store_and_preserve_padding_1 = func(%target_1:ptr<storage, MyStruct, read_write>, %value_param_1:MyStruct):void {  # %tint_store_and_preserve_padding_1: 'tint_store_and_preserve_padding', %target_1: 'target', %value_param_1: 'value_param'
   $B8: {
-    %17:ptr<storage, vec4<u32>, read_write> = access %target_1, 0u
-    %18:vec4<u32> = access %value_param_1, 0u
-    store %17, %18
-    %19:ptr<storage, u32, read_write> = access %target_1, 1u
-    %20:u32 = access %value_param_1, 1u
+    %19:ptr<storage, vec4<u32>, read_write> = access %target_1, 0u
+    %20:vec4<u32> = access %value_param_1, 0u
     store %19, %20
+    %21:ptr<storage, u32, read_write> = access %target_1, 1u
+    %22:u32 = access %value_param_1, 1u
+    store %21, %22
     ret
   }
 }
@@ -729,7 +733,7 @@ TEST_F(IR_PreservePaddingTest, Mat3x3) {
 
     auto* src = R"(
 $B1: {  # root
-  %buffer:ptr<storage, mat3x3<f32>, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, mat3x3<f32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:mat3x3<f32>):void {
@@ -743,7 +747,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %buffer:ptr<storage, mat3x3<f32>, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, mat3x3<f32>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:mat3x3<f32>):void {
@@ -800,7 +804,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %buffer:ptr<storage, MyStruct, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, MyStruct, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:MyStruct):void {
@@ -819,7 +823,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %buffer:ptr<storage, MyStruct, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, MyStruct, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:MyStruct):void {
@@ -879,7 +883,7 @@ TEST_F(IR_PreservePaddingTest, Mat3x3_Array) {
 
     auto* src = R"(
 $B1: {  # root
-  %buffer:ptr<storage, array<mat3x3<f32>, 4>, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, array<mat3x3<f32>, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:array<mat3x3<f32>, 4>):void {
@@ -893,7 +897,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %buffer:ptr<storage, array<mat3x3<f32>, 4>, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, array<mat3x3<f32>, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:array<mat3x3<f32>, 4>):void {
@@ -906,23 +910,27 @@ $B1: {  # root
   $B3: {
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %9:bool = gte %idx, 4u
-        if %9 [t: $B7] {  # if_1
+      $B5: {  # body
+        %9:u32 = load %idx
+        %10:bool = gte %9, 4u
+        if %10 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %10:ptr<storage, mat3x3<f32>, read_write> = access %target, %idx
-        %11:mat3x3<f32> = access %value_param, %idx
-        %12:void = call %tint_store_and_preserve_padding_1, %10, %11
+        %11:ptr<storage, mat3x3<f32>, read_write> = access %target, %9
+        %12:mat3x3<f32> = access %value_param, %9
+        %13:void = call %tint_store_and_preserve_padding_1, %11, %12
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %14:u32 = add %idx, 1u
-        next_iteration %14  # -> $B5
+        %15:u32 = load %idx
+        %16:u32 = add %15, 1u
+        store %idx, %16
+        next_iteration  # -> $B5
       }
     }
     ret
@@ -930,15 +938,15 @@ $B1: {  # root
 }
 %tint_store_and_preserve_padding_1 = func(%target_1:ptr<storage, mat3x3<f32>, read_write>, %value_param_1:mat3x3<f32>):void {  # %tint_store_and_preserve_padding_1: 'tint_store_and_preserve_padding', %target_1: 'target', %value_param_1: 'value_param'
   $B8: {
-    %17:ptr<storage, vec3<f32>, read_write> = access %target_1, 0u
-    %18:vec3<f32> = access %value_param_1, 0u
-    store %17, %18
-    %19:ptr<storage, vec3<f32>, read_write> = access %target_1, 1u
-    %20:vec3<f32> = access %value_param_1, 1u
+    %19:ptr<storage, vec3<f32>, read_write> = access %target_1, 0u
+    %20:vec3<f32> = access %value_param_1, 0u
     store %19, %20
-    %21:ptr<storage, vec3<f32>, read_write> = access %target_1, 2u
-    %22:vec3<f32> = access %value_param_1, 2u
+    %21:ptr<storage, vec3<f32>, read_write> = access %target_1, 1u
+    %22:vec3<f32> = access %value_param_1, 1u
     store %21, %22
+    %23:ptr<storage, vec3<f32>, read_write> = access %target_1, 2u
+    %24:vec3<f32> = access %value_param_1, 2u
+    store %23, %24
     ret
   }
 }
@@ -967,7 +975,7 @@ TEST_F(IR_PreservePaddingTest, Vec3_Array) {
 
     auto* src = R"(
 $B1: {  # root
-  %buffer:ptr<storage, array<vec3<f32>, 4>, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, array<vec3<f32>, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:array<vec3<f32>, 4>):void {
@@ -981,7 +989,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %buffer:ptr<storage, array<vec3<f32>, 4>, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, array<vec3<f32>, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:array<vec3<f32>, 4>):void {
@@ -994,23 +1002,27 @@ $B1: {  # root
   $B3: {
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %9:bool = gte %idx, 4u
-        if %9 [t: $B7] {  # if_1
+      $B5: {  # body
+        %9:u32 = load %idx
+        %10:bool = gte %9, 4u
+        if %10 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %10:ptr<storage, vec3<f32>, read_write> = access %target, %idx
-        %11:vec3<f32> = access %value_param, %idx
-        store %10, %11
+        %11:ptr<storage, vec3<f32>, read_write> = access %target, %9
+        %12:vec3<f32> = access %value_param, %9
+        store %11, %12
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %12:u32 = add %idx, 1u
-        next_iteration %12  # -> $B5
+        %13:u32 = load %idx
+        %14:u32 = add %13, 1u
+        store %idx, %14
+        next_iteration  # -> $B5
       }
     }
     ret
@@ -1069,7 +1081,7 @@ Outer = struct @align(16) {
 }
 
 $B1: {  # root
-  %buffer:ptr<storage, array<Outer, 3>, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, array<Outer, 3>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:array<Outer, 3>):void {
@@ -1097,7 +1109,7 @@ Outer = struct @align(16) {
 }
 
 $B1: {  # root
-  %buffer:ptr<storage, array<Outer, 3>, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, array<Outer, 3>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:array<Outer, 3>):void {
@@ -1110,23 +1122,27 @@ $B1: {  # root
   $B3: {
     loop [i: $B4, b: $B5, c: $B6] {  # loop_1
       $B4: {  # initializer
-        next_iteration 0u  # -> $B5
+        %idx:ptr<function, u32, read_write> = var 0u
+        next_iteration  # -> $B5
       }
-      $B5 (%idx:u32): {  # body
-        %9:bool = gte %idx, 3u
-        if %9 [t: $B7] {  # if_1
+      $B5: {  # body
+        %9:u32 = load %idx
+        %10:bool = gte %9, 3u
+        if %10 [t: $B7] {  # if_1
           $B7: {  # true
             exit_loop  # loop_1
           }
         }
-        %10:ptr<storage, Outer, read_write> = access %target, %idx
-        %11:Outer = access %value_param, %idx
-        %12:void = call %tint_store_and_preserve_padding_1, %10, %11
+        %11:ptr<storage, Outer, read_write> = access %target, %9
+        %12:Outer = access %value_param, %9
+        %13:void = call %tint_store_and_preserve_padding_1, %11, %12
         continue  # -> $B6
       }
       $B6: {  # continuing
-        %14:u32 = add %idx, 1u
-        next_iteration %14  # -> $B5
+        %15:u32 = load %idx
+        %16:u32 = add %15, 1u
+        store %idx, %16
+        next_iteration  # -> $B5
       }
     }
     ret
@@ -1134,35 +1150,35 @@ $B1: {  # root
 }
 %tint_store_and_preserve_padding_1 = func(%target_1:ptr<storage, Outer, read_write>, %value_param_1:Outer):void {  # %tint_store_and_preserve_padding_1: 'tint_store_and_preserve_padding', %target_1: 'target', %value_param_1: 'value_param'
   $B8: {
-    %17:ptr<storage, u32, read_write> = access %target_1, 0u
-    %18:u32 = access %value_param_1, 0u
-    store %17, %18
-    %19:ptr<storage, Inner, read_write> = access %target_1, 1u
-    %20:Inner = access %value_param_1, 1u
-    %21:void = call %tint_store_and_preserve_padding_2, %19, %20
-    %23:ptr<storage, array<Inner, 4>, read_write> = access %target_1, 2u
-    %24:array<Inner, 4> = access %value_param_1, 2u
-    %25:void = call %tint_store_and_preserve_padding_3, %23, %24
-    %27:ptr<storage, u32, read_write> = access %target_1, 3u
-    %28:u32 = access %value_param_1, 3u
-    store %27, %28
+    %19:ptr<storage, u32, read_write> = access %target_1, 0u
+    %20:u32 = access %value_param_1, 0u
+    store %19, %20
+    %21:ptr<storage, Inner, read_write> = access %target_1, 1u
+    %22:Inner = access %value_param_1, 1u
+    %23:void = call %tint_store_and_preserve_padding_2, %21, %22
+    %25:ptr<storage, array<Inner, 4>, read_write> = access %target_1, 2u
+    %26:array<Inner, 4> = access %value_param_1, 2u
+    %27:void = call %tint_store_and_preserve_padding_3, %25, %26
+    %29:ptr<storage, u32, read_write> = access %target_1, 3u
+    %30:u32 = access %value_param_1, 3u
+    store %29, %30
     ret
   }
 }
 %tint_store_and_preserve_padding_2 = func(%target_2:ptr<storage, Inner, read_write>, %value_param_2:Inner):void {  # %tint_store_and_preserve_padding_2: 'tint_store_and_preserve_padding', %target_2: 'target', %value_param_2: 'value_param'
   $B9: {
-    %31:ptr<storage, u32, read_write> = access %target_2, 0u
-    %32:u32 = access %value_param_2, 0u
-    store %31, %32
-    %33:ptr<storage, array<vec3<f32>, 4>, read_write> = access %target_2, 1u
-    %34:array<vec3<f32>, 4> = access %value_param_2, 1u
-    %35:void = call %tint_store_and_preserve_padding_4, %33, %34
-    %37:ptr<storage, mat3x3<f32>, read_write> = access %target_2, 2u
-    %38:mat3x3<f32> = access %value_param_2, 2u
-    %39:void = call %tint_store_and_preserve_padding_5, %37, %38
-    %41:ptr<storage, u32, read_write> = access %target_2, 3u
-    %42:u32 = access %value_param_2, 3u
-    store %41, %42
+    %33:ptr<storage, u32, read_write> = access %target_2, 0u
+    %34:u32 = access %value_param_2, 0u
+    store %33, %34
+    %35:ptr<storage, array<vec3<f32>, 4>, read_write> = access %target_2, 1u
+    %36:array<vec3<f32>, 4> = access %value_param_2, 1u
+    %37:void = call %tint_store_and_preserve_padding_4, %35, %36
+    %39:ptr<storage, mat3x3<f32>, read_write> = access %target_2, 2u
+    %40:mat3x3<f32> = access %value_param_2, 2u
+    %41:void = call %tint_store_and_preserve_padding_5, %39, %40
+    %43:ptr<storage, u32, read_write> = access %target_2, 3u
+    %44:u32 = access %value_param_2, 3u
+    store %43, %44
     ret
   }
 }
@@ -1170,23 +1186,27 @@ $B1: {  # root
   $B10: {
     loop [i: $B11, b: $B12, c: $B13] {  # loop_2
       $B11: {  # initializer
-        next_iteration 0u  # -> $B12
+        %idx_1:ptr<function, u32, read_write> = var 0u  # %idx_1: 'idx'
+        next_iteration  # -> $B12
       }
-      $B12 (%idx_1:u32): {  # body
-        %46:bool = gte %idx_1, 4u
-        if %46 [t: $B14] {  # if_2
+      $B12: {  # body
+        %48:u32 = load %idx_1
+        %49:bool = gte %48, 4u
+        if %49 [t: $B14] {  # if_2
           $B14: {  # true
             exit_loop  # loop_2
           }
         }
-        %47:ptr<storage, vec3<f32>, read_write> = access %target_3, %idx_1
-        %48:vec3<f32> = access %value_param_3, %idx_1
-        store %47, %48
+        %50:ptr<storage, vec3<f32>, read_write> = access %target_3, %48
+        %51:vec3<f32> = access %value_param_3, %48
+        store %50, %51
         continue  # -> $B13
       }
       $B13: {  # continuing
-        %49:u32 = add %idx_1, 1u
-        next_iteration %49  # -> $B12
+        %52:u32 = load %idx_1
+        %53:u32 = add %52, 1u
+        store %idx_1, %53
+        next_iteration  # -> $B12
       }
     }
     ret
@@ -1194,15 +1214,15 @@ $B1: {  # root
 }
 %tint_store_and_preserve_padding_5 = func(%target_4:ptr<storage, mat3x3<f32>, read_write>, %value_param_4:mat3x3<f32>):void {  # %tint_store_and_preserve_padding_5: 'tint_store_and_preserve_padding', %target_4: 'target', %value_param_4: 'value_param'
   $B15: {
-    %52:ptr<storage, vec3<f32>, read_write> = access %target_4, 0u
-    %53:vec3<f32> = access %value_param_4, 0u
-    store %52, %53
-    %54:ptr<storage, vec3<f32>, read_write> = access %target_4, 1u
-    %55:vec3<f32> = access %value_param_4, 1u
-    store %54, %55
-    %56:ptr<storage, vec3<f32>, read_write> = access %target_4, 2u
-    %57:vec3<f32> = access %value_param_4, 2u
+    %56:ptr<storage, vec3<f32>, read_write> = access %target_4, 0u
+    %57:vec3<f32> = access %value_param_4, 0u
     store %56, %57
+    %58:ptr<storage, vec3<f32>, read_write> = access %target_4, 1u
+    %59:vec3<f32> = access %value_param_4, 1u
+    store %58, %59
+    %60:ptr<storage, vec3<f32>, read_write> = access %target_4, 2u
+    %61:vec3<f32> = access %value_param_4, 2u
+    store %60, %61
     ret
   }
 }
@@ -1210,23 +1230,27 @@ $B1: {  # root
   $B16: {
     loop [i: $B17, b: $B18, c: $B19] {  # loop_3
       $B17: {  # initializer
-        next_iteration 0u  # -> $B18
+        %idx_2:ptr<function, u32, read_write> = var 0u  # %idx_2: 'idx'
+        next_iteration  # -> $B18
       }
-      $B18 (%idx_2:u32): {  # body
-        %61:bool = gte %idx_2, 4u
-        if %61 [t: $B20] {  # if_3
+      $B18: {  # body
+        %65:u32 = load %idx_2
+        %66:bool = gte %65, 4u
+        if %66 [t: $B20] {  # if_3
           $B20: {  # true
             exit_loop  # loop_3
           }
         }
-        %62:ptr<storage, Inner, read_write> = access %target_5, %idx_2
-        %63:Inner = access %value_param_5, %idx_2
-        %64:void = call %tint_store_and_preserve_padding_2, %62, %63
+        %67:ptr<storage, Inner, read_write> = access %target_5, %65
+        %68:Inner = access %value_param_5, %65
+        %69:void = call %tint_store_and_preserve_padding_2, %67, %68
         continue  # -> $B19
       }
       $B19: {  # continuing
-        %65:u32 = add %idx_2, 1u
-        next_iteration %65  # -> $B18
+        %70:u32 = load %idx_2
+        %71:u32 = add %70, 1u
+        store %idx_2, %71
+        next_iteration  # -> $B18
       }
     }
     ret
@@ -1261,7 +1285,7 @@ TEST_F(IR_PreservePaddingTest, MultipleStoresSameType) {
 
     auto* src = R"(
 $B1: {  # root
-  %buffer:ptr<storage, array<mat3x3<f32>, 4>, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, array<mat3x3<f32>, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:mat3x3<f32>):void {
@@ -1282,7 +1306,7 @@ $B1: {  # root
 
     auto* expect = R"(
 $B1: {  # root
-  %buffer:ptr<storage, array<mat3x3<f32>, 4>, read_write> = var undef @binding_point(0, 0)
+  %buffer:ptr<storage, array<mat3x3<f32>, 4>, read_write> = var @binding_point(0, 0)
 }
 
 %foo = func(%value:mat3x3<f32>):void {
@@ -1341,7 +1365,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, buffer<64>, read_write> = var undef
+  %v:ptr<workgroup, buffer<64>, read_write> = var
 }
 
 %foo = func():void {
@@ -1382,7 +1406,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, buffer<64>, read_write> = var undef
+  %v:ptr<workgroup, buffer<64>, read_write> = var
 }
 
 %foo = func():void {
@@ -1404,7 +1428,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, buffer<64>, read_write> = var undef
+  %v:ptr<workgroup, buffer<64>, read_write> = var
 }
 
 %foo = func():void {
@@ -1459,7 +1483,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, buffer<64>, read_write> = var undef
+  %v:ptr<workgroup, buffer<64>, read_write> = var
 }
 
 %foo = func():void {
@@ -1482,7 +1506,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, buffer<64>, read_write> = var undef
+  %v:ptr<workgroup, buffer<64>, read_write> = var
 }
 
 %foo = func():void {
@@ -1546,7 +1570,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, buffer<64>, read_write> = var undef
+  %v:ptr<workgroup, buffer<64>, read_write> = var
 }
 
 %bar = func(%p1:u32, %p2:ptr<workgroup, MyStruct, read_write>):void {
@@ -1574,7 +1598,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, buffer<64>, read_write> = var undef
+  %v:ptr<workgroup, buffer<64>, read_write> = var
 }
 
 %bar = func(%p1:u32, %p2:ptr<workgroup, MyStruct, read_write>):void {
@@ -1654,7 +1678,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, buffer<64>, read_write> = var undef
+  %v:ptr<workgroup, buffer<64>, read_write> = var
 }
 
 %baz = func(%baz_p1:ptr<workgroup, MyStruct, read_write>, %baz_p2:u32):void {
@@ -1689,7 +1713,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, buffer<64>, read_write> = var undef
+  %v:ptr<workgroup, buffer<64>, read_write> = var
 }
 
 %baz = func(%baz_p1:ptr<workgroup, MyStruct, read_write>, %baz_p2:u32):void {
@@ -1766,7 +1790,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, buffer<64>, read_write> = var undef
+  %v:ptr<workgroup, buffer<64>, read_write> = var
 }
 
 %bar = func(%p1:u32, %p2:ptr<workgroup, MyStruct, read_write>):void {
@@ -1795,7 +1819,7 @@ MyStruct = struct @align(16) {
 }
 
 $B1: {  # root
-  %v:ptr<workgroup, buffer<64>, read_write> = var undef
+  %v:ptr<workgroup, buffer<64>, read_write> = var
 }
 
 %bar = func(%p1:u32, %p2:ptr<workgroup, MyStruct, read_write>):void {

@@ -345,17 +345,26 @@ RenderPipeline::RenderPipeline(DeviceBase* dev, const UnpackedPtr<RenderPipeline
 
 RenderPipeline::~RenderPipeline() = default;
 
-MaybeError RenderPipeline::InitializeImpl() {
+MaybeUnknownError RenderPipeline::InitializeImpl() {
     mMtlPrimitiveTopology = MTLPrimitiveTopology(GetPrimitiveTopology());
     mMtlFrontFace = MTLFrontFace(GetFrontFace());
     mMtlCullMode = ToMTLCullMode(GetCullMode());
     // Build a mapping of vertex buffer slots to packed indices
     {
+        PipelineLayout* layout = ToBackend(GetLayout());
+
         // Vertex buffers are placed after all the buffers for the bind groups.
-        uint32_t mtlVertexBufferIndex =
-            ToBackend(GetLayout())->GetBufferBindingCount(SingleShaderStage::Vertex);
+        uint32_t mtlVertexBufferIndex = layout->GetBufferBindingCount(SingleShaderStage::Vertex);
 
         for (VertexBufferSlot slot : GetVertexBuffersUsed()) {
+            if (GetDevice()->HasFeature(Feature::ChromiumExperimentalSamplingResourceTable) &&
+                !GetDevice()->IsToggleEnabled(Toggle::MetalUseArgumentBuffers) &&
+                (mtlVertexBufferIndex >= kResourceTableStorageSlot ||
+                 mtlVertexBufferIndex >= kResourceTableBindingSlot)) {
+                return DAWN_UNRECOVERABLE_ERROR(
+                    "Vertex buffer slot %d overlaps with required ResourceTable slot",
+                    mtlVertexBufferIndex);
+            }
             mMtlVertexBufferIndices[slot] = mtlVertexBufferIndex;
             mtlVertexBufferIndex++;
         }
@@ -486,7 +495,7 @@ MaybeError RenderPipeline::InitializeImpl() {
         if (GetStageMask() & wgpu::ShaderStage::Fragment) {
             absl::StrAppendFormat(&errorMessage, "\n\nand fragment MSL:\n\n%s", fragmentData.msl);
         }
-        return DAWN_UNRECOVERABLE_ERROR(errorMessage);
+        return DAWN_MAKE_UNRECOVERABLE_ERROR(errorMessage);
     }
     DAWN_ASSERT(mMtlRenderPipelineState != nil);
     timer.RecordMicroseconds("Metal.newRenderPipelineStateWithDescriptor.CacheMiss");

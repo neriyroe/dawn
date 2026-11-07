@@ -2160,6 +2160,20 @@ TEST_F(IRToProgramRoundtripTest, ModuleScopeVar_Handle_SamplerCmp) {
 )");
 }
 
+TEST_F(IRToProgramRoundtripTest, ModuleScopeVar_OverrideExpressions) {
+    RUN_TEST(R"(
+@id(0) override o : i32 = 1i;
+
+@id(1) override b : bool = ((o == 1i) && (f32(o) > 0.0f));
+
+var<private> v1 : vec2<f32> = vec3<f32>(f32(o), 1.0f, 2.0f).xy;
+
+var<private> v2 : f32 = vec2<f32>(f32(o), 1.0f).x;
+
+var<workgroup> w : array<i32, max(o, 2i)>;
+)");
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Function-scope var
 ////////////////////////////////////////////////////////////////////////////////
@@ -3667,6 +3681,30 @@ fn foo(p : ptr<workgroup, buffer>) {
   let a = bufferArrayView<array<u32>>(&(v), 0u, 8u);
   let b = bufferArrayView<S>(p, 4u, 8u);
   let c = bufferArrayView<array<u32>>(p, 0u, 8u);
+}
+)");
+}
+
+TEST_F(IRToProgramRoundtripTest, Print_StringLiteral) {
+    RUN_TEST(R"(
+fn f() {
+  print(`hello world`);
+}
+)");
+}
+
+TEST_F(IRToProgramRoundtripTest, Print_TemplateLiteral) {
+    RUN_TEST(R"(
+fn f(x : i32) {
+  print(`val: ${x}`);
+}
+)");
+}
+
+TEST_F(IRToProgramRoundtripTest, Print_TemplateLiteral_Multiple) {
+    RUN_TEST(R"(
+fn f(x : i32, y : f32) {
+  print(`x: ${x}, y: ${y}!`);
 }
 )");
 }

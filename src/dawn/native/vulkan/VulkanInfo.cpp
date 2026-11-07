@@ -256,7 +256,8 @@ ResultOrError<VulkanDeviceInfo> GatherDeviceInfo(const PhysicalDevice& device) {
     properties2.pNext = nullptr;
     PNextChainBuilder propertiesChain(&properties2);
 
-    propertiesChain.Add(&info.propertiesMaintenance3,
+    propertiesChain.Add(&info.idProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES);
+    propertiesChain.Add(&info.maintenance3Properties,
                         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_3_PROPERTIES);
 
     featuresChain.Add(&info._16BitStorageFeatures,
@@ -304,8 +305,18 @@ ResultOrError<VulkanDeviceInfo> GatherDeviceInfo(const PhysicalDevice& device) {
     }
 
     if (info.extensions[DeviceExt::Maintenance4]) {
-        propertiesChain.Add(&info.propertiesMaintenance4,
+        propertiesChain.Add(&info.maintenance4Properties,
                             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_PROPERTIES);
+    }
+
+    if (info.extensions[DeviceExt::Maintenance5]) {
+        propertiesChain.Add(&info.maintenance5Properties,
+                            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_PROPERTIES);
+    }
+
+    if (info.extensions[DeviceExt::Maintenance9]) {
+        featuresChain.Add(&info.maintenance9Features,
+                          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_FEATURES_KHR);
     }
 
     if (info.extensions[DeviceExt::ZeroInitializeWorkgroupMemory]) {
@@ -323,6 +334,8 @@ ResultOrError<VulkanDeviceInfo> GatherDeviceInfo(const PhysicalDevice& device) {
     if (info.extensions[DeviceExt::Robustness2]) {
         featuresChain.Add(&info.robustness2Features,
                           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT);
+        propertiesChain.Add(&info.robustness2Properties,
+                            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_PROPERTIES_EXT);
     }
 
     // Check subgroup features and properties
@@ -375,11 +388,6 @@ ResultOrError<VulkanDeviceInfo> GatherDeviceInfo(const PhysicalDevice& device) {
                           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_ROBUSTNESS_FEATURES);
         propertiesChain.Add(&info.pipelineRobustnessProperties,
                             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_ROBUSTNESS_PROPERTIES);
-    }
-
-    if (info.extensions[DeviceExt::Maintenance5]) {
-        propertiesChain.Add(&info.propertiesMaintenance5,
-                            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_PROPERTIES);
     }
 
     if (info.extensions[DeviceExt::RasterizationOrderAttachmentAccess]) {

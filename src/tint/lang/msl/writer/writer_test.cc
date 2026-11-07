@@ -132,16 +132,15 @@ struct tint_symbol_1 {
 
 void entry_inner(uint tint_local_index, tint_module_vars_struct tint_module_vars) {
   {
-    uint v = 0u;
-    v = tint_local_index;
+    uint idx = tint_local_index;
     while(true) {
-      uint const v_1 = v;
-      if ((v_1 >= 1073741823u)) {
+      uint const v = idx;
+      if ((v >= 1073741823u)) {
         break;
       }
-      (*tint_module_vars.a)[v_1] = 0u;
+      (*tint_module_vars.a)[v] = 0u;
       {
-        v = (v_1 + 64u);
+        idx = (idx + 64u);
       }
     }
   }
@@ -149,8 +148,8 @@ void entry_inner(uint tint_local_index, tint_module_vars_struct tint_module_vars
 }
 
 [[max_total_threads_per_threadgroup(64)]]
-kernel void entry(uint tint_local_index [[thread_index_in_threadgroup]], threadgroup tint_symbol_1* v_2 [[threadgroup(0)]]) {
-  tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.a=(&(*v_2).tint_symbol)};
+kernel void entry(uint tint_local_index [[thread_index_in_threadgroup]], threadgroup tint_symbol_1* v_1 [[threadgroup(0)]]) {
+  tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.a=(&(*v_1).tint_symbol)};
   (entry_inner(tint_local_index, tint_module_vars));
 }
 )");
@@ -170,7 +169,7 @@ TEST_F(MslWriterTest, ArrayLengthFromImmediate_Unused) {
     });
 
     Options options;
-    options.immediate_binding_point = tint::BindingPoint{0, 30};
+    options.immediate_binding_point = 30u;
     options.array_length_from_constants.bindpoint_to_size_index[{0u, 0u}] = 0u;
     options.array_length_from_constants.buffer_sizes_offset = 64u;
     options.disable_robustness = true;
@@ -204,7 +203,7 @@ TEST_F(MslWriterTest, ArrayLengthFromImmediate_Used) {
     });
 
     Options options;
-    options.immediate_binding_point = tint::BindingPoint{0, 30};
+    options.immediate_binding_point = 30u;
     options.array_length_from_constants.bindpoint_to_size_index[{0u, 0u}] = 0u;
     options.array_length_from_constants.buffer_sizes_offset = 64u;
     options.disable_robustness = true;
@@ -253,7 +252,7 @@ TEST_P(MslWriterStorageBufferSizesTest, ConfiguredLayout) {
 
     Options options;
     options.disable_robustness = true;
-    options.immediate_binding_point = BindingPoint{0, 30};
+    options.immediate_binding_point = 30u;
     options.non_constant_zero_offset = 4u;
     if (GetParam()) {
         options.array_length_from_constants.buffer_sizes_offset = 64u;
@@ -322,7 +321,7 @@ TEST_F(MslWriterTest, ArrayLengthFromImmediate_ZeroOffset) {
     });
 
     Options options;
-    options.immediate_binding_point = BindingPoint{0, 30};
+    options.immediate_binding_point = 30u;
     options.non_constant_zero_offset = 4u;
     options.array_length_from_constants.buffer_sizes_offset = 0u;
     options.array_length_from_constants.bindpoint_to_size_index[{0, 0}] = 0u;
@@ -345,7 +344,7 @@ TEST_F(MslWriterTest, ImmediateF16) {
     });
 
     Options options;
-    options.immediate_binding_point = tint::BindingPoint{0, 30};
+    options.immediate_binding_point = 30u;
     options.non_constant_zero_offset = 64;
     auto result = Generate(options);
     ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
@@ -381,7 +380,7 @@ TEST_F(MslWriterTest, ImmediateVec3F16) {
     });
 
     Options options;
-    options.immediate_binding_point = tint::BindingPoint{0, 30};
+    options.immediate_binding_point = 30u;
     options.non_constant_zero_offset = 64;
     auto result = Generate(options);
     ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
@@ -531,7 +530,7 @@ TEST_F(MslWriterTest, VertexPulling) {
     Options options;
     options.bindings.storage.emplace(BindingPoint{4u, 0u}, BindingPoint{0u, 1u});
     options.vertex_pulling_config = std::move(vertex_pulling_config);
-    options.immediate_binding_point = BindingPoint{0, 30};
+    options.immediate_binding_point = 30u;
     options.array_length_from_constants = std::move(array_length_config);
 
     auto result = Generate(options);
@@ -588,6 +587,19 @@ TEST_F(MslWriterTest, CanGenerate_TexelBufferUnsupported) {
     ASSERT_NE(result, Success);
     EXPECT_THAT(result.Failure().reason,
                 testing::HasSubstr("texel buffers are not supported by the MSL backend"));
+}
+
+TEST_F(MslWriterTest, CanGenerate_ViewIndexUnsupported) {
+    auto* ep = b.Function("entry", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    auto* view_index = b.FunctionParam("view_index", ty.u32());
+    view_index->SetBuiltin(core::BuiltinValue::kViewIndex);
+    ep->AppendParam(view_index);
+    b.Append(ep->Block(), [&] { b.Return(ep); });
+
+    auto result = Generate();
+    ASSERT_NE(result, Success);
+    EXPECT_THAT(result.Failure().reason,
+                testing::HasSubstr("view_index is not supported by the MSL backend"));
 }
 
 TEST_F(MslWriterTest, CanGenerate_DynamicOffsetOnNonBufferType) {
@@ -750,27 +762,26 @@ struct tint_symbol_1 {
 
 void entry_inner(uint tint_local_index, tint_module_vars_struct tint_module_vars) {
   {
-    uint v_1 = 0u;
-    v_1 = tint_local_index;
+    uint idx = tint_local_index;
     while(true) {
-      uint const v_2 = v_1;
-      if ((v_2 >= 32u)) {
+      uint const v_1 = idx;
+      if ((v_1 >= 32u)) {
         break;
       }
-      (*tint_module_vars.v)[v_2] = 0u;
+      (*tint_module_vars.v)[v_1] = 0u;
       {
-        v_1 = (v_2 + 1u);
+        idx = (idx + 1u);
       }
     }
   }
   (threadgroup_barrier(mem_flags::mem_threadgroup));
-  threadgroup tint_aliased_vec4_f32* const v_3 = reinterpret_cast<threadgroup float4*>(reinterpret_cast<threadgroup char*>(tint_module_vars.v) + 0u);
-  (*v_3).x = 0.0f;
+  threadgroup tint_aliased_vec4_f32* const v_2 = reinterpret_cast<threadgroup float4*>(reinterpret_cast<threadgroup char*>(tint_module_vars.v) + 0u);
+  (*v_2).x = 0.0f;
 }
 
 [[max_total_threads_per_threadgroup(1)]]
-kernel void entry(uint tint_local_index [[thread_index_in_threadgroup]], threadgroup tint_symbol_1* v_4 [[threadgroup(0)]]) {
-  tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.v=(&(*v_4).tint_symbol)};
+kernel void entry(uint tint_local_index [[thread_index_in_threadgroup]], threadgroup tint_symbol_1* v_3 [[threadgroup(0)]]) {
+  tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.v=(&(*v_3).tint_symbol)};
   (entry_inner(tint_local_index, tint_module_vars));
 }
 )");
@@ -831,16 +842,15 @@ void foo(tint_module_vars_struct tint_module_vars) {
 
 void entry_inner(uint tint_local_index, tint_module_vars_struct tint_module_vars) {
   {
-    uint v_2 = 0u;
-    v_2 = tint_local_index;
+    uint idx = tint_local_index;
     while(true) {
-      uint const v_3 = v_2;
-      if ((v_3 >= 128u)) {
+      uint const v_2 = idx;
+      if ((v_2 >= 128u)) {
         break;
       }
-      (*tint_module_vars.v)[v_3] = 0u;
+      (*tint_module_vars.v)[v_2] = 0u;
       {
-        v_2 = (v_3 + 1u);
+        idx = (idx + 1u);
       }
     }
   }
@@ -849,8 +859,8 @@ void entry_inner(uint tint_local_index, tint_module_vars_struct tint_module_vars
 }
 
 [[max_total_threads_per_threadgroup(1)]]
-kernel void entry(uint tint_local_index [[thread_index_in_threadgroup]], threadgroup tint_symbol_1* v_4 [[threadgroup(0)]]) {
-  tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.v=(&(*v_4).tint_symbol)};
+kernel void entry(uint tint_local_index [[thread_index_in_threadgroup]], threadgroup tint_symbol_1* v_3 [[threadgroup(0)]]) {
+  tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.v=(&(*v_3).tint_symbol)};
   (entry_inner(tint_local_index, tint_module_vars));
 }
 )");

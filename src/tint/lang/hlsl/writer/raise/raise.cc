@@ -33,7 +33,6 @@
 
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/reflection.h"
-#include "src/tint/lang/core/ir/transform/array_length_from.h"
 #include "src/tint/lang/core/ir/transform/binary_polyfill.h"
 #include "src/tint/lang/core/ir/transform/binding_remapper.h"
 #include "src/tint/lang/core/ir/transform/builtin_polyfill.h"
@@ -50,6 +49,7 @@
 #include "src/tint/lang/core/ir/transform/remove_continue_in_switch.h"
 #include "src/tint/lang/core/ir/transform/remove_terminator_args.h"
 #include "src/tint/lang/core/ir/transform/rename_conflicts.h"
+#include "src/tint/lang/core/ir/transform/replace_array_and_buffer_length.h"
 #include "src/tint/lang/core/ir/transform/resource_table.h"
 #include "src/tint/lang/core/ir/transform/robustness.h"
 #include "src/tint/lang/core/ir/transform/signed_integer_polyfill.h"
@@ -65,6 +65,7 @@
 #include "src/tint/lang/hlsl/writer/common/options.h"
 #include "src/tint/lang/hlsl/writer/raise/array_offset_from_immediate.h"
 #include "src/tint/lang/hlsl/writer/raise/binary_polyfill.h"
+#include "src/tint/lang/hlsl/writer/raise/bitcast_polyfill.h"
 #include "src/tint/lang/hlsl/writer/raise/builtin_polyfill.h"
 #include "src/tint/lang/hlsl/writer/raise/decompose_snorm10_10_10_2.h"
 #include "src/tint/lang/hlsl/writer/raise/decompose_storage_access.h"
@@ -197,6 +198,8 @@ Result<RaiseResult> Raise(core::ir::Module& module, const Options& options) {
         // Direct3D guarantees to return zero for any resource that is accessed out of bounds, and
         // according to the description of the assembly store_uav_typed, out of bounds addressing
         // means nothing gets written to memory.
+        // Note that the sample_index parameter of multisampled textureLoad will still be clamped by
+        // the Robustness transform, as Direct3D leaves out-of-bounds sample indices undefined.
         config.clamp_texture = false;
 
         config.use_integer_range_analysis = !options.disable_integer_range_analysis;
@@ -257,9 +260,9 @@ Result<RaiseResult> Raise(core::ir::Module& module, const Options& options) {
         TINT_CHECK_RESULT(raise::ReplaceDefaultOnlySwitch(module));
     }
 
-    // ArrayLength must run after Robustness, which introduces arrayLength calls.
+    // ReplaceArrayAndBufferLength must run after Robustness, which introduces arrayLength calls.
     if (array_length_from_immediate_options.buffer_sizes_offset) {
-        TINT_CHECK_RESULT(core::ir::transform::ArrayLengthFromImmediates(
+        TINT_CHECK_RESULT(core::ir::transform::ReplaceArrayAndBufferLength(
             module, immediate_data_layout, buffer_sizes_array_elements_num,
             array_length_from_immediate_options.bindpoint_to_size_index));
     }
@@ -351,11 +354,6 @@ Result<RaiseResult> Raise(core::ir::Module& module, const Options& options) {
 
     TINT_CHECK_RESULT(raise::BinaryPolyfill(module));
 
-    // Avoid potential UB (aka signed overflow) by performing unsigned integer arithmetic.
-    core::ir::transform::SignedIntegerPolyfillConfig signed_integer_cfg{
-        .signed_negation = true, .signed_arithmetic = true, .signed_shiftleft = true};
-    TINT_CHECK_RESULT(core::ir::transform::SignedIntegerPolyfill(module, signed_integer_cfg));
-
     // BuiltinPolyfill must come after BinaryPolyfill and DecomposeStorageAccess as they add
     // builtins
     {
@@ -365,6 +363,18 @@ Result<RaiseResult> Raise(core::ir::Module& module, const Options& options) {
         config.use_hlsl_2021_select = (options.compiler == Options::Compiler::kDXC_2021);
         TINT_CHECK_RESULT(raise::BuiltinPolyfill(module, config));
     }
+
+    // Avoid potential UB (aka signed overflow) by performing unsigned integer arithmetic.
+    // SignedIntegerPolyfill must come after BuiltinPolyfill as it can introduce additional signed
+    // integer arithmetic.
+    core::ir::transform::SignedIntegerPolyfillConfig signed_integer_cfg{
+        .signed_negation = true, .signed_arithmetic = true, .signed_shiftleft = true};
+    TINT_CHECK_RESULT(core::ir::transform::SignedIntegerPolyfill(module, signed_integer_cfg));
+
+    // BitcastPolyfill must come after any transform that introduces bitcasts (including
+    // SignedIntegerPolyfill).
+    TINT_CHECK_RESULT(raise::BitcastPolyfill(module));
+
     TINT_CHECK_RESULT(core::ir::transform::VectorizeScalarMatrixConstructors(module));
     TINT_CHECK_RESULT(core::ir::transform::RemoveContinueInSwitch(module));
 

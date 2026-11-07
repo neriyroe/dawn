@@ -65,6 +65,7 @@ class CaseStatement;
 class ForLoopStatement;
 class Function;
 class IdentifierExpression;
+class InterpolatedStringExpression;
 class LoopStatement;
 class MemberAccessorExpression;
 class ReturnStatement;
@@ -297,6 +298,7 @@ class Resolver {
                            Vector<const sem::ValueExpression*, N>& args);
     sem::ValueExpression* Literal(const ast::LiteralExpression*);
     sem::ValueExpression* MemberAccessor(const ast::MemberAccessorExpression*);
+    sem::ValueExpression* InterpolatedString(const ast::InterpolatedStringExpression*);
     sem::ValueExpression* UnaryOp(const ast::UnaryOpExpression*);
 
     /// Register a memory store to an expression, to track accesses to root identifiers in order to
@@ -712,7 +714,7 @@ class Resolver {
     Vector<std::function<void(const sem::GlobalVariable*)>, 4> on_transitively_reference_global_;
     uint32_t current_scoping_depth_ = 0;
     Hashmap<const ast::Expression*, const ast::BinaryExpression*, 8> logical_binary_lhs_to_parent_;
-    Hashset<const ast::Expression*, 8> not_evaluated_;
+    tint::Bitset<0> not_evaluated_;
     Hashmap<const core::type::Type*, size_t, 8> nest_depth_;
     Hashmap<std::pair<core::intrinsic::Overload, wgsl::BuiltinFn>, sem::BuiltinFn*, 64> builtins_;
     Hashmap<core::intrinsic::Overload, sem::ValueConstructor*, 16> constructors_;

@@ -56,6 +56,8 @@ static constexpr std::array<wgpu::PresentMode, 4> kAllPresentModes = {
 namespace dawn {
 namespace {
 
+using ::testing::HasSubstr;
+
 struct GLFWindowDestroyer {
     void operator()(GLFWwindow* ptr) { glfwDestroyWindow(ptr); }
 };
@@ -190,7 +192,6 @@ TEST_P(SurfaceConfigurationValidationTests, AnyCombinationOfCapabilities) {
     // TODO(dawn:2320): Fails with "internal drawable creation failed" on the Windows NVIDIA CQ
     // builders but not locally. This is a similar limitation to SurfaceTests.SwitchPresentMode.
     DAWN_SUPPRESS_TEST_IF(IsWindows() && IsVulkan() && IsNvidia());
-
 
     wgpu::Surface surface = CreateTestSurface();
 
@@ -331,7 +332,7 @@ TEST_P(SurfaceConfigurationValidationTests, ErrorIncludeUnsupportedUsage) {
 
     wgpu::SurfaceConfiguration config = GetPreferredConfiguration(surface);
     config.usage = wgpu::TextureUsage::StorageAttachment;
-    ASSERT_DEVICE_ERROR_MSG(surface.Configure(&config), testing::HasSubstr("Usages requested"));
+    ASSERT_DEVICE_ERROR_MSG(surface.Configure(&config), HasSubstr("Usages requested"));
 }
 
 // Test that validation of format capabilities still happens.
@@ -354,7 +355,7 @@ TEST_P(SurfaceConfigurationValidationTests, StorageRequiresCapableFormat) {
             surface.Configure(&config);
         } else {
             ASSERT_DEVICE_ERROR_MSG(surface.Configure(&config),
-                                    testing::HasSubstr("TextureUsage::StorageBinding"));
+                                    HasSubstr("TextureUsage::StorageBinding"));
         }
     }
 }

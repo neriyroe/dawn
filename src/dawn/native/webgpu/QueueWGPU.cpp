@@ -27,6 +27,7 @@
 
 #include "src/dawn/native/webgpu/QueueWGPU.h"
 
+#include <algorithm>
 #include <limits>
 #include <vector>
 
@@ -91,7 +92,7 @@ MaybeError Queue::SubmitImpl(Span<CommandBufferBase* const> commands) {
 
     std::vector<WGPUCommandBuffer> innerCommandBuffers(commands.size());
     for (auto [i, commandBuffer] : Enumerate(commands)) {
-        DAWN_TRY_ASSIGN(innerCommandBuffers[i], ToBackend(commandBuffer)->Encode());
+        DAWN_TRY_ASSIGN(innerCommandBuffers[i], ToBackend(commandBuffer)->RecordCommands());
     }
 
     auto& wgpu = ToBackend(GetDevice())->wgpu.get();
@@ -173,7 +174,7 @@ ResultOrError<ExecutionSerial> Queue::CheckAndUpdateCompletedSerials() {
             DAWN_TRY(CheckWGPUSuccess(status, "instanceWaitAny"));
 
             // Update fenceSerial since future is ready.
-            fenceSerial = tentativeSerial;
+            fenceSerial = std::max(fenceSerial, tentativeSerial);
 
             futuresInFlight->pop_front();
         }
@@ -246,8 +247,8 @@ ResultOrError<ExecutionSerial> Queue::WaitForQueueSerialImpl(ExecutionSerial wai
             case WGPUWaitStatus_Success:
                 return completedSerial;
             default:
-                return DAWN_FORMAT_UNRECOVERABLE_ERROR("inner instanceWaitAny status is (%s).",
-                                                       FromAPI(status));
+                return DAWN_UNRECOVERABLE_ERROR("inner instanceWaitAny status is (%s).",
+                                                FromAPI(status));
         }
     });
 }

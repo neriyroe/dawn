@@ -226,7 +226,8 @@ void DeviceBase::DeviceLostEvent::Complete(EventCompletionType completionType) {
     }
 }
 
-ResultOrError<Ref<PipelineLayoutBase>> ValidateLayoutAndGetComputePipelineDescriptorWithDefaults(
+ResultOrUnknownError<Ref<PipelineLayoutBase>>
+ValidateLayoutAndGetComputePipelineDescriptorWithDefaults(
     DeviceBase* device,
     const ComputePipelineDescriptor& descriptor,
     ComputePipelineDescriptor* outDescriptor) {
@@ -249,11 +250,11 @@ ResultOrError<Ref<PipelineLayoutBase>> ValidateLayoutAndGetComputePipelineDescri
     return layoutRef;
 }
 
-ResultOrError<Ref<PipelineLayoutBase>> ValidateLayoutAndGetRenderPipelineDescriptorWithDefaults(
-    DeviceBase* device,
-    const RenderPipelineDescriptor& descriptor,
-    RenderPipelineDescriptor* outDescriptor,
-    bool allowInternalBinding) {
+ResultOrUnknownError<Ref<PipelineLayoutBase>>
+ValidateLayoutAndGetRenderPipelineDescriptorWithDefaults(DeviceBase* device,
+                                                         const RenderPipelineDescriptor& descriptor,
+                                                         RenderPipelineDescriptor* outDescriptor,
+                                                         bool allowInternalBinding) {
     Ref<PipelineLayoutBase> layoutRef;
     *outDescriptor = descriptor;
 
@@ -624,19 +625,19 @@ void DeviceBase::HandleDeviceLost(wgpu::DeviceLostReason reason, std::string_vie
     }
 }
 
-void DeviceBase::HandleError(ErrorData* data,
-                             InternalErrorType type,
+void DeviceBase::HandleError(std::unique_ptr<UnknownError> error,
                              InternalErrorType additionalAllowedErrors,
                              wgpu::DeviceLostReason lostReason,
                              ForwardToErrorScope forwardToErrorScope) {
     auto deviceGuard = GetGuard();
-    AppendDebugLayerMessages(data);
+    AppendDebugLayerMessages(error->GetData());
 
+    InternalErrorType type = error->GetType();
     if (type != InternalErrorType::Validation) {
         // D3D device can provide additional device removed reason. We would
         // like to query and log the device removed reason if the error is
         // not validation error.
-        AppendDeviceLostMessage(data);
+        AppendDeviceLostMessage(error->GetData());
     }
 
     InternalErrorType allowedErrors = InternalErrorType::Validation | additionalAllowedErrors;
@@ -645,8 +646,8 @@ void DeviceBase::HandleError(ErrorData* data,
         // If we receive an error which we did not explicitly allow, assume the backend can't
         // recover and lose the device now. Cleanup for the device will be deferred until the
         // last external reference of the device is dropped, or an explicit call to Destroy.
-        data->AppendContext("handling unexpected error type %s when allowed errors are %s.", type,
-                            allowedErrors);
+        error->AppendContext("handling unexpected error type %s when allowed errors are %s.", type,
+                             allowedErrors);
 
         // Handle the remainder of this error as if it caused a device lost.
         type = InternalErrorType::BackendDeviceLost;
@@ -661,7 +662,7 @@ void DeviceBase::HandleError(ErrorData* data,
         mIsValidationEnabled = true;
     }
 
-    const std::string messageStr = data->GetFormattedMessage();
+    const std::string messageStr = error->GetFormattedMessage();
     if (type == InternalErrorType::BackendDeviceLost) {
         HandleDeviceLost(lostReason, messageStr);
 
@@ -713,16 +714,9 @@ void DeviceBase::HandleErrorGeneratingAsyncTask(Ref<ErrorGeneratingAsyncTask> ta
     });
 }
 
-void DeviceBase::ConsumeError(std::unique_ptr<UnrecoverableError> error,
-                              InternalErrorType additionalAllowedErrors) {
-    DAWN_CHECK(error != nullptr);
-    HandleError(std::move(error), additionalAllowedErrors);
-}
-
-void DeviceBase::ConsumeError(std::unique_ptr<ValidationError> error,
-                              InternalErrorType additionalAllowedErrors) {
-    DAWN_CHECK(error != nullptr);
-    HandleError(std::move(error), additionalAllowedErrors);
+void DeviceBase::ConsumeErrorImpl(std::unique_ptr<UnknownError> err,
+                                  InternalErrorType additionalAllowedErrors) {
+    HandleError(std::move(err), additionalAllowedErrors);
 }
 
 void DeviceBase::APISetLoggingCallback(const WGPULoggingCallbackInfo& callbackInfo) {
@@ -905,7 +899,8 @@ void DeviceBase::APIForceLoss(wgpu::DeviceLostReason reason, StringView messageI
     // Note that since we are passing None as the allowedErrors, an additional message will be
     // appended noting that the error was unexpected. Since this call is for testing only it is not
     // too important, but useful for users to understand where the extra message is coming from.
-    HandleError(DAWN_UNRECOVERABLE_ERROR(std::string(message)), InternalErrorType::None, reason);
+    HandleError(DAWN_MAKE_UNRECOVERABLE_ERROR(std::string(message)), InternalErrorType::None,
+                reason);
 }
 
 DeviceBase::State DeviceBase::GetState() const {
@@ -941,7 +936,7 @@ void DeviceBase::Disconnect() {
 
     // Wait for all GPU work to complete before proceeding with destruction.
     // ConsumedError ensures that we pick up any errors that should trigger the DeviceLost callback.
-    std::ignore = ConsumedError(mQueue->WaitForIdleForDestruction());
+    mQueue->WaitForIdleForDestruction();
     std::ignore = ConsumedError(TickImpl());
 
     // The GPU timeline is finished.
@@ -1224,37 +1219,42 @@ BindGroupLayoutBase* DeviceBase::APICreateBindGroupLayout(
 BufferBase* DeviceBase::APICreateBuffer(const BufferDescriptor* rawDescriptor) {
     // 1. Validate the descriptor and call CreateBufferImpl.
     bool fakeOOMAtNativeMap = false;
-    ResultOrError<Ref<BufferBase>> resultOrError = ([&]() -> ResultOrError<Ref<BufferBase>> {
-        DAWN_TRY(ValidateIsAlive());
-        UnpackedPtr<BufferDescriptor> descriptor;
-        if (IsValidationEnabled()) {
-            DAWN_TRY_ASSIGN(descriptor, ValidateBufferDescriptor(this, rawDescriptor));
-        } else {
-            descriptor = Unpack(rawDescriptor);
-        }
+    ResultOrUnknownError<Ref<BufferBase>> resultOrError =
+        ([&]() -> ResultOrUnknownError<Ref<BufferBase>> {
+            DAWN_TRY(ValidateIsAlive());
+            UnpackedPtr<BufferDescriptor> descriptor;
+            if (IsValidationEnabled()) {
+                DAWN_TRY_ASSIGN(descriptor, ValidateBufferDescriptor(this, rawDescriptor));
+            } else {
+                descriptor = Unpack(rawDescriptor);
+            }
 
-        bool hasHostMapped = descriptor.Has<BufferHostMappedPointer>();
-        bool fakeOOMAtDevice = false;
-        if (auto* ext = descriptor.Get<DawnFakeBufferOOMForTesting>()) {
-            fakeOOMAtNativeMap = ext->fakeOOMAtNativeMap;
-            fakeOOMAtDevice = ext->fakeOOMAtDevice;
-        }
+            bool hasHostMapped = descriptor.Has<BufferHostMappedPointer>();
+            bool fakeOOMAtDevice = false;
+            if (auto* ext = descriptor.Get<DawnFakeBufferOOMForTesting>()) {
+                fakeOOMAtNativeMap = ext->fakeOOMAtNativeMap;
+                fakeOOMAtDevice = ext->fakeOOMAtDevice;
+            }
 
-        if (fakeOOMAtDevice) {
-            return DAWN_OUT_OF_MEMORY_ERROR("DawnFakeBufferOOMForTesting fakeOOMAtDevice");
-        }
-        if (hasHostMapped) {
-            // Creating a buffer from a host-mapped pointer doesn't require the lock.
-            return CreateBufferImpl(descriptor);
-        } else {
-            auto deviceGuard = UseGuardForCreateBuffer();
-            return CreateBufferImpl(descriptor);
-        }
-    })();
+            if (fakeOOMAtDevice) {
+                return DAWN_OUT_OF_MEMORY_ERROR("DawnFakeBufferOOMForTesting fakeOOMAtDevice");
+            }
+            if (hasHostMapped) {
+                // Creating a buffer from a host-mapped pointer doesn't require the lock.
+                Ref<BufferBase> bufferBase;
+                DAWN_TRY_ASSIGN(bufferBase, CreateBufferImpl(descriptor));
+                return bufferBase;
+            } else {
+                auto deviceGuard = UseGuardForCreateBuffer();
+                Ref<BufferBase> bufferBase;
+                DAWN_TRY_ASSIGN(bufferBase, CreateBufferImpl(descriptor));
+                return bufferBase;
+            }
+        })();
 
     // 2. Error handling.
     Ref<BufferBase> buffer;
-    std::unique_ptr<UnrecoverableError> deferredError;
+    std::unique_ptr<UnknownError> deferredError;
     if (resultOrError.IsSuccess()) [[likely]] {
         buffer = resultOrError.AcquireSuccess();
     } else {
@@ -1326,12 +1326,14 @@ Future DeviceBase::APICreateComputePipelineAsync(
     };
 
     if (IsLost()) {
-        // Device lost error: create an async event that completes when created.
+        // Async pipeline creation must succeed with an invalid pipeline on a lost device.
         return GetFuture(AcquireRef(new CreateComputePipelineAsyncEvent(
-            this, callbackInfo, DAWN_BACKEND_DEVICE_LOST_ERROR("Device lost"), descriptor->label)));
+            this, callbackInfo, ComputePipelineBase::MakeError(this, descriptor->label),
+            /*readyAtCreation=*/true)));
     }
 
-    auto resultOrError = CreateUninitializedComputePipeline(descriptor);
+    ResultOrUnknownError<Ref<ComputePipelineBase>> resultOrError =
+        CreateUninitializedComputePipeline(descriptor);
     if (resultOrError.IsError()) {
         // Validation error: create an async event that completes when created.
         return GetFuture(AcquireRef(new CreateComputePipelineAsyncEvent(
@@ -1403,9 +1405,10 @@ Future DeviceBase::APICreateRenderPipelineAsync(
     };
 
     if (IsLost()) {
-        // Device lost error: create an async event that completes when created.
+        // Async pipeline creation must succeed with an invalid pipeline on a lost device.
         return GetFuture(AcquireRef(new CreateRenderPipelineAsyncEvent(
-            this, callbackInfo, DAWN_BACKEND_DEVICE_LOST_ERROR("Device lost"), descriptor->label)));
+            this, callbackInfo, RenderPipelineBase::MakeError(this, descriptor->label),
+            /*readyAtCreation=*/true)));
     }
 
     auto resultOrError = CreateUninitializedRenderPipeline(descriptor);
@@ -1462,8 +1465,8 @@ ShaderModuleBase* DeviceBase::APICreateShaderModule(const ShaderModuleDescriptor
     TRACE_EVENT(DAWN_TRACE_CATEGORY(), "DeviceBase::APICreateShaderModule", "label", label.label);
 
     Ref<ShaderModuleBase> shaderModule;
-    std::unique_ptr<ValidationError> errorData;
-    ResultOrValError<Ref<ShaderModuleBase>> creationResult =
+    std::unique_ptr<UnknownError> errorData;
+    ResultOrUnknownError<Ref<ShaderModuleBase>> creationResult =
         CreateShaderModule(descriptor, /*internalExtensions=*/{});
     if (creationResult.IsSuccess()) {
         // CreateShaderModule can succeed but still return a shader module which failed compilation.
@@ -1506,8 +1509,7 @@ ShaderModuleBase* DeviceBase::APICreateErrorShaderModule(const ShaderModuleDescr
     auto log = result->GetCompilationLog();
 
     ConsumeError(DAWN_VALIDATION_ERROR("Error in calling %s.CreateShaderModule(%s).\n%s", this,
-                                       descriptor, log)
-                     .AsVal());
+                                       descriptor, log));
 
     return ReturnToAPI(std::move(result));
 }
@@ -1660,7 +1662,7 @@ SharedBufferMemoryBase* DeviceBase::APIImportSharedBufferMemory(
     return result.Detach();
 }
 
-ResultOrError<Ref<SharedBufferMemoryBase>> DeviceBase::ImportSharedBufferMemory(
+ResultOrUnknownError<Ref<SharedBufferMemoryBase>> DeviceBase::ImportSharedBufferMemory(
     const SharedBufferMemoryDescriptor* descriptor) {
     DAWN_TRY(ValidateIsAlive());
 
@@ -1670,7 +1672,7 @@ ResultOrError<Ref<SharedBufferMemoryBase>> DeviceBase::ImportSharedBufferMemory(
     return ImportSharedBufferMemoryImpl(unpacked);
 }
 
-ResultOrError<Ref<SharedBufferMemoryBase>> DeviceBase::ImportSharedBufferMemoryImpl(
+ResultOrUnknownError<Ref<SharedBufferMemoryBase>> DeviceBase::ImportSharedBufferMemoryImpl(
     UnpackedPtr<SharedBufferMemoryDescriptor> unpacked) {
     return DAWN_UNIMPLEMENTED_ERROR("Not implemented");
 }
@@ -1685,7 +1687,7 @@ SharedTextureMemoryBase* DeviceBase::APIImportSharedTextureMemory(
     return ReturnToAPI(std::move(result));
 }
 
-ResultOrError<Ref<SharedTextureMemoryBase>> DeviceBase::ImportSharedTextureMemory(
+ResultOrUnknownError<Ref<SharedTextureMemoryBase>> DeviceBase::ImportSharedTextureMemory(
     const SharedTextureMemoryDescriptor* descriptor) {
     DAWN_TRY(ValidateIsAlive());
 
@@ -1694,7 +1696,7 @@ ResultOrError<Ref<SharedTextureMemoryBase>> DeviceBase::ImportSharedTextureMemor
     return ImportSharedTextureMemoryImpl(unpacked);
 }
 
-ResultOrError<Ref<SharedTextureMemoryBase>> DeviceBase::ImportSharedTextureMemoryImpl(
+ResultOrUnknownError<Ref<SharedTextureMemoryBase>> DeviceBase::ImportSharedTextureMemoryImpl(
     UnpackedPtr<SharedTextureMemoryDescriptor> unpacked) {
     return DAWN_UNIMPLEMENTED_ERROR("Not implemented");
 }
@@ -1708,7 +1710,7 @@ SharedFenceBase* DeviceBase::APIImportSharedFence(const SharedFenceDescriptor* d
     return ReturnToAPI(std::move(result));
 }
 
-ResultOrError<Ref<SharedFenceBase>> DeviceBase::ImportSharedFence(
+ResultOrUnknownError<Ref<SharedFenceBase>> DeviceBase::ImportSharedFence(
     const SharedFenceDescriptor* descriptor) {
     DAWN_TRY(ValidateIsAlive());
 
@@ -1717,7 +1719,7 @@ ResultOrError<Ref<SharedFenceBase>> DeviceBase::ImportSharedFence(
     return ImportSharedFenceImpl(unpacked);
 }
 
-ResultOrError<Ref<SharedFenceBase>> DeviceBase::ImportSharedFenceImpl(
+ResultOrUnknownError<Ref<SharedFenceBase>> DeviceBase::ImportSharedFenceImpl(
     UnpackedPtr<SharedFenceDescriptor> unpacked) {
     return DAWN_UNIMPLEMENTED_ERROR("Not implemented");
 }
@@ -1900,11 +1902,10 @@ void DeviceBase::EmitLog(wgpu::LoggingType type, std::string_view message) {
 wgpu::Status DeviceBase::APIGetAHardwareBufferProperties(void* handle,
                                                          AHardwareBufferProperties* properties) {
     if (!HasFeature(Feature::SharedTextureMemoryAHardwareBuffer)) {
-        ConsumeError(DAWN_VALIDATION_ERROR("Queried APIGetAHardwareBufferProperties() on %s "
-                                           "without the %s feature being set.",
-                                           this,
-                                           ToCppAPI(Feature::SharedTextureMemoryAHardwareBuffer))
-                         .AsVal());
+        ConsumeError(
+            DAWN_VALIDATION_ERROR("Queried APIGetAHardwareBufferProperties() on %s "
+                                  "without the %s feature being set.",
+                                  this, ToCppAPI(Feature::SharedTextureMemoryAHardwareBuffer)));
         return wgpu::Status::Error;
     }
 
@@ -1972,7 +1973,7 @@ void DeviceBase::APIInjectError(wgpu::ErrorType type, StringView message) {
     if (errorType == InternalErrorType::Validation) {
         HandleError(DAWN_MAKE_VALIDATION_ERROR(std::string(message)));
     } else {
-        HandleError(DAWN_MAKE_UNRECOVERABLE_ERROR(errorType, std::string(message)),
+        HandleError(DAWN_MAKE_ERROR(errorType, std::string(message)),
                     InternalErrorType::OutOfMemory);
     }
 }
@@ -2000,7 +2001,7 @@ QueueBase* DeviceBase::GetQueue() const {
 
 // Implementation details of object creation
 
-ResultOrError<Ref<BindGroupBase>> DeviceBase::CreateBindGroup(
+ResultOrUnknownError<Ref<BindGroupBase>> DeviceBase::CreateBindGroup(
     const BindGroupDescriptor* rawDescriptor,
     UsageValidationMode mode) {
     DAWN_TRY(ValidateIsAlive());
@@ -2015,7 +2016,7 @@ ResultOrError<Ref<BindGroupBase>> DeviceBase::CreateBindGroup(
     return CreateBindGroupImpl(descriptor);
 }
 
-ResultOrError<Ref<BindGroupLayoutBase>> DeviceBase::CreateBindGroupLayout(
+ResultOrUnknownError<Ref<BindGroupLayoutBase>> DeviceBase::CreateBindGroupLayout(
     const BindGroupLayoutDescriptor* rawDescriptor,
     bool allowInternalBinding) {
     DAWN_TRY(ValidateIsAlive());
@@ -2032,7 +2033,8 @@ ResultOrError<Ref<BindGroupLayoutBase>> DeviceBase::CreateBindGroupLayout(
     return GetOrCreateBindGroupLayout(descriptor);
 }
 
-ResultOrError<Ref<BufferBase>> DeviceBase::CreateBuffer(const BufferDescriptor* rawDescriptor) {
+ResultOrUnknownError<Ref<BufferBase>> DeviceBase::CreateBuffer(
+    const BufferDescriptor* rawDescriptor) {
     DAWN_TRY(ValidateIsAlive());
 
     UnpackedPtr<BufferDescriptor> descriptor;
@@ -2053,7 +2055,7 @@ ResultOrError<Ref<BufferBase>> DeviceBase::CreateBuffer(const BufferDescriptor* 
     return std::move(buffer);
 }
 
-ResultOrError<Ref<ComputePipelineBase>> DeviceBase::CreateComputePipeline(
+ResultOrUnknownError<Ref<ComputePipelineBase>> DeviceBase::CreateComputePipeline(
     const ComputePipelineDescriptor* descriptor) {
     // If a pipeline layout is not specified, we cannot use cached pipelines.
     bool useCache = descriptor->layout != nullptr;
@@ -2069,16 +2071,16 @@ ResultOrError<Ref<ComputePipelineBase>> DeviceBase::CreateComputePipeline(
         }
     }
 
-    MaybeError maybeError;
+    MaybeUnknownError maybeError;
     bool errorIsValidation = false;
     {
         SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetPlatform(), "CreateComputePipelineUS");
         maybeError = uninitializedComputePipeline->Initialize();
-        auto error = maybeError.AcquireError();
+        std::unique_ptr<UnknownError> error = maybeError.AcquireError();
         if (error != nullptr) {
             errorIsValidation = error->GetType() == dawn::native::InternalErrorType::Validation;
         }
-        maybeError = MaybeError(std::move(error));
+        maybeError = std::move(error);
     }
 
     DAWN_HISTOGRAM_BOOLEAN(GetPlatform(), "CreateComputePipelineSuccess",
@@ -2088,7 +2090,7 @@ ResultOrError<Ref<ComputePipelineBase>> DeviceBase::CreateComputePipeline(
                     : std::move(uninitializedComputePipeline);
 }
 
-ResultOrError<Ref<CommandEncoder>> DeviceBase::CreateCommandEncoder(
+ResultOrValError<Ref<CommandEncoder>> DeviceBase::CreateCommandEncoder(
     const CommandEncoderDescriptor* descriptor) {
     const CommandEncoderDescriptor defaultDescriptor = {};
     if (descriptor == nullptr) {
@@ -2110,7 +2112,7 @@ Ref<PipelineCacheBase> DeviceBase::GetOrCreatePipelineCacheImpl(const CacheKey& 
     DAWN_UNREACHABLE();
 }
 
-ResultOrError<Ref<ComputePipelineBase>> DeviceBase::CreateUninitializedComputePipeline(
+ResultOrUnknownError<Ref<ComputePipelineBase>> DeviceBase::CreateUninitializedComputePipeline(
     const ComputePipelineDescriptor* descriptor) {
     DAWN_TRY(ValidateIsAlive());
     if (IsValidationEnabled()) {
@@ -2137,7 +2139,7 @@ void DeviceBase::InitializeRenderPipelineAsyncImpl(Ref<CreateRenderPipelineAsync
     event->InitializeSync();
 }
 
-ResultOrError<Ref<PipelineLayoutBase>> DeviceBase::CreatePipelineLayout(
+ResultOrUnknownError<Ref<PipelineLayoutBase>> DeviceBase::CreatePipelineLayout(
     const PipelineLayoutDescriptor* descriptor,
     PipelineCompatibilityToken pipelineCompatibilityToken) {
     DAWN_TRY(ValidateIsAlive());
@@ -2160,18 +2162,18 @@ ResultOrError<Ref<PipelineLayoutBase>> DeviceBase::CreatePipelineLayout(
     return GetOrCreatePipelineLayout(unpacked);
 }
 
-ResultOrError<Ref<ExternalTextureBase>> DeviceBase::CreateExternalTextureImpl(
+ResultOrUnknownError<Ref<ExternalTextureBase>> DeviceBase::CreateExternalTextureImpl(
     const ExternalTextureDescriptor* descriptor) {
     DAWN_TRY(ValidateIsAlive());
     if (IsValidationEnabled()) {
         DAWN_TRY_CONTEXT(ValidateExternalTextureDescriptor(this, descriptor), "validating %s",
                          descriptor);
     }
-
     return ExternalTextureBase::Create(this, descriptor);
 }
 
-ResultOrError<Ref<QuerySetBase>> DeviceBase::CreateQuerySet(const QuerySetDescriptor* descriptor) {
+ResultOrUnknownError<Ref<QuerySetBase>> DeviceBase::CreateQuerySet(
+    const QuerySetDescriptor* descriptor) {
     DAWN_TRY(ValidateIsAlive());
     if (IsValidationEnabled()) {
         DAWN_TRY_CONTEXT(ValidateQuerySetDescriptor(this, descriptor), "validating %s", descriptor);
@@ -2179,7 +2181,7 @@ ResultOrError<Ref<QuerySetBase>> DeviceBase::CreateQuerySet(const QuerySetDescri
     return CreateQuerySetImpl(descriptor);
 }
 
-ResultOrError<Ref<RenderBundleEncoder>> DeviceBase::CreateRenderBundleEncoder(
+ResultOrUnknownError<Ref<RenderBundleEncoder>> DeviceBase::CreateRenderBundleEncoder(
     const RenderBundleEncoderDescriptor* descriptor) {
     DAWN_TRY(ValidateIsAlive());
     UnpackedPtr<RenderBundleEncoderDescriptor> unpacked;
@@ -2204,7 +2206,7 @@ ResultOrError<Ref<RenderBundleBase>> DeviceBase::CreateRenderBundle(
         encoder->AcquireRenderPassUsages(), encoder->AcquireIndirectDrawMetadata()));
 }
 
-ResultOrError<Ref<RenderPipelineBase>> DeviceBase::CreateRenderPipeline(
+ResultOrUnknownError<Ref<RenderPipelineBase>> DeviceBase::CreateRenderPipeline(
     const RenderPipelineDescriptor* descriptor,
     bool allowInternalBinding) {
     // If a pipeline layout is not specified, we cannot use cached pipelines.
@@ -2222,7 +2224,7 @@ ResultOrError<Ref<RenderPipelineBase>> DeviceBase::CreateRenderPipeline(
         }
     }
 
-    MaybeError maybeError;
+    MaybeUnknownError maybeError;
     bool errorIsValidation = false;
     {
         SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetPlatform(), "CreateRenderPipelineUS");
@@ -2231,7 +2233,7 @@ ResultOrError<Ref<RenderPipelineBase>> DeviceBase::CreateRenderPipeline(
         if (error != nullptr) {
             errorIsValidation = error->GetType() == dawn::native::InternalErrorType::Validation;
         }
-        maybeError = MaybeError(std::move(error));
+        maybeError = std::move(error);
     }
 
     DAWN_HISTOGRAM_BOOLEAN(GetPlatform(), "CreateRenderPipelineSuccess",
@@ -2242,7 +2244,7 @@ ResultOrError<Ref<RenderPipelineBase>> DeviceBase::CreateRenderPipeline(
                     : std::move(uninitializedRenderPipeline);
 }
 
-ResultOrError<Ref<RenderPipelineBase>> DeviceBase::CreateUninitializedRenderPipeline(
+ResultOrUnknownError<Ref<RenderPipelineBase>> DeviceBase::CreateUninitializedRenderPipeline(
     const RenderPipelineDescriptor* descriptor,
     bool allowInternalBinding) {
     DAWN_TRY(ValidateIsAlive());
@@ -2264,7 +2266,7 @@ ResultOrError<Ref<RenderPipelineBase>> DeviceBase::CreateUninitializedRenderPipe
     return CreateUninitializedRenderPipelineImpl(Unpack(&appliedDescriptor));
 }
 
-ResultOrError<Ref<ResourceTableBase>> DeviceBase::CreateResourceTable(
+ResultOrUnknownError<Ref<ResourceTableBase>> DeviceBase::CreateResourceTable(
     const ResourceTableDescriptor* descriptor) {
     DAWN_TRY(ValidateIsAlive());
     if (IsValidationEnabled()) {
@@ -2281,12 +2283,12 @@ ResultOrError<Ref<ResourceTableBase>> DeviceBase::CreateResourceTable(
         EmitLog(wgpu::LoggingType::Error, error->GetFormattedMessage());
         return nullptr;
     }
-
     return CreateResourceTableImpl(descriptor);
 }
 
-ResultOrError<Ref<SamplerBase>> DeviceBase::CreateSampler(const SamplerDescriptor* descriptorOrig,
-                                                          ValidationMode validate) {
+ResultOrUnknownError<Ref<SamplerBase>> DeviceBase::CreateSampler(
+    const SamplerDescriptor* descriptorOrig,
+    ValidationMode validate) {
     DAWN_TRY(ValidateIsAlive());
 
     SamplerDescriptor descriptor = {};
@@ -2298,11 +2300,10 @@ ResultOrError<Ref<SamplerBase>> DeviceBase::CreateSampler(const SamplerDescripto
         DAWN_TRY_CONTEXT(ValidateSamplerDescriptor(this, &descriptor), "validating %s",
                          &descriptor);
     }
-
     return GetOrCreateSampler(&descriptor);
 }
 
-ResultOrValError<Ref<ShaderModuleBase>> DeviceBase::CreateShaderModule(
+ResultOrUnknownError<Ref<ShaderModuleBase>> DeviceBase::CreateShaderModule(
     const ShaderModuleDescriptor* descriptor,
     const std::vector<tint::wgsl::Extension>& internalExtensions) {
     DAWN_TRY(ValidateIsAlive());
@@ -2381,7 +2382,7 @@ ResultOrValError<Ref<ShaderModuleBase>> DeviceBase::CreateShaderModule(
     // Check in-memory shader module cache first, and if missed create a new ShaderModule which may
     // use the BlobCache.
     return GetOrCreate(
-        mCaches->shaderModules, &blueprint, [&]() -> ResultOrValError<Ref<ShaderModuleBase>> {
+        mCaches->shaderModules, &blueprint, [&]() -> ResultOrError<Ref<ShaderModuleBase>> {
             Ref<ShaderModuleBase> shaderModule;
             DAWN_TRY_ASSIGN(shaderModule, CreateShaderModuleImpl(unpacked, internalExtensions));
             shaderModule->SetContentHash(blueprintHash);
@@ -2396,7 +2397,8 @@ ResultOrError<Ref<SwapChainBase>> DeviceBase::CreateSwapChain(Surface* surface,
     return CreateSwapChainImpl(surface, previousSwapChain, config);
 }
 
-ResultOrError<Ref<TextureBase>> DeviceBase::CreateTexture(const TextureDescriptor* descriptorOrig) {
+ResultOrUnknownError<Ref<TextureBase>> DeviceBase::CreateTexture(
+    const TextureDescriptor* descriptorOrig) {
     DAWN_TRY(ValidateIsAlive());
 
     TextureDescriptor rawDescriptor = WithTrivialFrontendDefaults(*descriptorOrig);
@@ -2416,11 +2418,13 @@ ResultOrError<Ref<TextureBase>> DeviceBase::CreateTexture(const TextureDescripto
     } else {
         descriptor = Unpack(&rawDescriptor);
     }
-
+    if (IsToggleEnabled(Toggle::LimitMaxTextureBytesTo1MB)) {
+        DAWN_TRY(ValidateTextureAllocationSizeForTesting(this, *descriptor));
+    }
     return CreateTextureImpl(descriptor);
 }
 
-ResultOrError<Ref<TextureViewBase>> DeviceBase::CreateTextureView(
+ResultOrUnknownError<Ref<TextureViewBase>> DeviceBase::CreateTextureView(
     TextureBase* texture,
     const TextureViewDescriptor* descriptorOrig) {
     DAWN_TRY(ValidateIsAlive());
@@ -2444,12 +2448,14 @@ ResultOrError<Ref<TextureViewBase>> DeviceBase::CreateTextureView(
     }
 
     return texture->GetOrCreateViewFromCache(
-        descriptor, [&](const TextureViewQuery&) -> ResultOrError<Ref<TextureViewBase>> {
-            return CreateTextureViewImpl(texture, descriptor);
+        descriptor, [&](const TextureViewQuery&) -> ResultOrUnknownError<Ref<TextureViewBase>> {
+            Ref<TextureViewBase> textureViewBase;
+            DAWN_TRY_ASSIGN(textureViewBase, CreateTextureViewImpl(texture, descriptor));
+            return textureViewBase;
         });
 }
 
-ResultOrError<Ref<TexelBufferViewBase>> DeviceBase::CreateTexelBufferView(
+ResultOrUnknownError<Ref<TexelBufferViewBase>> DeviceBase::CreateTexelBufferView(
     BufferBase* buffer,
     const TexelBufferViewDescriptor* descriptor) {
     DAWN_TRY(ValidateIsAlive());
@@ -2462,7 +2468,6 @@ ResultOrError<Ref<TexelBufferViewBase>> DeviceBase::CreateTexelBufferView(
     } else {
         unpacked = Unpack(descriptor);
     }
-
     return CreateTexelBufferViewImpl(buffer, unpacked);
 }
 
@@ -2543,6 +2548,10 @@ dawn::platform::WorkerTaskPool* DeviceBase::GetWorkerTaskPool() const {
 
 PipelineCompatibilityToken DeviceBase::GetNextPipelineCompatibilityToken() {
     return PipelineCompatibilityToken(mNextPipelineCompatibilityToken++);
+}
+
+PassTrackerID DeviceBase::GetNextPassTrackerID() {
+    return PassTrackerID(mNextPassTrackerID++);
 }
 
 const CacheKey& DeviceBase::GetCacheKey() const {
@@ -2822,7 +2831,7 @@ std::pair<std::string, bool> DeviceBase::GetTraceInfo() {
 
 tint::InternalCompilerErrorCallbackInfo DeviceBase::GetTintInternalCompilerErrorCallback() {
     static auto tintInternalCompilerErrorCallback = [](std::string err, void* userdata) {
-        static_cast<DeviceBase*>(userdata)->HandleError(DAWN_UNRECOVERABLE_ERROR(err));
+        static_cast<DeviceBase*>(userdata)->HandleError(DAWN_MAKE_UNRECOVERABLE_ERROR(err));
     };
     return tint::InternalCompilerErrorCallbackInfo{
         .callback = tintInternalCompilerErrorCallback,

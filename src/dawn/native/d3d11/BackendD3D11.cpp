@@ -42,9 +42,9 @@
 namespace dawn::native::d3d11 {
 namespace {
 
-MaybeValError ValidateRequestOptions(const UnpackedPtr<RequestAdapterOptions>& options,
-                                     ComPtr<IDXGIAdapter>* dxgiAdapter,
-                                     ComPtr<ID3D11Device>* d3d11Device) {
+MaybeUnknownError ValidateRequestOptions(const UnpackedPtr<RequestAdapterOptions>& options,
+                                         ComPtr<IDXGIAdapter>* dxgiAdapter,
+                                         ComPtr<ID3D11Device>* d3d11Device) {
     auto* d3d11DeviceOption = options.Get<RequestAdapterOptionsD3D11Device>();
     if (!d3d11DeviceOption) {
         return {};
@@ -116,7 +116,7 @@ std::vector<Ref<PhysicalDeviceBase>> Backend::DiscoverPhysicalDevices(
         if (GetInstance()->ConsumedErrorAndWarnOnce(
                 CreatePhysicalDevice(std::move(dxgiAdapter), std::move(d3d11Device)),
                 &physicalDevice) ||
-            !physicalDevice->SupportsFeatureLevel(options->featureLevel, GetInstance())) {
+            !physicalDevice->SupportsFeatureLevel(options->featureLevel)) {
             return {};
         }
         return {std::move(physicalDevice)};

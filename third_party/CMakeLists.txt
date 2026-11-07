@@ -33,11 +33,16 @@ set(BUILD_TESTING OFF)
 # a parent project that does not want to use depot_tools.
 if (DAWN_FETCH_DEPENDENCIES)
     message(STATUS "Running fetch_dawn_dependencies:")
+    set(_fetch_dependency_args --directory "${PROJECT_SOURCE_DIR}")
+    if (DAWN_USE_AGILITY_SDK)
+        list(APPEND _fetch_dependency_args --fetch-agility-sdk)
+    endif()
     execute_process(
         COMMAND
             ${Python3_EXECUTABLE}
             "${PROJECT_SOURCE_DIR}/tools/fetch_dawn_dependencies.py"
-            --directory ${PROJECT_SOURCE_DIR}
+            ${_fetch_dependency_args}
+        COMMAND_ERROR_IS_FATAL ANY
     )
 endif ()
 
@@ -154,7 +159,7 @@ if (NOT TARGET SPIRV-Tools AND
     add_subdirectory(${DAWN_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools" EXCLUDE_FROM_ALL)
 endif()
 
-if(NOT TARGET glslang AND (TINT_BUILD_GLSL_WRITER OR TINT_BUILD_GLSL_VALIDATOR) AND TINT_BUILD_CMD_TOOLS)
+if(NOT TARGET glslang AND (((TINT_BUILD_GLSL_WRITER OR TINT_BUILD_GLSL_VALIDATOR) AND TINT_BUILD_CMD_TOOLS) OR TINT_BUILD_MESA))
     set(SKIP_GLSLANG_INSTALL ON CACHE BOOL "" FORCE)
     set(ENABLE_OPT OFF CACHE BOOL "" FORCE)
     message(STATUS "Dawn: using GLSLang at ${DAWN_GLSLANG_DIR}")
@@ -372,4 +377,3 @@ endif()
 if (DAWN_USE_AGILITY_SDK AND NOT TARGET agility-sdk)
     add_subdirectory(${DAWN_AGILITY_SDK_DIR} "${CMAKE_CURRENT_BINARY_DIR}/agility-sdk")
 endif()
-

@@ -163,6 +163,22 @@ DAWN_NATIVE_EXPORT bool SetHDRMetadata(WGPUSurface surface, const VkHdrMetadataE
 // The configured chain's actual image count, or zero when it is not a Vulkan chain.
 DAWN_NATIVE_EXPORT uint32_t GetSwapchainImageCount(WGPUSurface surface);
 
+// Can be chained in WGPURequestAdapterOptions
+struct DAWN_NATIVE_EXPORT RequestAdapterOptionsVulkanUUIDs : wgpu::ChainedStruct {
+    RequestAdapterOptionsVulkanUUIDs();
+
+    std::array<uint8_t, VK_UUID_SIZE> deviceUUID = {};
+    std::array<uint8_t, VK_UUID_SIZE> driverUUID = {};
+};
+
+// Can be chained in WGPUAdapterInfo
+struct DAWN_NATIVE_EXPORT AdapterPropertiesVulkanUUIDs : wgpu::ChainedStructOut {
+    AdapterPropertiesVulkanUUIDs();
+
+    std::array<uint8_t, VK_UUID_SIZE> deviceUUID = {};
+    std::array<uint8_t, VK_UUID_SIZE> driverUUID = {};
+};
+
 enum class NeedsDedicatedAllocation {
     Yes,
     No,

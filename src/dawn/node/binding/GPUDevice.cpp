@@ -27,7 +27,6 @@
 
 #include "src/dawn/node/binding/GPUDevice.h"
 
-#include <cassert>
 #include <cstdio>
 #include <memory>
 #include <string_view>
@@ -55,6 +54,7 @@
 #include "src/dawn/node/binding/GPUSupportedLimits.h"
 #include "src/dawn/node/binding/GPUTexture.h"
 #include "src/dawn/node/utils/Debug.h"
+#include "src/utils/assert.h"
 #include "src/utils/compiler.h"
 #include "src/utils/numeric.h"
 
@@ -131,7 +131,7 @@ createErrorFromWGPUError(Napi::Env env, wgpu::ErrorType type, wgpu::StringView m
             // you're using an older version of Emscripten). It shouldn't happen in Dawn.
             break;
     }
-    assert(false);
+    DAWN_ASSERT(false);
     return {};
 }
 
@@ -207,6 +207,7 @@ GPUDevice::GPUDevice(Napi::Env env,
         std::string_view type_str = str(type);
         printf("%.*s:\n", static_cast<int>(type_str.size()), type_str.data());
         chunkedWrite(message);
+        printf("\n");
     });
     {
         std::lock_guard<std::mutex> lock(s_device_to_js_map_mutex_);
@@ -256,6 +257,7 @@ void GPUDevice::handleUncapturedError(ErrorType type, wgpu::StringView message) 
     if (doDefault) {
         printf("%.*s:\n", static_cast<int>(type_str.size()), type_str.data());
         chunkedWrite(message);
+        printf("\n");
     }
 }
 
@@ -332,7 +334,7 @@ interop::Interface<interop::GPUBuffer> GPUDevice::createBuffer(
     // Buffer creation may return nullptr if it fails to map at creation. Translate that to a
     // RangeError as required by the spec.
     if (dawnBuffer == nullptr) {
-        assert(descriptor.mappedAtCreation);
+        DAWN_ASSERT(descriptor.mappedAtCreation);
         Napi::RangeError::New(env, "createBuffer failed to allocate a buffer mapped at creation.")
             .ThrowAsJavaScriptException();
         return {};

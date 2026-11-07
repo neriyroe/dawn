@@ -65,6 +65,7 @@
 #include <android/api-level.h>
 #endif
 
+#include "absl/cleanup/cleanup.h"
 #include "dawn/dawn_proc.h"
 #include "dawn/wire/WireClient.h"
 #include "dawn/wire/WireServer.h"
@@ -73,6 +74,7 @@
 #include "src/dawn/common/Math.h"
 #include "src/dawn/common/StringViewUtils.h"
 #include "src/dawn/common/SystemUtils.h"
+#include "src/dawn/native/ErrorInjector.h"
 #include "src/dawn/tests/MockCallback.h"
 #include "src/dawn/tests/PartitionAllocSupport.h"
 #include "src/dawn/utils/ComboRenderPipelineDescriptor.h"
@@ -1060,14 +1062,13 @@ DawnTestBase::DawnTestBase(const AdapterTestParam& param) : mParam(param) {
                 native::GetProcs().adapterGetInfo(candidate.Get(), &info);
 
                 const auto& testParam = gCurrentTest->mParam;
-                bool result =
-                    (testParam.adapterProperties.selected &&
-                     info.deviceID == testParam.adapterProperties.deviceID &&
-                     info.vendorID == testParam.adapterProperties.vendorID &&
-                     info.adapterType ==
-                         static_cast<WGPUAdapterType>(testParam.adapterProperties.adapterType) &&
-                     DAWN_UNSAFE_TODO(std::string_view(info.device.data, info.device.length)) ==
-                         testParam.adapterProperties.name);
+                bool result = (testParam.adapterProperties.selected &&
+                               info.deviceID == testParam.adapterProperties.deviceID &&
+                               info.vendorID == testParam.adapterProperties.vendorID &&
+                               info.adapterType == static_cast<WGPUAdapterType>(
+                                                       testParam.adapterProperties.adapterType) &&
+                               std::string_view(wgpu::StringView(info.device)) ==
+                                   testParam.adapterProperties.name);
                 native::GetProcs().adapterInfoFreeMembers(info);
                 return result;
             });
@@ -1247,11 +1248,13 @@ bool DawnTestBase::IsIntelGen12() const {
 }
 
 bool DawnTestBase::IsIntelGen12OrLater() const {
-    return gpu_info::IsIntelGen12LP(mAdapterInfo->vendorID, mAdapterInfo->deviceID) ||
-           gpu_info::IsIntelGen12HP(mAdapterInfo->vendorID, mAdapterInfo->deviceID) ||
-           gpu_info::IsIntelXeLPG(mAdapterInfo->vendorID, mAdapterInfo->deviceID) ||
-           gpu_info::IsIntelXe2LPG(mAdapterInfo->vendorID, mAdapterInfo->deviceID) ||
-           gpu_info::IsIntelXe2HPG(mAdapterInfo->vendorID, mAdapterInfo->deviceID);
+    return IsIntel() && gpu_info::GetIntelGen(mAdapterInfo->vendorID, mAdapterInfo->deviceID) >=
+                            gpu_info::IntelGen::Xe;
+}
+
+bool DawnTestBase::IsIntelXe2OrLater() const {
+    return IsIntel() && gpu_info::GetIntelGen(mAdapterInfo->vendorID, mAdapterInfo->deviceID) >=
+                            gpu_info::IntelGen::Xe2;
 }
 
 bool DawnTestBase::IsWindows() const {
@@ -1457,6 +1460,10 @@ native::Adapter DawnTestBase::GetAdapter() const {
     return mBackendAdapter;
 }
 
+const gpu_info::DriverVersion& DawnTestBase::GetDriverVersion() const {
+    return mBackendAdapter.GetDriverVersion();
+}
+
 utils::WireHelper* DawnTestBase::GetWireHelper() const {
     return mWireHelper.get();
 }
@@ -1512,6 +1519,30 @@ void* DawnTestBase::GetUniqueUserdata() {
     return reinterpret_cast<void*>(++mNextUniqueUserdata);
 }
 
+#if defined(DAWN_ENABLE_ERROR_INJECTION)
+void DawnTestBase::ExhaustiveErrorInjection(std::function<void(ErrorInjectionPhase)> fn) {
+    native::ClearErrorInjector();
+    native::EnableErrorInjector();
+    fn(ErrorInjectionPhase::CountCalls);
+    native::DisableErrorInjector();
+
+    const uint64_t failureCount = native::AcquireErrorInjectorCallCount();
+    EXPECT_GT(failureCount, 0u);
+    WaitForAllOperations();
+
+    for (uint64_t failureIndex = 0; failureIndex < failureCount; ++failureIndex) {
+        SCOPED_TRACE(failureIndex);
+        native::ClearErrorInjector();
+        native::EnableErrorInjector();
+        native::InjectErrorAt(failureIndex);
+        fn(ErrorInjectionPhase::InjectError);
+        native::DisableErrorInjector();
+        EXPECT_EQ(native::AcquireErrorInjectorCallCount(), failureIndex + 1);
+    }
+    native::ClearErrorInjector();
+}
+#endif  // defined(DAWN_ENABLE_ERROR_INJECTION)
+
 uint32_t DawnTestBase::GetDeviceCreationDeprecationWarningExpectation(
     const wgpu::DeviceDescriptor& descriptor) {
     uint32_t expectedDeprecatedCount = 0;
@@ -1526,6 +1557,22 @@ uint32_t DawnTestBase::GetDeviceCreationDeprecationWarningExpectation(
 
 WGPUDevice DawnTestBase::CreateDeviceImpl(std::string isolationKey,
                                           const WGPUDeviceDescriptor* descriptor) {
+#if defined(DAWN_ENABLE_ERROR_INJECTION)
+    // Pause error injection while creating a helper test device so that tests calling
+    // DawnTestBase::CreateDevice() inside an error injection scope (e.g. to create a fresh
+    // un-lost device per iteration) do not consume error injection call indices during device
+    // creation.
+    const bool wasErrorInjectorEnabled = native::ErrorInjectorEnabled();
+    if (wasErrorInjectorEnabled) {
+        native::DisableErrorInjector();
+    }
+    absl::Cleanup restoreErrorInjector = [&] {
+        if (wasErrorInjectorEnabled) {
+            native::EnableErrorInjector();
+        }
+    };
+#endif  // defined(DAWN_ENABLE_ERROR_INJECTION)
+
     // Create the device from the adapter
     std::vector<wgpu::FeatureName> requiredFeatures = GetRequiredFeatures();
     if (IsImplicitDeviceSyncEnabled()) {
@@ -1569,6 +1616,7 @@ WGPUDevice DawnTestBase::CreateDeviceImpl(std::string isolationKey,
         EXPECT_EQ(warningsAfter, warningsBefore + deviceCreationDeprecatedWarningExpectation);
         mLastWarningCount = warningsAfter;
     }
+
     return createdDevice;
 }
 

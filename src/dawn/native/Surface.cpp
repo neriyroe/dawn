@@ -468,7 +468,7 @@ uint64_t Surface::GetXWindow() const {
     return mXWindow;
 }
 
-MaybeError Surface::Configure(const SurfaceConfiguration* configIn) {
+MaybeUnknownError Surface::Configure(const SurfaceConfiguration* configIn) {
     SurfaceConfiguration config = WithTrivialFrontendDefaults(*configIn);
     DAWN_CHECK(config.device);
     // Configured-or-not is specified as a client-side state, so it must be
@@ -481,8 +481,7 @@ MaybeError Surface::Configure(const SurfaceConfiguration* configIn) {
     // Output formats and color spaces can change when the window moves between displays.
     AdapterBase* adapter = GetCurrentDevice()->GetAdapter();
     PhysicalDeviceSurfaceCapabilities caps;
-    DAWN_TRY_ASSIGN(
-        caps, adapter->GetPhysicalDevice()->GetSurfaceCapabilities(adapter->GetInstance(), this));
+    DAWN_TRY_ASSIGN(caps, adapter->GetPhysicalDevice()->GetSurfaceCapabilities(this));
     if (config.alphaMode == wgpu::CompositeAlphaMode::Auto) {
         config.alphaMode = caps.alphaModes[0];
     }
@@ -525,7 +524,7 @@ void Surface::DetachSwapChain(SwapChainBase* swapChain) {
     }
 }
 
-MaybeError Surface::Unconfigure() {
+MaybeUnknownError Surface::Unconfigure() {
     if (IsError()) {
         DAWN_CHECK(mSwapChain == nullptr);
         DAWN_CHECK(mCurrentDevice == nullptr);
@@ -558,13 +557,12 @@ MaybeError Surface::Unconfigure() {
     return result;
 }
 
-MaybeValError Surface::GetCapabilities(AdapterBase* adapter,
-                                       SurfaceCapabilities* capabilities) const {
+MaybeUnknownError Surface::GetCapabilities(AdapterBase* adapter,
+                                           SurfaceCapabilities* capabilities) const {
     DAWN_INVALID_IF(IsError(), "%s is invalid.", this);
 
     PhysicalDeviceSurfaceCapabilities caps;
-    DAWN_TRY_ASSIGN(
-        caps, adapter->GetPhysicalDevice()->GetSurfaceCapabilities(adapter->GetInstance(), this));
+    DAWN_TRY_ASSIGN(caps, adapter->GetPhysicalDevice()->GetSurfaceCapabilities(this));
     capabilities->nextInChain = nullptr;
     capabilities->usages = caps.usages;
     capabilities->formats = HeapArrayFrom(caps.formats).MoveToSpan();
@@ -575,9 +573,9 @@ MaybeValError Surface::GetCapabilities(AdapterBase* adapter,
 }
 
 void APISurfaceCapabilitiesFreeMembers(WGPUSurfaceCapabilities capabilities) {
-    delete[] capabilities.formats;
-    delete[] capabilities.presentModes;
-    delete[] capabilities.alphaModes;
+    DeleteAllocationFromHeapArray(capabilities.formats);
+    DeleteAllocationFromHeapArray(capabilities.presentModes);
+    DeleteAllocationFromHeapArray(capabilities.alphaModes);
 }
 
 MaybeError Surface::GetCurrentTexture(SurfaceTexture* surfaceTexture) const {
@@ -608,7 +606,7 @@ const std::string& Surface::GetLabel() const {
 }
 
 void Surface::APIConfigure(const SurfaceConfiguration* config) {
-    MaybeError maybeError = Configure(config);
+    MaybeUnknownError maybeError = Configure(config);
     if (!GetCurrentDevice()) {
         std::ignore = mInstance->ConsumedError(std::move(maybeError));
     } else {
@@ -619,7 +617,7 @@ void Surface::APIConfigure(const SurfaceConfiguration* config) {
 
 wgpu::Status Surface::APIGetCapabilities(AdapterBase* adapter,
                                          SurfaceCapabilities* capabilities) const {
-    MaybeValError maybeError = GetCapabilities(adapter, capabilities);
+    MaybeUnknownError maybeError = GetCapabilities(adapter, capabilities);
     if (!GetCurrentDevice()) {
         return mInstance->ConsumedError(std::move(maybeError)) ? wgpu::Status::Error
                                                                : wgpu::Status::Success;
@@ -645,12 +643,11 @@ wgpu::Status Surface::APIPresent() {
     // Validation that the surface is configured. Note this is synchronous
     // validation so it can't be skipped even if the surface is an error.
     if (!GetCurrentDevice()) {
-        mInstance->ConsumeError(
-            DAWN_VALIDATION_ERROR("%s is in the unconfigured state.", this).AsVal());
+        mInstance->ConsumeError(DAWN_VALIDATION_ERROR("%s is in the unconfigured state.", this));
         return wgpu::Status::Error;
     }
 
-    std::ignore = GetCurrentDevice()->ConsumedError([&]() -> MaybeValError {
+    std::ignore = GetCurrentDevice()->ConsumedError([&]() -> MaybeUnknownError {
         DAWN_INVALID_IF(IsError(), "%s is invalid.", this);
         DAWN_INVALID_IF(!mSwapChain.Get(), "%s is not successfully configured.", this);
         {
@@ -663,7 +660,7 @@ wgpu::Status Surface::APIPresent() {
 }
 
 void Surface::APIUnconfigure() {
-    MaybeError maybeError = Unconfigure();
+    MaybeUnknownError maybeError = Unconfigure();
     if (!GetCurrentDevice()) {
         std::ignore = mInstance->ConsumedError(std::move(maybeError));
     } else {

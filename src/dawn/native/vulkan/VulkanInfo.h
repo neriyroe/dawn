@@ -86,6 +86,7 @@ struct VulkanDeviceKnobs {
     VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR
         shaderSubgroupUniformControlFlowFeatures;
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures;
+    VkPhysicalDeviceMaintenance9FeaturesKHR maintenance9Features;
     // Never gathered, only ever set: Dawn wants nothing of these, and an embedder that does asks for them.
     VkPhysicalDeviceTimelineSemaphoreFeaturesKHR timelineSemaphoreFeatures;
     VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures;
@@ -98,19 +99,21 @@ struct VulkanDeviceKnobs {
 
 struct VulkanDeviceInfo : VulkanDeviceKnobs {
     VkPhysicalDeviceProperties properties;
-    VkPhysicalDeviceMaintenance3Properties propertiesMaintenance3;
+    VkPhysicalDeviceIDProperties idProperties;
+    VkPhysicalDeviceMaintenance3Properties maintenance3Properties;
+    VkPhysicalDeviceMaintenance4Properties maintenance4Properties;
+    VkPhysicalDeviceMaintenance5Properties maintenance5Properties;
     VkPhysicalDeviceDriverProperties driverProperties;
     VkPhysicalDeviceSubgroupSizeControlPropertiesEXT subgroupSizeControlProperties;
     VkPhysicalDeviceShaderIntegerDotProductPropertiesKHR shaderIntegerDotProductProperties;
-    VkPhysicalDeviceMaintenance4Properties propertiesMaintenance4;
     VkPhysicalDeviceSubgroupProperties subgroupProperties;
     VkPhysicalDeviceExternalMemoryHostPropertiesEXT externalMemoryHostProperties;
     VkPhysicalDeviceCooperativeMatrixPropertiesKHR cooperativeMatrixProperties;
     VkPhysicalDeviceDescriptorIndexingProperties descriptorIndexingProperties;
     VkPhysicalDevicePipelineRobustnessProperties pipelineRobustnessProperties;
-    VkPhysicalDeviceMaintenance5Properties propertiesMaintenance5;
     VkPhysicalDeviceDrmPropertiesEXT drmProperties;
     VkPhysicalDeviceMeshShaderPropertiesEXT meshShaderProperties;
+    VkPhysicalDeviceRobustness2PropertiesEXT robustness2Properties;
 
     std::vector<VkQueueFamilyProperties> queueFamilies;
     std::vector<VkCooperativeMatrixPropertiesKHR> cooperativeMatrixConfigs;

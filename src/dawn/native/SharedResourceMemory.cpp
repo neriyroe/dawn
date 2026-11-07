@@ -117,8 +117,8 @@ wgpu::Status SharedResourceMemory::APIBeginAccess(
 }
 
 template <typename Resource, typename BeginAccessDescriptor>
-MaybeError SharedResourceMemory::BeginAccess(Resource* resource,
-                                             const BeginAccessDescriptor* rawDescriptor) {
+MaybeUnknownError SharedResourceMemory::BeginAccess(Resource* resource,
+                                                    const BeginAccessDescriptor* rawDescriptor) {
     DAWN_TRY(GetDevice()->ValidateIsAlive());
     DAWN_TRY(GetDevice()->ValidateObject(resource));
 
@@ -244,14 +244,14 @@ MaybeValError SharedResourceMemory::BeginAccessImpl(
     DAWN_UNREACHABLE();
 }
 
-ResultOrError<FenceAndSignalValue> SharedResourceMemory::EndAccessImpl(
+ResultOrUnknownError<FenceAndSignalValue> SharedResourceMemory::EndAccessImpl(
     TextureBase* texture,
     ExecutionSerial lastUsageSerial,
     UnpackedPtr<SharedTextureMemoryEndAccessState>& state) {
     DAWN_UNREACHABLE();
 }
 
-ResultOrError<FenceAndSignalValue> SharedResourceMemory::EndAccessImpl(
+ResultOrUnknownError<FenceAndSignalValue> SharedResourceMemory::EndAccessImpl(
     BufferBase* buffer,
     ExecutionSerial lastUsageSerial,
     UnpackedPtr<SharedBufferMemoryEndAccessState>& state) {
@@ -263,7 +263,7 @@ bool SharedResourceMemory::APIIsDeviceLost() const {
 }
 
 template <typename Resource, typename EndAccessState>
-MaybeError SharedResourceMemory::EndAccess(Resource* resource, EndAccessState* state) {
+MaybeUnknownError SharedResourceMemory::EndAccess(Resource* resource, EndAccessState* state) {
     DAWN_TRY(GetDevice()->ValidateObject(resource));
     DAWN_TRY(ValidateResourceCreatedFromSelf(resource));
 
@@ -305,23 +305,19 @@ MaybeError SharedResourceMemory::EndAccess(Resource* resource, EndAccessState* s
     }
 
     PendingFenceList fenceList;
-    // The state transitions to NotAccessed if the exclusive access ends, or the last concurrent
-    // read ends. When this occurs, acquire any pending fences that may remain. This occurs if
-    // the accesses never acquired them.
-    if (mContents->mSharedResourceAccessState == SharedResourceAccessState::NotAccessed) {
-        mContents->AcquirePendingFences(&fenceList);
-    }
 
     DAWN_CHECK(!resource->IsError());
     ExecutionSerial lastUsageSerial = resource->OnEndAccess();
+    // If the last usage serial is non-zero, the resource was used by GPU commands during this
+    // access.
+    const bool usedDuringAccess = lastUsageSerial != kBeginningOfGPUTime;
 
-    // If the last usage serial is non-zero, the texture was used.
-    // Call the error-generating part of the EndAccess implementation to export a fence.
-    // This is separated out because writing the output state must happen regardless of whether
-    // or not EndAccessInternal succeeds.
-    MaybeError err;
-    if (lastUsageSerial != kBeginningOfGPUTime) {
-        ResultOrError<FenceAndSignalValue> result =
+    // If the resource was used, call the error-generating part of the EndAccess implementation to
+    // export a fence. This is separated out because writing the output state must happen
+    // regardless of whether or not EndAccessInternal succeeds.
+    MaybeUnknownError err;
+    if (usedDuringAccess) {
+        ResultOrUnknownError<FenceAndSignalValue> result =
             EndAccessInternal(lastUsageSerial, resource, state);
         if (result.IsSuccess()) {
             FenceAndSignalValue fence = result.AcquireSuccess();
@@ -333,6 +329,18 @@ MaybeError SharedResourceMemory::EndAccess(Resource* resource, EndAccessState* s
         } else {
             err = result.AcquireError();
         }
+    }
+
+    // The state transitions to NotAccessed if the exclusive access ends, or the last concurrent
+    // read ends. When this occurs, acquire any pending fences that may remain. This occurs if
+    // the accesses never acquired them. Note that this must happen after EndAccessInternal, which
+    // flushes the commands using the resource, since backends may only acquire and wait on the
+    // pending fences when those commands are submitted. Otherwise, the fences would be returned
+    // here without the submitted commands waiting on them.
+    if (mContents->mSharedResourceAccessState == SharedResourceAccessState::NotAccessed) {
+        PendingFenceList pendingFences;
+        mContents->AcquirePendingFences(&pendingFences);
+        fenceList.insert(fenceList.end(), pendingFences.begin(), pendingFences.end());
     }
 
     // Copy the fences to the output state.
@@ -351,21 +359,33 @@ MaybeError SharedResourceMemory::EndAccess(Resource* resource, EndAccessState* s
         state->fences = {};
         state->signaledValues = {};
     }
-    state->initialized = resource->IsResourceInitialized();
+    // If EndAccessInternal failed, including because the device is lost (or destroyed), commands
+    // using the resource during this access may not have been flushed, may have been dropped
+    // without ever executing (e.g. a queue.writeTexture recorded in a passive pending command
+    // context, or a submit that failed), or may have been in the middle of executing when the
+    // device was lost, even though the resource was already marked as initialized on the CPU side.
+    // In that case, conservatively report the resource as uninitialized so that the next user
+    // lazily clears it instead of reading back undefined contents. If the resource wasn't used
+    // during the access, its initialized state is still the one set on BeginAccess.
+    bool dirtyDueToErrors = !err.IsSuccess() && usedDuringAccess;
+    state->initialized = resource->IsResourceInitialized() && !dirtyDueToErrors;
     return err;
 }
 
 template <typename Resource, typename EndAccessState>
-ResultOrError<FenceAndSignalValue> SharedResourceMemory::EndAccessInternal(
+ResultOrUnknownError<FenceAndSignalValue> SharedResourceMemory::EndAccessInternal(
     ExecutionSerial lastUsageSerial,
     Resource* resource,
     EndAccessState* rawState) {
+    // If the device is lost (including when it is destroyed), the backend can't record or submit
+    // any more commands, and the commands using the resource may have been dropped, so there is
+    // nothing to export for them. Return an error so that EndAccess reports the resource as
+    // uninitialized, and so that the backend part of EndAccess is skipped entirely.
+    DAWN_TRY(GetDevice()->ValidateIsAlive());
     UnpackedPtr<EndAccessState> state;
     DAWN_TRY_ASSIGN(state, ValidateAndUnpack(rawState));
-    if (!GetDevice()->IsLost()) {
-        // Ensure that commands are submitted before exporting fences with the last usage serial.
-        DAWN_TRY(GetDevice()->GetQueue()->EnsureCommandsFlushed(lastUsageSerial));
-    }
+    // Ensure that commands are submitted before exporting fences with the last usage serial.
+    DAWN_TRY(GetDevice()->GetQueue()->EnsureCommandsFlushed(lastUsageSerial));
     return EndAccessImpl(resource, lastUsageSerial, state);
 }
 

@@ -36,6 +36,7 @@
 #include "src/dawn/native/ResourceHeapAllocator.h"
 
 namespace dawn::native {
+namespace {
 
 class PlaceholderResourceHeapAllocator : public ResourceHeapAllocator {
   public:
@@ -532,4 +533,5 @@ TEST(BuddyMemoryAllocatorTests, HeapAllocationFailureReleasesReservedBlock) {
     allocator.Deallocate(allocation);
 }
 
+}  // anonymous namespace
 }  // namespace dawn::native

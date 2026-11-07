@@ -38,10 +38,11 @@
 namespace dawn::wire {
 namespace {
 
-using testing::_;
-using testing::Return;
-using testing::Unused;
-using testing::WithArg;
+using ::testing::_;
+using ::testing::HasSubstr;
+using ::testing::Return;
+using ::testing::Unused;
+using ::testing::WithArg;
 
 using WireShaderModuleCreationTests = WireTest;
 
@@ -384,7 +385,7 @@ TEST_F(WireShaderModuleCreationTests, InvalidSType) {
                       WGPUStringView errorMessage) -> WGPUShaderModule {
             EXPECT_EQ(serverDesc->nextInChain, nullptr);
             EXPECT_THAT(ToString(errorMessage),
-                        testing::HasSubstr("Unsupported or invalid chained struct with SType"));
+                        HasSubstr("Unsupported or invalid chained struct with SType"));
 
             return apiShaderModule;
         });
@@ -404,7 +405,7 @@ TEST_F(WireShaderModuleCreationTests, UnknownSType) {
                       WGPUStringView errorMessage) -> WGPUShaderModule {
             EXPECT_EQ(serverDesc->nextInChain, nullptr);
             EXPECT_THAT(ToString(errorMessage),
-                        testing::HasSubstr("Unsupported or invalid chained struct with SType (0)"));
+                        HasSubstr("Unsupported or invalid chained struct with SType (0)"));
 
             return apiShaderModule;
         });
@@ -429,7 +430,7 @@ TEST_F(WireShaderModuleCreationTests, ValidAndInvalidSTypeInChain) {
                       WGPUStringView errorMessage) -> WGPUShaderModule {
             EXPECT_EQ(serverDesc->nextInChain, nullptr);
             EXPECT_THAT(ToString(errorMessage),
-                        testing::HasSubstr("Unsupported or invalid chained struct with SType"));
+                        HasSubstr("Unsupported or invalid chained struct with SType"));
 
             return apiShaderModule;
         });
@@ -446,7 +447,7 @@ TEST_F(WireShaderModuleCreationTests, ValidAndInvalidSTypeInChain) {
                       WGPUStringView errorMessage) -> WGPUShaderModule {
             EXPECT_EQ(serverDesc->nextInChain, nullptr);
             EXPECT_THAT(ToString(errorMessage),
-                        testing::HasSubstr("Unsupported or invalid chained struct with SType"));
+                        HasSubstr("Unsupported or invalid chained struct with SType"));
 
             return apiShaderModule;
         });

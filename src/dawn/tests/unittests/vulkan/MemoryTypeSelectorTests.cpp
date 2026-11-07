@@ -35,6 +35,7 @@
 #include "src/dawn/utils/TestUtils.h"
 
 namespace dawn::native::vulkan {
+namespace {
 
 // Memory requirement that allows any memory type to be selected. Size and alignment aren't
 // important. The corresponding bit in `memoryTypeBits` must be 1 for each memory type index.
@@ -357,4 +358,5 @@ TEST(MemoryTypeSelectorTests, Adreno_620) {
               3u);
 }
 
+}  // anonymous namespace
 }  // namespace dawn::native::vulkan

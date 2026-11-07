@@ -33,9 +33,25 @@
 
 namespace dawn::native {
 
-void IgnoreErrors(MaybeError maybeError) {
+UnknownError::UnknownError(std::unique_ptr<ErrorData> d) : mData(std::move(d)) {}
+UnknownError::UnknownError(std::unique_ptr<UnrecoverableError> d) : mData(d->ReleaseData()) {}
+UnknownError::UnknownError(std::unique_ptr<ValidationError> d) : mData(d->ReleaseData()) {}
+
+UnrecoverableError::UnrecoverableError(std::unique_ptr<UnknownError> d)
+    : UnknownError(d->ReleaseData()) {
+    if (GetType() == InternalErrorType::Validation) {
+        SetType(InternalErrorType::Unrecoverable);
+    }
+}
+
+UnrecoverableError::UnrecoverableError(std::unique_ptr<ValidationError> d)
+    : UnknownError(d->ReleaseData()) {
+    SetType(InternalErrorType::Unrecoverable);
+}
+
+void IgnoreErrors(MaybeUnknownError maybeError) {
     if (maybeError.IsError()) {
-        std::unique_ptr<UnrecoverableError> errorData = maybeError.AcquireError();
+        std::unique_ptr<UnknownError> errorData = maybeError.AcquireError();
         // During shutdown and destruction, device lost errors can be ignored.
         // We can also ignore other unexpected internal errors on shut down and treat it as
         // device lost so that we can continue with destruction.

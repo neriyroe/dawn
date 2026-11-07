@@ -127,9 +127,12 @@ DAWN_MAKE_CACHE_REQUEST(SpirvCompilationRequest, SPIRV_COMPILATION_REQUEST_MEMBE
 
 #endif  // TINT_BUILD_SPV_WRITER
 
-ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
+ResultOrUnknownError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
     const CompileParameters& in) {
     TRACE_EVENT(DAWN_TRACE_CATEGORY(), "ShaderModuleVk::GetHandleAndSpirv");
+
+    ModuleAndSpirv result;
+    result.device = ToBackend(GetDevice());
 
     // A native module is SPIR-V already, compiled offline from the same HLSL as its DXIL.
     if (IsNative()) {
@@ -137,11 +140,10 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
         // Its descriptor sets are its bind group numbers, which a leading internal set would shift.
         DAWN_INVALID_IF(in.pipelineUsesFramebufferFetch || in.layout->UsesResourceTable(),
                         "%s cannot be used with framebuffer fetch or a resource table.", this);
-        std::vector<uint32_t> spirv = GetNativeSpirv();
-        VkShaderModule handle;
-        DAWN_TRY_ASSIGN(handle, CreateHandle(spirv));
-        return ModuleAndSpirv{
-            .module = handle, .entryPoint = GetNativeEntryPoint(), .spirv = std::move(spirv)};
+        result.spirv = GetNativeSpirv();
+        result.entryPoint = GetNativeEntryPoint();
+        DAWN_TRY_ASSIGN(result.module, CreateHandle(result.spirv));
+        return result;
     }
 
 #if TINT_BUILD_SPV_WRITER
@@ -314,8 +316,18 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
         GetDevice()->IsToggleEnabled(Toggle::UseVulkanMemoryModel);
     // Currently we can disable index clamping on all runtime-sized arrays in Tint robustness
     // transform as unsized arrays can only be declared on storage address space.
-    req.tintOptions.extensions.disable_runtime_sized_array_index_clamping =
+    req.tintOptions.extensions.disable_storage_runtime_sized_array_index_clamping =
         GetDevice()->IsToggleEnabled(Toggle::VulkanUseBufferRobustAccess2);
+    // We can only disable index clamping on runtime-sized uniform arrays in Tint if the
+    // allocated buffer size is large enough for the Vulkan property. These arrays can appear with
+    // the buffer_view feature.
+    // Note: 16 bytes matches the round up allocation size of uniform buffers in BufferVk.cpp and
+    // should be kept in sync.
+    req.tintOptions.extensions.disable_uniform_runtime_sized_array_index_clamping =
+        GetDevice()->IsToggleEnabled(Toggle::VulkanUseBufferRobustAccess2) &&
+        ToBackend(GetDevice())
+                ->GetDeviceInfo()
+                .robustness2Properties.robustUniformBufferAccessSizeAlignment <= 16;
     req.tintOptions.extensions.disable_image_robustness =
         GetDevice()->IsToggleEnabled(Toggle::VulkanUseImageRobustAccess2);
     req.tintOptions.extensions.disable_storage_subgroup_matrix_clamping =
@@ -331,21 +343,10 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
     req.tintOptions.extensions.use_zero_initialize_workgroup_memory =
         GetDevice()->IsToggleEnabled(Toggle::VulkanUseZeroInitializeWorkgroupMemoryExtension);
 
-    // Maximal reconvergence takes precedence over subgroup uniform control flow in the SPIR-V
-    // backend so just try to turn both on.
-    if (GetDevice()->IsToggleEnabled(Toggle::UseSpirvReconvergenceMode)) {
-        req.tintOptions.extensions.use_maximal_reconvergence =
-            ToBackend(GetDevice())->GetDeviceInfo().HasExt(DeviceExt::MaximalReconvergence) &&
-            ToBackend(GetDevice())
-                    ->GetDeviceInfo()
-                    .shaderMaximalReconvergenceFeatures.shaderMaximalReconvergence == VK_TRUE;
-        req.tintOptions.extensions.use_subgroup_uniform_control_flow =
-            ToBackend(GetDevice())->GetDeviceInfo().HasExt(DeviceExt::SubgroupUniformControlFlow) &&
-            ToBackend(GetDevice())
-                    ->GetDeviceInfo()
-                    .shaderSubgroupUniformControlFlowFeatures.shaderSubgroupUniformControlFlow ==
-                VK_TRUE;
-    }
+    req.tintOptions.extensions.use_maximal_reconvergence =
+        GetDevice()->IsToggleEnabled(Toggle::UseSpirvMaximalReconvergence);
+    req.tintOptions.extensions.use_subgroup_uniform_control_flow =
+        GetDevice()->IsToggleEnabled(Toggle::UseSpirvSubgroupUniformControlFlow);
 
     req.tintOptions.workarounds.texture_sample_compare_depth_cube_array =
         GetDevice()->IsToggleEnabled(Toggle::VulkanSampleCompareDepthCubeArrayWorkaround);
@@ -411,7 +412,7 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
     auto compilationLease = GetDevice()->GetBlobCache()->AcquireCompilation(cacheKey);
     DAWN_TRY_LOAD_OR_RUN(
         compilation, GetDevice(), std::move(cacheKey), std::move(req), CompiledSpirv::FromValidatedBlob,
-        [](SpirvCompilationRequest r) -> ResultOrError<CompiledSpirv> {
+        [](SpirvCompilationRequest r) -> ResultOrUnknownError<CompiledSpirv> {
             TRACE_EVENT(DAWN_TRACE_CATEGORY(), "tint::spirv::writer::Generate()");
 
             // Requires Tint Program here right before actual using.
@@ -494,16 +495,14 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
         },
         "Vulkan.CompileShaderToSPIRV");
 
-    VkShaderModule newHandle;
-    DAWN_TRY_ASSIGN(newHandle, CreateHandle(compilation->spirv));
-    ToBackend(GetDevice())->GetBlobCache()->EnsureStored(compilation);
-
-    return ModuleAndSpirv{.module = newHandle,
-                          .entryPoint = GetDevice()->GetIsolatedEntryPointName(),
-                          .spirv = std::move(compilation->spirv),
-                          .hasInputAttachment = hasInputAttachment,
-                          .workgroupSize = compilation->workgroupSize,
-                          .explicitSubgroupSize = compilation->explicitSubgroupSize};
+    DAWN_TRY_ASSIGN(result.module, CreateHandle(compilation->spirv));
+    GetDevice()->GetBlobCache()->EnsureStored(compilation);
+    result.entryPoint = GetDevice()->GetIsolatedEntryPointName();
+    result.spirv = std::move(compilation->spirv);
+    result.hasInputAttachment = hasInputAttachment;
+    result.workgroupSize = compilation->workgroupSize;
+    result.explicitSubgroupSize = compilation->explicitSubgroupSize;
+    return result;
 #else
     return DAWN_UNRECOVERABLE_ERROR("TINT_BUILD_SPV_WRITER is not defined.");
 #endif

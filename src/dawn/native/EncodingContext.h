@@ -91,12 +91,12 @@ class EncodingContext {
 
     // Functions to set current encoder state
     void EnterPass(const ApiObjectBase* passEncoder);
-    MaybeError ExitRenderPass(const ApiObjectBase* passEncoder,
-                              RenderPassResourceUsageTracker usageTracker,
-                              CommandEncoder* commandEncoder,
-                              IndirectDrawMetadata indirectDrawMetadata);
+    MaybeUnknownError ExitRenderPass(const ApiObjectBase* passEncoder,
+                                     RenderPassResourceUsageTracker usageTracker,
+                                     CommandEncoder* commandEncoder,
+                                     IndirectDrawMetadata indirectDrawMetadata);
     void ExitComputePass(const ApiObjectBase* passEncoder, ComputePassResourceUsage usages);
-    MaybeError Finish();
+    MaybeUnknownError Finish();
 
     // Called when a pass encoder is deleted. Provides an opportunity to clean up if it's the
     // mCurrentEncoder.
@@ -113,11 +113,10 @@ class EncodingContext {
 
   private:
     // Functions to handle encoder errors
-    void HandleError(std::unique_ptr<UnrecoverableError> error);
-    void HandleError(std::unique_ptr<ValidationError> error);
+    void HandleError(std::unique_ptr<UnknownError> error);
 
     template <typename E>
-        requires(IsMaybeConcreteError<E>)
+        requires(IsMaybeError<E>)
     inline bool ConsumedError(E maybeError) {
         if (maybeError.IsError()) [[unlikely]] {
             HandleError(maybeError.AcquireError());
@@ -127,7 +126,7 @@ class EncodingContext {
     }
 
     template <typename E, typename... Args>
-        requires(IsMaybeConcreteError<E>)
+        requires(IsMaybeError<E>)
     inline bool ConsumedError(E maybeError, const char* formatStr, const Args&... args) {
         if (maybeError.IsError()) [[unlikely]] {
             auto error = maybeError.AcquireError();
@@ -227,7 +226,7 @@ class EncodingContext {
     std::vector<std::string_view> mDebugGroupLabels;
 
     Status mStatus = Status::Open;
-    std::unique_ptr<UnrecoverableError> mError;
+    std::unique_ptr<UnknownError> mError;
 };
 
 }  // namespace dawn::native

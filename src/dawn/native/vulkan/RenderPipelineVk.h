@@ -50,7 +50,8 @@ class RenderPipeline final : public RenderPipelineBase {
 
     // Specializations used to JIT pipelines.
     using Specialization = CommonPipelineSpecialization;
-    ResultOrError<PipelineHandles> GetOrCreateSpecializedHandle(Specialization&& specialization);
+    ResultOrUnknownError<PipelineHandles> GetOrCreateSpecializedHandle(
+        Specialization&& specialization);
     bool RequiresSpecialization() const;
 
     VkPipeline GetHandle() const;
@@ -79,7 +80,7 @@ class RenderPipeline final : public RenderPipelineBase {
 
     void DestroyImpl(DestroyReason reason) override;
     using RenderPipelineBase::RenderPipelineBase;
-    MaybeError InitializeImpl() override;
+    MaybeUnknownError InitializeImpl() override;
 
     bool NeedsPixelCenterPolyfill() const;
 
@@ -88,7 +89,7 @@ class RenderPipeline final : public RenderPipelineBase {
         Ref<RefCountedVkHandle<VkPipeline>> pipeline;
         Ref<RefCountedVkHandle<VkPipelineLayout>> layout;
     };
-    ResultOrError<SpecializationResult> InitializeSpecialization(
+    ResultOrUnknownError<SpecializationResult> InitializeSpecialization(
         const Specialization& specialization,
         bool buildCacheKey);
 

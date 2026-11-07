@@ -530,8 +530,9 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
     {Toggle::SplitBufferTextureCopyForOversizedRow,
      {"split_buffer_texture_copy_for_oversized_row",
       "Split a buffer-to-texture or texture-to-buffer copy into one copy command per row so its "
-      "row pitch (bytes) and row width (texels) never overflow the 18-bit and 14-bit hardware "
-      "register fields. Workaround for an Intel GPU hardware limitation.",
+      "row pitch (bytes) and row width (texels) never overflow hardware register fields or driver "
+      "stride calculations. Workaround for Intel, ARM, ImgTec, and Qualcomm GPU hardware/driver "
+      "limitations.",
       "https://crbug.com/481934465", ToggleStage::Device}},
     {Toggle::GLUseArrayLengthFromImmediate,
      {"gl_use_array_length_from_immediate",
@@ -728,11 +729,6 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "Use a monolithic VkPipelineCache per device. The embedder is responsible for calling "
       "PerformIdleTasks() on the device to serialize VkPipelineCache to BlobCache if needed.",
       "crbug.com/370343334", ToggleStage::Device}},
-    {Toggle::VulkanIncompletePipelineCacheWorkaround,
-     {"vulkan_incomplete_pipeline_cache_workaround",
-      "Some drivers encounter corruption when serializing VkPipelineCache data. If VK_INCOMPLETE"
-      "is returned ignore it and skip serializing the pipeline cache again.",
-      "crbug.com/446113735", ToggleStage::Device}},
     {Toggle::MetalSerializeTimestampGenerationAndResolution,
      {"metal_serialize_timestamp_generation_and_resolution",
       "Newer Apple GPUs can race on query set resolution with timestamp writing from earlier "
@@ -852,12 +848,9 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "https://crbug.com/517225032", ToggleStage::Device}},
     {Toggle::VulkanSleepAfterLostDeviceWait,
      {"vulkan_sleep_after_lost_device_wait",
-      "Insert an arbitrary sleep after WaitIdle functions on device loss.",
+      "Insert an arbitrary sleep after WaitIdle functions on device loss. On some Mali drivers, "
+      "these may return before it's safe to destroy the device.",
       "https://crbug.com/500417361", ToggleStage::Device}},
-    {Toggle::UseSpirvReconvergenceMode,
-     {"use_spirv_reconvergence_mode",
-      "Use SPIR-V reconvergence execution mode if supported by the device.",
-      "https://crbug.com/379673383", ToggleStage::Device}},
     {Toggle::VulkanReplaceWorkgroupAtomicStoreWithExchange,
      {"vulkan_replace_workgroup_atomic_store_with_exchange",
       "Workaround for a driver bug that implements atomic store incorrectly.",
@@ -885,6 +878,18 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "Killswitch for a fix to the validation where non-blendable formats where allowed for "
       "alphaToCoverageEnabled",
       "https://crbug.com/550350271", ToggleStage::Device}},
+    {Toggle::GLHoistConstantArrayInitializers,
+     {"gl_hoist_constant_array_initializers",
+      "Hoist constant array initializers inside structures to work around a driver crash.",
+      "https://crbug.com/569195060", ToggleStage::Device}},
+    {Toggle::UseSpirvMaximalReconvergence,
+     {"use_spirv_maximal_reconvergence",
+      "Use SPIR-V maximal reconvergence execution mode if supported by the device.",
+      "https://crbug.com/379673383", ToggleStage::Device}},
+    {Toggle::UseSpirvSubgroupUniformControlFlow,
+     {"use_spirv_subgroup_uniform_control_flow",
+      "Use SPIR-V subgroup uniform control flow execution mode if supported by the device.",
+      "https://crbug.com/379673383", ToggleStage::Device}},
     {Toggle::WaitIsThreadSafe,
      {"wait_is_thread_safe",
       "WaitFor* functions are thread-safe and can be called without the device-lock if implicit "
@@ -977,6 +982,32 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "Some ImgTec drivers only report 64, which is below the WebGPU requirement. Enabling this "
       "toggle accepts the limit of 64 instead of rejecting the adapter entirely.",
       "https://g-issues.chromium.org/issues/559589664", ToggleStage::Instance}},
+    {Toggle::Limit3DTexturePotFootprintTo4GB,
+     {"limit_3d_texture_pot_footprint_to_4gb",
+      "Synthesize OutOfMemory if a 3D texture's base-level power-of-two footprint is 4 GiB or "
+      "larger, or exceeds 1 MiB with limit_max_texture_bytes_to_1mb enabled. "
+      "Works around a PowerVR driver bug.",
+      "https://crbug.com/497202432", ToggleStage::Device}},
+    {Toggle::LimitMaxTextureBytesTo1MB,
+     {"limit_max_texture_bytes_to_1mb",
+      "For testing, synthesize an OutOfMemory error when a texture's base mip level's largest "
+      "plane exceeds 1 MiB, counting all array layers and samples. Depth/stencil is treated "
+      "as one allocation using the maximum texel block memory cost from the WebGPU spec. "
+      "Also lowers the "
+      "limit_3d_texture_pot_footprint_to_4gb threshold to 1 MiB when that toggle is enabled. "
+      "Does not limit cumulative allocations or imported textures.",
+      "https://crbug.com/573237633", ToggleStage::Device}},
+    {Toggle::VulkanUseDescriptorUpdateTemplate,
+     {"vulkan_use_descriptor_update_template",
+      "Use VkDescriptorUpdateTemplate to update descriptor sets in BindGroup.",
+      "https://crbug.com/438554018", ToggleStage::Device}},
+    {Toggle::D3D12DisableRelaxedBufferTextureCopyAlignmentForCompressedFormats,
+     {"d3d12_disable_relaxed_buffer_texture_copy_alignment_for_compressed_formats",
+      "Don't use the relaxed row pitch and offset alignment enabled by "
+      "d3d12_relax_buffer_texture_copy_pitch_and_offset_alignment in buffer-texture copies of "
+      "block-compressed textures. Works around a device hang on some Intel GPUs when many "
+      "buffer-texture copies of BC textures are recorded with unaligned buffer offsets.",
+      "https://crbug.com/581018327", ToggleStage::Device}},
 
     // Comment to separate the }} so it is clearer what to copy-paste to add a toggle.
 }};

@@ -133,10 +133,11 @@ class Surface final : public ErrorMonad {
     Surface(InstanceBase* instance, ErrorMonad::ErrorTag tag);
     ~Surface() override;
 
-    MaybeError Configure(const SurfaceConfiguration* config);
-    MaybeError Unconfigure();
+    MaybeUnknownError Configure(const SurfaceConfiguration* config);
+    MaybeUnknownError Unconfigure();
 
-    MaybeValError GetCapabilities(AdapterBase* adapter, SurfaceCapabilities* capabilities) const;
+    MaybeUnknownError GetCapabilities(AdapterBase* adapter,
+                                      SurfaceCapabilities* capabilities) const;
     MaybeError GetCurrentTexture(SurfaceTexture* surfaceTexture) const;
 
     Ref<InstanceBase> mInstance;

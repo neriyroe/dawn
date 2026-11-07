@@ -39,10 +39,12 @@
 namespace dawn {
 namespace {
 
-class FeatureTests : public testing::Test {
+using ::testing::Test;
+
+class FeatureTests : public Test {
   public:
     FeatureTests()
-        : testing::Test(),
+        : Test(),
           mInstanceBase([]() -> Ref<dawn::native::InstanceBase> {
               static constexpr auto kMultipleDevicesPerAdapter =
                   wgpu::InstanceFeatureName::MultipleDevicesPerAdapter;
@@ -51,8 +53,8 @@ class FeatureTests : public testing::Test {
               };
               return dawn::native::APICreateInstance(&instanceDesc);
           }()),
-          mPhysicalDevice(native::null::PhysicalDevice::Create()),
-          mUnsafePhysicalDevice(native::null::PhysicalDevice::Create()),
+          mPhysicalDevice(native::null::PhysicalDevice::Create(mInstanceBase.Get())),
+          mUnsafePhysicalDevice(native::null::PhysicalDevice::Create(mInstanceBase.Get())),
           mAdapterBase(mInstanceBase.Get(),
                        mPhysicalDevice.Get(),
                        wgpu::FeatureLevel::Core,

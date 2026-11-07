@@ -102,8 +102,11 @@ function(tint_default_compile_options TARGET)
   endif()
 
   set(COMMON_CLANG_OPTIONS
+    # We require C++20.
     -Wno-c++98-compat
     -Wno-c++98-compat-pedantic
+    -Wno-c++20-extensions
+
     -Wno-deprecated-copy-with-dtor
     -Wno-documentation
     -Wno-documentation-unknown-command
@@ -120,6 +123,7 @@ function(tint_default_compile_options TARGET)
     -Wno-lifetime-safety-intra-tu-suggestions
     -Wno-lifetime-safety-cross-tu-suggestions
     -Wno-lifetime-safety-invalidation
+    -Wno-experimental-lifetime-safety-field-origin-escape
   )
 
   if(COMPILER_IS_GNU)
@@ -273,17 +277,23 @@ function(tint_fuzz_compile_options TARGET)
   set_target_properties(${TARGET} PROPERTIES FOLDER "Fuzzers")
 endfunction()
 
+function(tint_cmd_compile_options TARGET)
+  tint_default_compile_options(${TARGET})
+
+  if(MSVC AND IS_DEBUG_BUILD)
+    # TODO(crbug.com/tint/1749): both msvc and clang builds stack overflow on
+    # debug builds. Increase the initial stack size to 4 MB (default is 1MB).
+    target_link_options(${TARGET} PRIVATE "/STACK:4194304")
+  endif()
+endfunction()
+
 function(tint_test_cmd_compile_options TARGET)
   tint_test_compile_options(${TARGET})
 
-  if(MSVC)
-    # TODO(crbug.com/tint/1749): MSVC debug builds can suffer from stack
-    # overflows when resolving deeply nested expression chains or statements.
-    # Production builds neither use MSVC nor debug, so just bump the stack size
-    # for this build combination.
-    if(IS_DEBUG_BUILD)
-      target_link_options(${TARGET} PRIVATE "/STACK:4194304") # 4MB, default is 1MB
-    endif()
+  if(MSVC AND IS_DEBUG_BUILD)
+    # TODO(crbug.com/tint/1749): both msvc and clang builds stack overflow on
+    # debug builds. Increase the initial stack size to 4 MB (default is 1MB).
+    target_link_options(${TARGET} PRIVATE "/STACK:4194304")
   endif()
 
   target_link_libraries(${TARGET} PRIVATE gmock)
@@ -419,7 +429,7 @@ function(tint_add_target TARGET KIND)
     tint_proto_compile_options(${TARGET})
   elseif(${KIND} STREQUAL cmd)
     add_executable(${TARGET})
-    tint_default_compile_options(${TARGET})
+    tint_cmd_compile_options(${TARGET})
     if (TINT_ENABLE_INSTALL)
       install(TARGETS "${TARGET}")
     endif()

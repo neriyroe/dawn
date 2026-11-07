@@ -316,16 +316,16 @@ MaybeError Queue::SubmitPendingCommandsImpl() {
 }
 
 MaybeError Queue::SubmitImpl(Span<CommandBufferBase* const> commands) {
-    // CommandBuffer::Execute() will modify the state of the global immediate device context, it may
-    // affect following usage of it.
+    // CommandBuffer::RecordCommands() will modify the state of the global immediate device
+    // context, it may affect following usage of it.
     // TODO(dawn:1770): figure how if we need to track and restore the state of the immediate device
     // context.
-    TRACE_EVENT_BEGIN(DAWN_TRACE_CATEGORY("recording"), "CommandBufferD3D11::Execute");
+    TRACE_EVENT_BEGIN(DAWN_TRACE_CATEGORY("recording"), "CommandBufferD3D11::RecordCommands");
     {
         auto commandContext =
             GetScopedSwapStatePendingCommandContext(QueueBase::SubmitMode::Normal);
         for (CommandBufferBase* commandBuffer : commands) {
-            DAWN_TRY(ToBackend(commandBuffer)->Execute(&commandContext));
+            DAWN_TRY(ToBackend(commandBuffer)->RecordCommands(&commandContext));
         }
     }
     DAWN_TRY(SubmitPendingCommandsImpl());
@@ -505,8 +505,8 @@ ResultOrError<ExecutionSerial> MonitoredFenceQueue::CheckCompletedSerialsImpl() 
         ID3D11Device* d3d11Device = ToBackend(GetDevice())->GetD3D11Device();
         DAWN_TRY(CheckHRESULT(d3d11Device->GetDeviceRemovedReason(),
                               "ID3D11Device::GetDeviceRemovedReason"));
-        // Otherwise, return a generic device lost error.
-        return DAWN_BACKEND_DEVICE_LOST_ERROR("Device lost");
+        // A removed device must report a failing HRESULT.
+        DAWN_UNREACHABLE();
     }
 
     DAWN_TRY(RecycleSystemEventReceivers(completedSerial));
@@ -624,7 +624,7 @@ ResultOrError<ExecutionSerial> SystemEventQueue::WaitForQueueSerialImpl(Executio
     }
 
     if (serial > GetLastSubmittedCommandSerial()) {
-        return DAWN_FORMAT_UNRECOVERABLE_ERROR(
+        return DAWN_UNRECOVERABLE_ERROR(
             "Wait a serial (%llu) which is greater than last submitted command serial (%llu).",
             uint64_t{serial}, uint64_t(GetLastSubmittedCommandSerial()));
     }
@@ -765,7 +765,7 @@ ResultOrError<ExecutionSerial> DelayFlushQueue::WaitForQueueSerialImpl(Execution
     }
 
     if (waitSerial > GetLastSubmittedCommandSerial()) {
-        return DAWN_FORMAT_UNRECOVERABLE_ERROR(
+        return DAWN_UNRECOVERABLE_ERROR(
             "Wait a serial (%llu) which is greater than last submitted command serial (%llu).",
             uint64_t{waitSerial}, uint64_t(GetLastSubmittedCommandSerial()));
     }

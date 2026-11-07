@@ -35,6 +35,7 @@
 
 #include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/ir/array_count.h"
+#include "src/tint/lang/core/ir/constexpr_if.h"
 #include "src/tint/lang/core/type/binding_array.h"
 #include "src/tint/lang/core/type/sampled_texture.h"
 #include "src/tint/lang/core/type/storage_texture.h"
@@ -3001,7 +3002,7 @@ fn f() {
 
 TEST_F(IRToProgramTest, For_IncInInit_Cmp) {
     // %b1 = block {  # root
-    //   %i:ptr<storage, u32, read_write> = var undef @binding_point(0, 0)
+    //   %i:ptr<storage, u32, read_write> = var @binding_point(0, 0)
     // }
     //
     // %f = func():void -> %b2 {
@@ -3636,6 +3637,123 @@ var<workgroup> v : array<i32, (wgsize * 2i)>;
 )");
 }
 
+TEST_F(IRToProgramTest, Override_ArraySize_BuiltinCall) {
+    b.Append(b.ir.root_block, [&] {
+        auto* wgsize = b.Override("wgsize", ty.i32());
+        wgsize->SetOverrideId(OverrideId{10});
+
+        auto* call =
+            b.Call<wgsl::ir::BuiltinCall>(ty.i32(), wgsl::BuiltinFn::kMax, wgsize, 2_i)->Result();
+        auto* cnt = ty.Get<core::ir::type::ValueArrayCount>(call);
+        auto* ary = ty.Get<core::type::Array>(ty.i32(), cnt, 0_u);
+        b.Var("v", ty.ref(workgroup, ary, read_write));
+    });
+
+    EXPECT_WGSL(R"(
+@id(10) override wgsize : i32;
+
+var<workgroup> v : array<i32, max(wgsize, 2i)>;
+)");
+}
+
+TEST_F(IRToProgramTest, Override_ConvertInitializer) {
+    core::ir::Override* o;
+    b.Append(b.ir.root_block, [&] {
+        auto* from = b.Override("from", 42_i);
+        from->SetOverrideId(OverrideId{10});
+
+        o = b.Override("o", b.Convert(ty.f32(), from));
+    });
+
+    auto* fn = b.Function("f", ty.f32());
+    b.Append(fn->Block(), [&] { b.Return(fn, o); });
+
+    EXPECT_WGSL(R"(
+@id(10) override v : i32 = 42i;
+
+override o : f32 = f32(v);
+
+fn f() -> f32 {
+  return o;
+}
+)");
+}
+
+TEST_F(IRToProgramTest, Override_ConstructAndAccessInitializer) {
+    core::ir::Override* o;
+    b.Append(b.ir.root_block, [&] {
+        auto* from = b.Override("from", 42_i);
+        from->SetOverrideId(OverrideId{10});
+
+        auto* vec = b.Construct(ty.vec2i(), from, 1_i);
+        o = b.Override("o", b.Access(ty.i32(), vec, 0_u));
+    });
+
+    auto* fn = b.Function("f", ty.i32());
+    b.Append(fn->Block(), [&] { b.Return(fn, o); });
+
+    EXPECT_WGSL(R"(
+@id(10) override v : i32 = 42i;
+
+override o : i32 = vec2<i32>(v, 1i).x;
+
+fn f() -> i32 {
+  return o;
+}
+)");
+}
+
+TEST_F(IRToProgramTest, Override_SwizzleInitializer) {
+    core::ir::Var* v;
+    b.Append(b.ir.root_block, [&] {
+        auto* from = b.Override("from", 42_i);
+        from->SetOverrideId(OverrideId{10});
+
+        auto* vec = b.Construct(ty.vec3i(), from, 1_i, 2_i);
+        auto* swz = b.Swizzle(ty.vec2i(), vec, {1u, 0u});
+        v = b.Var("v", ty.ref(private_, ty.vec2i(), read_write));
+        v->SetInitializer(swz);
+    });
+
+    EXPECT_WGSL(R"(
+@id(10) override v_1 : i32 = 42i;
+
+var<private> v : vec2<i32> = vec3<i32>(v_1, 1i, 2i).yx;
+)");
+}
+
+TEST_F(IRToProgramTest, Override_ConstExprIfInitializer) {
+    core::ir::Override* o;
+    b.Append(b.ir.root_block, [&] {
+        auto* lhs = b.Override("lhs", true);
+        lhs->SetOverrideId(OverrideId{10});
+        auto* rhs = b.Override("rhs", false);
+        rhs->SetOverrideId(OverrideId{20});
+
+        auto* if_ = b.ConstExprIf(lhs);
+        if_->SetResult(b.InstructionResult(ty.bool_()));
+        b.Append(if_->True(), [&] { b.ExitIf(if_, rhs); });
+        b.Append(if_->False(), [&] { b.ExitIf(if_, false); });
+
+        o = b.Override("o", if_->Result());
+    });
+
+    auto* fn = b.Function("f", ty.bool_());
+    b.Append(fn->Block(), [&] { b.Return(fn, o); });
+
+    EXPECT_WGSL(R"(
+@id(10) override lhs : bool = true;
+
+@id(20) override rhs : bool = false;
+
+override o : bool = (lhs && rhs);
+
+fn f() -> bool {
+  return o;
+}
+)");
+}
+
 TEST_F(IRToProgramTest, StructMemberOffset) {
     auto* S = ty.Struct(mod.symbols.New("S"),
                         Vector{
@@ -3761,6 +3879,128 @@ fn f() {
   if (v) {
     _ = subgroupBallot(true);
   }
+}
+)");
+}
+
+TEST_F(IRToProgramTest, Print_StringLiteral) {
+    auto* fn = b.Function("f", ty.void_());
+    b.Append(fn->Block(), [&] {
+        b.Call<wgsl::ir::BuiltinCall>(ty.void_(), wgsl::BuiltinFn::kPrint,
+                                      b.Constant("hello world"));
+        b.Return(fn);
+    });
+
+    EXPECT_WGSL(R"(
+fn f() {
+  print(`hello world`);
+}
+)");
+}
+
+TEST_F(IRToProgramTest, Print_StringLiteral_Empty) {
+    auto* fn = b.Function("f", ty.void_());
+    b.Append(fn->Block(), [&] {
+        b.Call<wgsl::ir::BuiltinCall>(ty.void_(), wgsl::BuiltinFn::kPrint, b.Constant(""));
+        b.Return(fn);
+    });
+
+    EXPECT_WGSL(R"(
+fn f() {
+  print(``);
+}
+)");
+}
+
+TEST_F(IRToProgramTest, Print_InterpolateString_Single) {
+    auto* fn = b.Function("f", ty.void_());
+    b.Append(fn->Block(), [&] {
+        auto* is = b.InterpolateString(b.Constant("value: "), 42_i);
+        b.Call<wgsl::ir::BuiltinCall>(ty.void_(), wgsl::BuiltinFn::kPrint, is);
+        b.Return(fn);
+    });
+
+    EXPECT_WGSL(R"(
+fn f() {
+  print(`value: ${42i}`);
+}
+)");
+}
+
+TEST_F(IRToProgramTest, Print_InterpolateString_Multiple) {
+    auto* fn = b.Function("f", ty.void_());
+    b.Append(fn->Block(), [&] {
+        auto* is = b.InterpolateString(b.Constant("x: "), 42_i, b.Constant(", y: "), 1.5_f,
+                                       b.Constant("!"));
+        b.Call<wgsl::ir::BuiltinCall>(ty.void_(), wgsl::BuiltinFn::kPrint, is);
+        b.Return(fn);
+    });
+
+    EXPECT_WGSL(R"(
+fn f() {
+  print(`x: ${42i}, y: ${1.5f}!`);
+}
+)");
+}
+
+TEST_F(IRToProgramTest, Print_InterpolateString_HeadInterpolation) {
+    auto* fn = b.Function("f", ty.void_());
+    b.Append(fn->Block(), [&] {
+        auto* is = b.InterpolateString(42_i, b.Constant(" is the answer"));
+        b.Call<wgsl::ir::BuiltinCall>(ty.void_(), wgsl::BuiltinFn::kPrint, is);
+        b.Return(fn);
+    });
+
+    EXPECT_WGSL(R"(
+fn f() {
+  print(`${42i} is the answer`);
+}
+)");
+}
+
+TEST_F(IRToProgramTest, Print_InterpolateString_TailInterpolation) {
+    auto* fn = b.Function("f", ty.void_());
+    b.Append(fn->Block(), [&] {
+        auto* is = b.InterpolateString(b.Constant("answer is "), 42_i);
+        b.Call<wgsl::ir::BuiltinCall>(ty.void_(), wgsl::BuiltinFn::kPrint, is);
+        b.Return(fn);
+    });
+
+    EXPECT_WGSL(R"(
+fn f() {
+  print(`answer is ${42i}`);
+}
+)");
+}
+
+TEST_F(IRToProgramTest, Print_InterpolateString_AdjacentInterpolations) {
+    auto* fn = b.Function("f", ty.void_());
+    b.Append(fn->Block(), [&] {
+        auto* is = b.InterpolateString(1_i, 2_i);
+        b.Call<wgsl::ir::BuiltinCall>(ty.void_(), wgsl::BuiltinFn::kPrint, is);
+        b.Return(fn);
+    });
+
+    EXPECT_WGSL(R"(
+fn f() {
+  print(`${1i}${2i}`);
+}
+)");
+}
+
+TEST_F(IRToProgramTest, Print_InterpolateString_Expression) {
+    auto* x = b.FunctionParam("x", ty.i32());
+    auto* fn = b.Function("f", ty.void_());
+    fn->SetParams({x});
+    b.Append(fn->Block(), [&] {
+        auto* is = b.InterpolateString(b.Constant("sum: "), b.Add(x, 1_i));
+        b.Call<wgsl::ir::BuiltinCall>(ty.void_(), wgsl::BuiltinFn::kPrint, is);
+        b.Return(fn);
+    });
+
+    EXPECT_WGSL(R"(
+fn f(x : i32) {
+  print(`sum: ${(x + 1i)}`);
 }
 )");
 }

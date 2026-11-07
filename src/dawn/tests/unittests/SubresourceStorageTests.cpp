@@ -36,6 +36,7 @@
 #include "src/utils/log.h"
 
 namespace dawn::native {
+namespace {
 
 using ::testing::HasSubstr;
 
@@ -248,7 +249,7 @@ TEST(SubresourceStorageTest, IterateMaybeError) {
             if (!errorLayer) {
                 errorLayer = layer;
             }
-            return DAWN_FORMAT_UNRECOVERABLE_ERROR("Errored at layer: %d", layer);
+            return DAWN_UNRECOVERABLE_ERROR("Errored at layer: %d", layer);
         });
     ASSERT_TRUE(maybeError.IsError());
     std::unique_ptr<UnrecoverableError> error = maybeError.AcquireError();
@@ -757,4 +758,5 @@ TEST(SubresourceStorageTest, FillAfterModificationRecompresses) {
 //  - (with DAWN_ASSERT) that RecompressAspect didn't check that aspect 0 was compressed.
 //  - Missing decompression of layer 0 after introducing mInlineAspectData.
 
+}  // anonymous namespace
 }  // namespace dawn::native

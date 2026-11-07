@@ -37,6 +37,10 @@
 #include "dawn/dawn_proc_table.h"
 #include "dawn/native/dawn_native_export.h"
 
+namespace dawn::gpu_info {
+class DriverVersion;
+}  // namespace dawn::gpu_info
+
 namespace dawn::platform {
 class Platform;
 }  // namespace dawn::platform
@@ -102,6 +106,9 @@ class DAWN_NATIVE_EXPORT Adapter {
 
     // Returns the underlying WGPUAdapter object.
     WGPUAdapter Get() const;
+
+    // Returns the backend's driver version, or an empty version if unavailable.
+    const gpu_info::DriverVersion& GetDriverVersion() const;
 
     // Reset the backend device object for testing purposes.
     void ResetInternalDeviceForTesting();
@@ -212,6 +219,11 @@ DAWN_NATIVE_EXPORT const DawnProcTable& GetProcs();
 // Query the names of all the toggles that are enabled in adapter
 DAWN_NATIVE_EXPORT std::vector<const char*> GetTogglesUsed(const wgpu::Adapter& adapter);
 
+// Query the names of all the toggles that would be enabled on a device created from adapter
+DAWN_NATIVE_EXPORT std::vector<const char*> GetDeviceTogglesUsed(
+    const wgpu::Adapter& adapter,
+    const wgpu::DeviceDescriptor* descriptor = nullptr);
+
 // Query the names of all the toggles that are enabled in device
 DAWN_NATIVE_EXPORT std::vector<const char*> GetTogglesUsed(WGPUDevice device);
 
@@ -226,9 +238,6 @@ DAWN_NATIVE_EXPORT bool IsTextureSubresourceInitialized(
     uint32_t baseArrayLayer,
     uint32_t layerCount,
     WGPUTextureAspect aspect = WGPUTextureAspect_All);
-
-// Backdoor to get the order of the ProcMap for testing
-DAWN_NATIVE_EXPORT std::vector<std::string_view> GetProcMapNamesForTesting();
 
 DAWN_NATIVE_EXPORT bool DeviceTick(WGPUDevice device);
 

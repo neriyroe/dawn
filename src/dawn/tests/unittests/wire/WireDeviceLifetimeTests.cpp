@@ -41,12 +41,14 @@
 #include "src/dawn/utils/TerribleCommandBuffer.h"
 #include "src/dawn/utils/WireHelper.h"
 
-namespace dawn {
+namespace dawn::wire {
 namespace {
+
+using ::testing::Test;
 
 static WGPUDevice lastBackendDevice = nullptr;
 
-class WireDeviceLifetimeTests : public testing::Test {
+class WireDeviceLifetimeTests : public Test {
   public:
     WireDeviceLifetimeTests()
         : nativeProcs(BuildProcs()),
@@ -366,4 +368,4 @@ TEST_F(WireImportedDeviceLifetimeTests, DestroyDestroysTheImportedDevice) {
 }
 
 }  // anonymous namespace
-}  // namespace dawn
+}  // namespace dawn::wire

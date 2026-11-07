@@ -28,13 +28,13 @@
 #include "src/dawn/node/napi_v8/napi_v8.h"
 
 #include <algorithm>
-#include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <utility>
 
+#include "src/utils/assert.h"
 #include "src/utils/compiler.h"
 
 namespace {
@@ -188,14 +188,14 @@ void napi_ref__::PostGarbageCollectionCallback(const v8::WeakCallbackInfo<napi_r
     v8::Local<v8::Value> set_immediate_val;
     [[maybe_unused]] bool has_set_immediate =
         ctx->Global()->Get(ctx, key).ToLocal(&set_immediate_val) && set_immediate_val->IsFunction();
-    assert(has_set_immediate);
+    DAWN_ASSERT(has_set_immediate);
 
     v8::Local<v8::External> ext =
         v8::External::New(env->isolate, env, v8::kExternalPointerTypeTagDefault);
     v8::Local<v8::Function> drain_fn;
     [[maybe_unused]] bool has_drain_fn =
         v8::Function::New(ctx, DrainFinalizersV8Callback, ext).ToLocal(&drain_fn);
-    assert(has_drain_fn);
+    DAWN_ASSERT(has_drain_fn);
 
     env->finalizer_drain_scheduled = true;
     v8::Local<v8::Value> arg = drain_fn;
@@ -701,8 +701,11 @@ napi_status ConcludeDeferred(napi_env env,
     if (!ValidateArgs(env, deferred, value)) {
         return napi_invalid_arg;
     }
-    auto it = std::find_if(env->deferreds.begin(), env->deferreds.end(),
-                           [deferred](const auto& d) { return d.get() == deferred; });
+    if (!env->last_exception.IsEmpty()) {
+        return env->SetLastError(napi_pending_exception, "An exception is pending");
+    }
+    auto it = std::ranges::find_if(env->deferreds.begin(), env->deferreds.end(),
+                                   [deferred](const auto& d) { return d.get() == deferred; });
     if (it == env->deferreds.end()) {
         return env->SetLastError(napi_invalid_arg, "Deferred not found");
     }
@@ -1584,12 +1587,6 @@ void napi_fatal_error(const char* location,
     std::abort();
 }
 
-static napi_module* g_registered_module = nullptr;
-
-void napi_module_register(napi_module* mod) {
-    g_registered_module = mod;
-}
-
 // ============================================================================
 // References, ObjectWrap & Instance Data
 // ============================================================================
@@ -2031,12 +2028,13 @@ napi_status napi_get_typedarray_info(napi_env env,
         *byte_offset = ta->ByteOffset();
     }
     if (arraybuffer != nullptr) {
-        *arraybuffer = dawn::napi_v8::ToNapi(ta->Buffer());
+        *arraybuffer = dawn::napi_v8::ToNapi(ta->GetBuffer());
     }
     if (data != nullptr) {
         // SAFETY: ta->Buffer() provides data storage of at least ta->ByteOffset() +
         // ta->ByteLength() bytes.
-        *data = DAWN_UNSAFE_BUFFERS(static_cast<uint8_t*>(ta->Buffer()->Data()) + ta->ByteOffset());
+        *data =
+            DAWN_UNSAFE_BUFFERS(static_cast<uint8_t*>(ta->GetBuffer()->Data()) + ta->ByteOffset());
     }
     return napi_ok;
 }
@@ -2048,6 +2046,9 @@ napi_status napi_get_typedarray_info(napi_env env,
 napi_status napi_create_promise(napi_env env, napi_deferred* deferred, napi_value* promise) {
     if (!ValidateArgs(env, deferred, promise)) {
         return napi_invalid_arg;
+    }
+    if (!env->last_exception.IsEmpty()) {
+        return env->SetLastError(napi_pending_exception, "An exception is pending");
     }
     v8::Local<v8::Context> ctx = env->GetContext();
     v8::MaybeLocal<v8::Promise::Resolver> maybe_resolver = v8::Promise::Resolver::New(ctx);

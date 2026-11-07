@@ -187,25 +187,23 @@ class Device final : public DeviceBase {
 
 class PhysicalDevice : public PhysicalDeviceBase {
   public:
-    static Ref<PhysicalDevice> Create();
+    static Ref<PhysicalDevice> Create(InstanceBase* instance);
 
     ~PhysicalDevice() override;
 
     // PhysicalDeviceBase Implementation
     bool SupportsExternalImages() const override;
 
-    bool SupportsFeatureLevel(wgpu::FeatureLevel featureLevel,
-                              InstanceBase* instance) const override;
+    bool SupportsFeatureLevel(wgpu::FeatureLevel featureLevel) const override;
 
     ResultOrError<PhysicalDeviceSurfaceCapabilities> GetSurfaceCapabilities(
-        InstanceBase* instance,
         const Surface* surface) const override;
 
     // Used for the tests that intend to use an adapter without all features enabled.
     using PhysicalDeviceBase::SetSupportedFeaturesForTesting;
 
   private:
-    PhysicalDevice();
+    explicit PhysicalDevice(InstanceBase* instance);
 
     MaybeError InitializeImpl() override;
     void InitializeSupportedFeaturesImpl() override;
@@ -316,14 +314,14 @@ class ComputePipeline final : public ComputePipelineBase {
     using ComputePipelineBase::ComputePipelineBase;
 
   private:
-    ResultOrError<Extent3D> InitializeImpl() override;
+    ResultOrUnknownError<Extent3D> InitializeImpl() override;
 };
 
 class RenderPipeline final : public RenderPipelineBase {
   public:
     using RenderPipelineBase::RenderPipelineBase;
 
-    MaybeError InitializeImpl() override;
+    MaybeUnknownError InitializeImpl() override;
 };
 
 class ResourceTable final : public ResourceTableBase {

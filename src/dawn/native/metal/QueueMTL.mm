@@ -101,7 +101,7 @@ MaybeError Queue::Initialize() {
                                                                          error:&error];
             if (error != nil) {
                 return DAWN_UNRECOVERABLE_ERROR(
-                    "Error creating MTLLogState:" +
+                    "Error creating MTLLogState:%s",
                     std::string([error.localizedDescription UTF8String]));
             }
             // NOTE: If TSan errors are ever seen here, see the solution in addCompletedHandler.
@@ -213,7 +213,7 @@ CommandRecordingContext* Queue::GetPendingCommandContext(SubmitMode submitMode) 
 MaybeError Queue::CheckExecutionError() const {
     return mExecutionError.Use([](auto executionError) -> MaybeError {
         if (executionError->has_value()) {
-            return DAWN_UNRECOVERABLE_ERROR(executionError->value());
+            return DAWN_MAKE_UNRECOVERABLE_ERROR(executionError->value());
         }
         return {};
     });
@@ -349,7 +349,7 @@ id<MTLCommandQueue> Queue::GetMTLCommandQueue() const {
     return mCommandQueue.Get();
 }
 
-ResultOrError<Ref<SharedFence>> Queue::GetOrCreateSharedFence() {
+ResultOrUnknownError<Ref<SharedFence>> Queue::GetOrCreateSharedFence() {
     if (mSharedFence) {
         return mSharedFence;
     }
@@ -366,9 +366,9 @@ MaybeError Queue::SubmitImpl(Span<CommandBufferBase* const> commands) {
             SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(),
                                               "Dawn.Command.RecordMetalUS");
 
-            TRACE_EVENT(DAWN_TRACE_CATEGORY("recording"), "CommandBufferMTL::FillCommands");
+            TRACE_EVENT(DAWN_TRACE_CATEGORY("recording"), "CommandBufferMTL::RecordCommands");
             for (CommandBufferBase* commandBuffer : commands) {
-                DAWN_TRY(ToBackend(commandBuffer)->FillCommands(commandContext));
+                DAWN_TRY(ToBackend(commandBuffer)->RecordCommands(commandContext));
             }
         }
 

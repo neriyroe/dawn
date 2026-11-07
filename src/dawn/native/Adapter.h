@@ -86,6 +86,10 @@ class AdapterBase : public RefCounted, public WeakRefSupport<AdapterBase> {
     // Get a vector of used toggle names of the adapter.
     std::vector<const char*> GetTogglesUsed() const;
 
+    // Get a vector of used toggle names for a device created with descriptor.
+    std::vector<const char*> GetDeviceTogglesUsed(
+        const DeviceDescriptor* descriptor = nullptr) const;
+
     // Get the defaulting feature level of the adapter.
     wgpu::FeatureLevel GetFeatureLevel() const;
 
@@ -93,10 +97,13 @@ class AdapterBase : public RefCounted, public WeakRefSupport<AdapterBase> {
     const std::string& GetName() const;
 
   private:
-    std::pair<Ref<DeviceBase::DeviceLostEvent>, ResultOrError<Ref<DeviceBase>>> CreateDevice(
+    TogglesState CreateDeviceToggles(const DawnTogglesDescriptor* deviceTogglesDesc) const;
+
+    std::pair<Ref<DeviceBase::DeviceLostEvent>, ResultOrUnknownError<Ref<DeviceBase>>> CreateDevice(
         const DeviceDescriptor* rawDescriptor);
-    ResultOrError<Ref<DeviceBase>> CreateDeviceInternal(const DeviceDescriptor* rawDescriptor,
-                                                        Ref<DeviceBase::DeviceLostEvent> lostEvent);
+    ResultOrUnknownError<Ref<DeviceBase>> CreateDeviceInternal(
+        const DeviceDescriptor* rawDescriptor,
+        Ref<DeviceBase::DeviceLostEvent> lostEvent);
 
     ResultOrValError<UnpackedPtr<AdapterInfo>> ValidateGetInfo(AdapterInfo* info) const;
     ResultOrValError<UnpackedPtr<DawnFormatCapabilities>> ValidateGetFormatCapabilities(

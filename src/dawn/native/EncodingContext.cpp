@@ -91,7 +91,7 @@ CommandIterator EncodingContext::AcquireCommands() {
     return commands;
 }
 
-void EncodingContext::HandleError(std::unique_ptr<UnrecoverableError> error) {
+void EncodingContext::HandleError(std::unique_ptr<UnknownError> error) {
     // Append in reverse so that the most recently set debug group is printed first, like a
     // call stack.
     for (auto iter = mDebugGroupLabels.rbegin(); iter != mDebugGroupLabels.rend(); ++iter) {
@@ -110,36 +110,6 @@ void EncodingContext::HandleError(std::unique_ptr<UnrecoverableError> error) {
         // Finish() is called.
         if (mError == nullptr) {
             mError = std::move(error);
-        }
-    } else {
-        // EncodingContext is unprotected from multiple threads by default, but this code will
-        // modify Device's internal states so we need to lock the device now.
-        auto deviceGuard = mDevice->GetGuard();
-        mDevice->HandleEncoderError(std::move(error));
-    }
-
-    CloseWithStatus(Status::ErrorInRecording);
-}
-
-void EncodingContext::HandleError(std::unique_ptr<ValidationError> error) {
-    // Append in reverse so that the most recently set debug group is printed first, like a
-    // call stack.
-    for (auto iter = mDebugGroupLabels.rbegin(); iter != mDebugGroupLabels.rend(); ++iter) {
-        error->AppendDebugGroup(*iter);
-    }
-
-    bool deferErrors = mStatus != Status::Finished;
-    if (mDevice->IsImmediateErrorHandlingEnabled()) {
-        deferErrors = false;
-    }
-
-    if (deferErrors) {
-        // TODO(crbug.com/42240579): ASSERT that encoding only generates validation errors.
-
-        // If the encoding context is not finished, errors are deferred until
-        // Finish() is called.
-        if (mError == nullptr) {
-            mError = std::make_unique<UnrecoverableError>(error->ReleaseData());
         }
     } else {
         // EncodingContext is unprotected from multiple threads by default, but this code will
@@ -172,10 +142,10 @@ void EncodingContext::EnterPass(const ApiObjectBase* passEncoder) {
     mCurrentEncoder = passEncoder;
 }
 
-MaybeError EncodingContext::ExitRenderPass(const ApiObjectBase* passEncoder,
-                                           RenderPassResourceUsageTracker usageTracker,
-                                           CommandEncoder* commandEncoder,
-                                           IndirectDrawMetadata indirectDrawMetadata) {
+MaybeUnknownError EncodingContext::ExitRenderPass(const ApiObjectBase* passEncoder,
+                                                  RenderPassResourceUsageTracker usageTracker,
+                                                  CommandEncoder* commandEncoder,
+                                                  IndirectDrawMetadata indirectDrawMetadata) {
     DAWN_CHECK(mCurrentEncoder != mTopLevelEncoder);
     DAWN_CHECK(mCurrentEncoder == passEncoder);
 
@@ -269,7 +239,7 @@ void EncodingContext::PopDebugGroupLabel() {
     mDebugGroupLabels.pop_back();
 }
 
-MaybeError EncodingContext::Finish() {
+MaybeUnknownError EncodingContext::Finish() {
     CommitCommands(std::move(mPendingCommands));
 
     switch (mStatus) {

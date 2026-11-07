@@ -243,29 +243,6 @@
             {"name": "disabled toggles", "type": "char", "annotation": "const*const*", "length": "disabled toggle count"}
         ]
     },
-    "dawn load cache data function": {
-        "tags": ["dawn", "native"],
-        "category": "function pointer",
-        "returns": "size_t",
-        "args": [
-            {"name": "key", "type": "void const *"},
-            {"name": "key size", "type": "size_t"},
-            {"name": "value", "type": "void *"},
-            {"name": "value size", "type": "size_t"},
-            {"name": "userdata", "type": "void *"}
-        ]
-    },
-    "dawn store cache data function": {
-        "tags": ["dawn", "native"],
-        "category": "function pointer",
-        "args": [
-            {"name": "key", "type": "void const *"},
-            {"name": "key size", "type": "size_t"},
-            {"name": "value", "type": "void const *"},
-            {"name": "value size", "type": "size_t"},
-            {"name": "userdata", "type": "void *"}
-        ]
-    },
     "dawn load cache data callback": {
         "tags": ["dawn", "native"],
         "category": "callback function",
@@ -4308,8 +4285,10 @@
             {"value": 82, "name": "render bundle encoder resource table", "tags": ["dawn"]},
             {"value": 83, "name": "dawn shader source SPIRV", "tags": ["dawn"]},
             {"value": 84, "name": "shared buffer memory host pointer descriptor", "tags": ["dawn", "native"]},
-            {"value": 85, "name": "dawn mesh pipeline state", "tags": ["dawn"]},
-            {"value": 86, "name": "dawn shader source native", "tags": ["dawn"]}
+            {"value": 85, "name": "request adapter options vulkan UUIDs", "tags": ["dawn", "native"]},
+            {"value": 86, "name": "adapter properties vulkan UUIDs", "tags": ["dawn", "native"]},
+            {"value": 32768, "name": "dawn mesh pipeline state", "tags": ["dawn"]},
+            {"value": 32769, "name": "dawn shader source native", "tags": ["dawn"]}
         ]
     },
     "texture": {

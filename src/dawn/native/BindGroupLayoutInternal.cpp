@@ -1085,7 +1085,7 @@ std::string BindGroupLayoutInternalBase::EntriesToString() const {
         entries += absl::StrFormat("%s%s", sep, bindingInfo);
         sep = ", ";
     }
-    entries += "]";
+    entries += ']';
     return entries;
 }
 

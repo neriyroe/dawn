@@ -48,7 +48,8 @@ namespace {
 // These necessarily take up a couple of slots in a resource table.
 constexpr uint32_t kUniqueDefaultSamplers = 2;
 // On D3D12, the max number of unique sampler descriptors available to the user in a ResourceTable.
-constexpr uint32_t kD3D12MaxUniqueSamplers = 2048 - kUniqueDefaultSamplers;
+constexpr uint32_t kD3D12MaxUniqueSamplers =
+    2048 - (kMaxSamplersPerShaderStage * kNumStages) - kUniqueDefaultSamplers;
 
 class ResourceTableTests : public DawnTest {
   protected:
@@ -204,6 +205,7 @@ class ResourceTableTests : public DawnTest {
 
         // Check we have the expected results.
         std::vector<uint32_t> expectedU32;
+        expectedU32.reserve(expected.size());
         for (bool b : expected) {
             expectedU32.push_back(b ? 1u : 0u);
         }
@@ -413,6 +415,7 @@ class ResourceTableTests : public DawnTest {
 
         // Check we have the expected results.
         std::vector<uint32_t> expectedU32;
+        expectedU32.reserve(expected.size());
         for (auto optValue : expected) {
             expectedU32.push_back(optValue ? *optValue : 0xBEEFu);
         }
@@ -579,6 +582,9 @@ TEST_P(ResourceTableTests, RecyclingDoesntReuseTooSmallAllocation) {
 
 // Test WGSL `hasResource` reflects the state of the resource table.
 TEST_P(ResourceTableTests, HasResourceOneTexture) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     wgpu::TextureDescriptor tDesc{
         .usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::StorageBinding,
         .size = {1, 1},
@@ -603,6 +609,9 @@ TEST_P(ResourceTableTests, HasResourceOneTexture) {
 
 // Test WGSL `hasResource` reflects the state of the resource table.
 TEST_P(ResourceTableTests, HasResourceFilterableToUnfilterable) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     wgpu::TextureDescriptor tDesc{
         .usage = wgpu::TextureUsage::TextureBinding,
         .size = {1, 1},
@@ -618,6 +627,9 @@ TEST_P(ResourceTableTests, HasResourceFilterableToUnfilterable) {
 // Test that calling texture.Destroy() implicitly hides it.
 // Note: Similar tests for EndAccess are implemented in SharedTextureMemoryResourceTableTests.
 TEST_P(ResourceTableTests, HasResourceOneTextureDestroy) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     wgpu::TextureDescriptor tDesc{
         .usage = wgpu::TextureUsage::TextureBinding,
         .size = {1, 1},
@@ -637,6 +649,9 @@ TEST_P(ResourceTableTests, HasResourceOneTextureDestroy) {
 
 // Test that a texture used multiple times in the same table has its availability correctly updated.
 TEST_P(ResourceTableTests, HasResourceSameTextureMultipleTimes) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     wgpu::TextureDescriptor tDesc{
         .usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::StorageBinding,
         .size = {1, 1},
@@ -667,6 +682,9 @@ TEST_P(ResourceTableTests, HasResourceSameTextureMultipleTimes) {
 // as available.
 // Note: Similar tests for EndAccess are implemented in SharedTextureMemoryResourceTableTests.
 TEST_P(ResourceTableTests, HasResourceUpdateWithTextureAlreadyDestroyed) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     wgpu::TextureDescriptor tDesc{
         .usage = wgpu::TextureUsage::TextureBinding,
         .size = {1, 1},
@@ -683,6 +701,9 @@ TEST_P(ResourceTableTests, HasResourceUpdateWithTextureAlreadyDestroyed) {
 // Test that a texture used in multiple resource tables has its availability correctly updated.
 // Note: Similar tests for EndAccess are implemented in SharedTextureMemoryResourceTableTests.
 TEST_P(ResourceTableTests, HasResourceSameTextureMultipleTables) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     wgpu::TextureDescriptor tDesc{
         .usage = wgpu::TextureUsage::TextureBinding,
         .size = {1, 1},
@@ -704,6 +725,9 @@ TEST_P(ResourceTableTests, HasResourceSameTextureMultipleTables) {
 
 // Test that texture availabililty is controlled per-texture.
 TEST_P(ResourceTableTests, HasResourceMultipleTexturesTable) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     wgpu::TextureDescriptor tDesc{
         .usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::StorageBinding,
         .size = {1, 1},
@@ -843,6 +867,9 @@ TEST_P(ResourceTableTests, ImplicitHidingRender) {
 // and dynamically unhide it for the next dispatch (by removing the storage write)
 // all within a single compute pass.
 TEST_P(ResourceTableTests, ImplicitHidingComputeMidPass) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     wgpu::ShaderModule module = utils::CreateShaderModule(device, R"(
         enable chromium_experimental_resource_table;
 
@@ -1408,6 +1435,9 @@ std::vector<ResourceDescForTypeIDCase> MakeDescForTypeIDCases() {
 
 // Test that hasResource() works as expected for all supported resources in WGSL.
 TEST_P(ResourceTableTests, HasResourceCompatibilityAllTypes) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     // We rely on RGBA32Float being unfilterable for this test so that we can test both filterable /
     // unfilterable float without needing any additional extensions.
     DAWN_ASSERT(!device.HasFeature(wgpu::FeatureName::Float32Filterable));
@@ -1443,6 +1473,9 @@ TEST_P(ResourceTableTests, HasResourceCompatibilityAllTypes) {
 
 // Test that calling hasResource() with values outside of the resource table size returns false.
 TEST_P(ResourceTableTests, HasResourceOOBIsFalse) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     // Create the test pipeline
     wgpu::ShaderModule module = utils::CreateShaderModule(device, R"(
         enable chromium_experimental_resource_table;
@@ -1515,6 +1548,9 @@ TEST_P(ResourceTableTests, HasResourceOOBIsFalse) {
 // test (that's for the CTS) but tries to check a few different interesting cases (MS, DS, Cube, 2D
 // array).
 TEST_P(ResourceTableTests, DefaultBindingsAreZeroAndSizeOne) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     // Create the test pipeline
     wgpu::ShaderModule module = utils::CreateShaderModule(device, R"(
         enable chromium_experimental_resource_table;
@@ -2093,6 +2129,9 @@ TEST_P(ResourceTableTests, RemoveThenAddSamplerMultipleInSameSlot) {
 
 // Test what happens when we add more than kD3D12MaxUniqueSamplers unique samplers
 TEST_P(ResourceTableTests, AddUniqueSamplersOverLimit) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     // TODO(https://issues.chromium.org/issues/490066027): Fails on Mali G78
     DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsARM());
 
@@ -2105,7 +2144,7 @@ TEST_P(ResourceTableTests, AddUniqueSamplersOverLimit) {
     )");
     auto pipeline = device.CreateComputePipeline(&csDesc);
 
-    auto dispatch = [&](wgpu::ResourceTable table, bool shouldSucceed = true) {
+    auto dispatch = [&](wgpu::ResourceTable table, bool shouldSucceed) {
         wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
         wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
         pass.SetResourceTable(table);
@@ -2123,7 +2162,7 @@ TEST_P(ResourceTableTests, AddUniqueSamplersOverLimit) {
     wgpu::ResourceTable table = MakeResourceTable(2049);
 
     // Initial draw so that default resources are processed
-    dispatch(table);
+    dispatch(table, /*shouldSucceed*/ true);
 
     // Add kD3D12MaxUniqueSamplers, should all succeed
     for (auto i : Range(kD3D12MaxUniqueSamplers)) {
@@ -2131,7 +2170,7 @@ TEST_P(ResourceTableTests, AddUniqueSamplersOverLimit) {
         EXPECT_EQ(wgpu::Status::Success, table.Update(i, &br));
     }
 
-    dispatch(table);
+    dispatch(table, /*shouldSucceed*/ true);
 
     // Now add one more, should fail
     {
@@ -2139,8 +2178,104 @@ TEST_P(ResourceTableTests, AddUniqueSamplersOverLimit) {
         EXPECT_EQ(wgpu::Status::Success, table.Update(kD3D12MaxUniqueSamplers, &br));
     }
 
-    bool shouldSucceed = !IsD3D12();
-    dispatch(table, shouldSucceed);
+    dispatch(table, /*shouldSucceed*/ !IsD3D12());
+}
+
+// Test what happens when we bind the maximum number of BindGroup samplers across all shader stages
+// alongside a ResourceTable with kD3D12MaxUniqueSamplers unique samplers, and when we add one more.
+TEST_P(ResourceTableTests, AddUniqueSamplersOverLimitWithBindGroups) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+    // TODO(https://issues.chromium.org/issues/490066027): Fails on Mali G78
+    DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsARM());
+
+    // Create 3 BindGroups with kMaxSamplersPerShaderStage (16) samplers each (one BindGroup per
+    // shader stage: Vertex, Fragment, Compute), totaling 48 samplers across all three BindGroups.
+    constexpr std::array<wgpu::ShaderStage, kNumStages> kStages = {
+        wgpu::ShaderStage::Vertex,
+        wgpu::ShaderStage::Fragment,
+        wgpu::ShaderStage::Compute,
+    };
+    std::vector<wgpu::BindGroupLayout> bgls;
+    std::vector<wgpu::BindGroup> bgs;
+    uint32_t nextUniqueSamplerId = 0;
+    for (wgpu::ShaderStage stage : kStages) {
+        std::vector<wgpu::BindGroupLayoutEntry> bglEntries;
+        std::vector<wgpu::BindGroupEntry> bgEntries;
+        for (uint32_t i = 0; i < kMaxSamplersPerShaderStage; ++i) {
+            bglEntries.push_back({
+                .binding = i,
+                .visibility = stage,
+                .sampler = {.type = wgpu::SamplerBindingType::Filtering},
+            });
+            bgEntries.push_back({
+                .binding = i,
+                .sampler = CreateUniqueSampler(nextUniqueSamplerId++),
+            });
+        }
+        wgpu::BindGroupLayoutDescriptor bglDesc{
+            .entryCount = bglEntries.size(),
+            .entries = bglEntries.data(),
+        };
+        wgpu::BindGroupLayout bgl = device.CreateBindGroupLayout(&bglDesc);
+        bgls.push_back(bgl);
+
+        wgpu::BindGroupDescriptor bgDesc{
+            .layout = bgl,
+            .entryCount = bgEntries.size(),
+            .entries = bgEntries.data(),
+        };
+        bgs.push_back(device.CreateBindGroup(&bgDesc));
+    }
+
+    wgpu::ComputePipelineDescriptor csDesc;
+    csDesc.layout = MakePipelineLayoutWithTable(bgls);
+    csDesc.compute.module = utils::CreateShaderModule(device, R"(
+        enable chromium_experimental_resource_table;
+        @compute @workgroup_size(1) fn main() {
+            _ = hasResource<texture_2d<f32>>(0);
+        }
+    )");
+    auto pipeline = device.CreateComputePipeline(&csDesc);
+
+    auto dispatch = [&](wgpu::ResourceTable table, bool shouldSucceed) {
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+        for (auto [s, bg] : Enumerate(bgs)) {
+            pass.SetBindGroup(s, bg);
+        }
+        pass.SetResourceTable(table);
+        pass.SetPipeline(pipeline);
+        pass.DispatchWorkgroups(1);
+        pass.End();
+        wgpu::CommandBuffer commands = encoder.Finish();
+        if (shouldSucceed) {
+            queue.Submit(1, &commands);
+        } else {
+            EXPECT_DEVICE_LOSS(queue.Submit(1, &commands));
+        }
+    };
+
+    wgpu::ResourceTable table = MakeResourceTable(2049);
+
+    // Initial dispatch with 0 user samplers in the ResourceTable + 48 BindGroup samplers
+    dispatch(table, /*shouldSucceed*/ true);
+
+    // Add kD3D12MaxUniqueSamplers unique samplers to the ResourceTable, should all succeed
+    for (auto i : Range(kD3D12MaxUniqueSamplers)) {
+        wgpu::BindingResource br{.sampler = CreateUniqueSampler(nextUniqueSamplerId++)};
+        EXPECT_EQ(wgpu::Status::Success, table.Update(i, &br));
+    }
+
+    dispatch(table, /*shouldSucceed*/ true);
+
+    // Now add one more unique sampler to the ResourceTable, should fail on D3D12
+    {
+        wgpu::BindingResource br{.sampler = CreateUniqueSampler(nextUniqueSamplerId++)};
+        EXPECT_EQ(wgpu::Status::Success, table.Update(kD3D12MaxUniqueSamplers, &br));
+    }
+
+    dispatch(table, /*shouldSucceed*/ !IsD3D12());
 }
 
 // Test that adding a sampler, draw, then remove and add a duplicate sampler and draw works. This
@@ -2148,6 +2283,9 @@ TEST_P(ResourceTableTests, AddUniqueSamplersOverLimit) {
 // duplicate sampler is added back. On D3D12, internally this may result in a new sampler index,
 // which should be fine.
 TEST_P(ResourceTableTests, RemoveAddDuplicateSampler) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     // TODO(https://issues.chromium.org/issues/490066027): Fails on Mali G78
     DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsARM());
 
@@ -2208,6 +2346,9 @@ TEST_P(ResourceTableTests, RemoveAddDuplicateSampler) {
 // are duplicates. We test this by creating a table of size 2*2048, add 2048 unique samplers in the
 // first half of the table, then add the same set of sampers in the second half of the table.
 TEST_P(ResourceTableTests, AddDuplicateSamplersTwice) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     // TODO(https://issues.chromium.org/issues/490066027): Fails on Mali G78
     DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsARM());
 
@@ -2260,6 +2401,9 @@ TEST_P(ResourceTableTests, AddDuplicateSamplersTwice) {
 // and draws again, making sure this is supported. Effectively, this tests that the resource table
 // correctly handles removal of samplers.
 TEST_P(ResourceTableTests, AddAndRemoveMaxSamplersTwice) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     // TODO(https://issues.chromium.org/issues/490066027): Fails on Mali G78
     DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsARM());
     // TODO(https://issues.chromium.org/issues/512829734): Fails on Vulkan if
@@ -2483,6 +2627,9 @@ TEST_P(ResourceTableTests, RemoveThenAddTextureMultipleInSameSlot) {
 
 // Check that zero-initialization of the resources happens implicitly
 TEST_P(ResourceTableTests, ImplicitZeroInit) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     // Create the pipeline reading back from the texture.
     wgpu::ShaderModule module = utils::CreateShaderModule(device, R"(
         enable chromium_experimental_resource_table;
@@ -2681,6 +2828,9 @@ TEST_P(ResourceTableTests, UpdateAfterRemoveRequiresGPUIsFinished_ErrorBindGroup
 
 // Check that Update and Insert make the new binding visible in the resource table.
 TEST_P(ResourceTableTests, UpdateAndInsertMakeBindingVisible) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     wgpu::ResourceTable table = MakeResourceTable(2);
 
     // Before we do anything, the table has no valid entries.
@@ -2700,6 +2850,9 @@ TEST_P(ResourceTableTests, UpdateAndInsertMakeBindingVisible) {
 // Check that Remove instantly makes the binding not visible, both for entries added with
 // Update and Insert.
 TEST_P(ResourceTableTests, RemoveMakeBindingInvalid) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     // Fill a resource table with both Update and Insert.
     wgpu::ResourceTable table = MakeResourceTable(2);
 
@@ -2721,6 +2874,9 @@ TEST_P(ResourceTableTests, RemoveMakeBindingInvalid) {
 
 // Check that removing a binding and adding a different one works.
 TEST_P(ResourceTableTests, ReplaceBinding) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     // Create the test resource table.
     wgpu::ResourceTable table = MakeResourceTable(1);
     wgpu::BindingResource resource = {.textureView = MakeU8View(19)};
@@ -2741,6 +2897,9 @@ TEST_P(ResourceTableTests, ReplaceBinding) {
 
 // Check that removing a binding and adding it back works.
 TEST_P(ResourceTableTests, ReplaceWithSameBinding) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     // Create the test resource table.
     wgpu::ResourceTable table = MakeResourceTable(1);
     wgpu::BindingResource resource = {.textureView = MakeU8View(19)};
@@ -2760,6 +2919,9 @@ TEST_P(ResourceTableTests, ReplaceWithSameBinding) {
 
 // Check that setting multiple resource table, on per dispatch, on a single pass works.
 TEST_P(ResourceTableTests, SingleComputePassMultipleResourceTables) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+
     std::vector<wgpu::BindingResource> resources;
 
     wgpu::ResourceTable table0 = MakeResourceTable(2);
@@ -2902,6 +3064,94 @@ TEST_P(ResourceTableTests, DestroyDeviceThenResourceTable) {
     wgpu::ResourceTable table = MakeResourceTable(0);
     DestroyDevice();
     table.Destroy();
+}
+
+// Test dynamic filterability validation when sampling an unfilterable f32 texture (both bindless
+// and bindful) with bindless filtering vs. non-filtering samplers.
+TEST_P(ResourceTableTests, UnfilterableTextureWithBindlessSampler) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF(IsMetal());
+    // TODO(https://issues.chromium.org/issues/490066027): Fails on Mali G78
+    DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsARM());
+    DAWN_ASSERT(!device.HasFeature(wgpu::FeatureName::Float32Filterable));
+
+    wgpu::ComputePipelineDescriptor csDesc;
+    csDesc.compute.module = utils::CreateShaderModule(device, R"(
+        enable chromium_experimental_resource_table;
+
+        @group(0) @binding(0) var<storage, read_write> results : array<vec4f, 4>;
+        @group(0) @binding(1) var bindfulUnfilterableTex : texture_2d<f32>;
+
+        @compute @workgroup_size(1) fn main() {
+            let bindlessUnfilterableTex = getResource<texture_2d<f32>>(0);
+            let filteringSampler = getResource<sampler>(1);
+            let nonFilteringSampler = getResource<sampler>(2);
+
+            // 1. Bindless unfilterable texture + bindless filtering sampler -> must return 0
+            results[0] = textureSampleLevel(bindlessUnfilterableTex, filteringSampler, vec2f(0.5, 0.5), 0.0);
+
+            // 2. Bindless unfilterable texture + bindless non-filtering sampler -> must sample texel
+            results[1] = textureSampleLevel(bindlessUnfilterableTex, nonFilteringSampler, vec2f(0.5, 0.5), 0.0);
+
+            // 3. Bindful unfilterable texture + bindless filtering sampler -> must return 0
+            results[2] = textureSampleLevel(bindfulUnfilterableTex, filteringSampler, vec2f(0.5, 0.5), 0.0);
+
+            // 4. Bindful unfilterable texture + bindless non-filtering sampler -> must sample texel
+            results[3] = textureSampleLevel(bindfulUnfilterableTex, nonFilteringSampler, vec2f(0.5, 0.5), 0.0);
+        }
+    )");
+    wgpu::ComputePipeline pipeline = device.CreateComputePipeline(&csDesc);
+
+    // Create a 1x1 unfilterable RGBA32Float texture initialized to (1, 2, 3, 4).
+    wgpu::TextureDescriptor tDesc{
+        .usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst,
+        .size = {1, 1},
+        .format = wgpu::TextureFormat::RGBA32Float,
+    };
+    wgpu::Texture tex = device.CreateTexture(&tDesc);
+
+    const float kTexelData[4] = {1.0f, 2.0f, 3.0f, 4.0f};
+    wgpu::TexelCopyTextureInfo dstInfo = utils::CreateTexelCopyTextureInfo(tex, 0, {0, 0, 0});
+    wgpu::TexelCopyBufferLayout dataLayout = {.bytesPerRow = sizeof(kTexelData)};
+    wgpu::Extent3D copySize = {1, 1, 1};
+    queue.WriteTexture(&dstInfo, kTexelData, sizeof(kTexelData), &dataLayout, &copySize);
+
+    wgpu::SamplerDescriptor filteringDesc{
+        .magFilter = wgpu::FilterMode::Linear,
+        .minFilter = wgpu::FilterMode::Linear,
+    };
+    wgpu::Sampler filteringSampler = device.CreateSampler(&filteringDesc);
+    wgpu::Sampler nonFilteringSampler = device.CreateSampler();
+
+    wgpu::ResourceTable table = MakeResourceTable(3, {
+                                                         {0, {.textureView = tex.CreateView()}},
+                                                         {1, {.sampler = filteringSampler}},
+                                                         {2, {.sampler = nonFilteringSampler}},
+                                                     });
+
+    wgpu::BufferDescriptor bDesc{
+        .usage = wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc,
+        .size = sizeof(float) * 4 * 4,
+    };
+    wgpu::Buffer resultBuffer = device.CreateBuffer(&bDesc);
+    wgpu::BindGroup bg = utils::MakeBindGroup(device, pipeline.GetBindGroupLayout(0),
+                                              {{0, resultBuffer}, {1, tex.CreateView()}});
+
+    wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+    wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+    pass.SetPipeline(pipeline);
+    pass.SetBindGroup(0, bg);
+    pass.SetResourceTable(table);
+    pass.DispatchWorkgroups(1);
+    pass.End();
+    wgpu::CommandBuffer commands = encoder.Finish();
+    queue.Submit(1, &commands);
+
+    const float kExpectedZero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    EXPECT_BUFFER_FLOAT_RANGE_EQ(kExpectedZero, resultBuffer, 0ULL * 4 * sizeof(float), 4);
+    EXPECT_BUFFER_FLOAT_RANGE_EQ(kTexelData, resultBuffer, 1ULL * 4 * sizeof(float), 4);
+    EXPECT_BUFFER_FLOAT_RANGE_EQ(kExpectedZero, resultBuffer, 2ULL * 4 * sizeof(float), 4);
+    EXPECT_BUFFER_FLOAT_RANGE_EQ(kTexelData, resultBuffer, 3ULL * 4 * sizeof(float), 4);
 }
 
 DAWN_INSTANTIATE_TEST(ResourceTableTests, D3D12Backend(), MetalBackend(), VulkanBackend());
@@ -3245,6 +3495,9 @@ class ResourceTableBindfulInteractionTests : public DawnTestWithParams<BindfulIn
 };
 
 TEST_P(ResourceTableBindfulInteractionTests, Test) {
+    // TODO(473444514): Re-enable when compute shaders support ResourceTable on metal
+    DAWN_SUPPRESS_TEST_IF((GetParam().mBindlessReadKind == BindlessReadKind::Compute) && IsMetal());
+
     DoTest(GetParam().mBindlessReadKind, GetParam().mBindfulWriteKind);
 }
 

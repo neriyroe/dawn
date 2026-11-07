@@ -28,26 +28,17 @@
 #include "src/dawn/node/standalone/EventLoop.h"
 
 #include <algorithm>
-#include <cassert>
 #include <deque>
 #include <iostream>
 #include <optional>
 #include <thread>
 #include <utility>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wundef"
-#pragma clang diagnostic ignored "-Wcast-function-type-strict"
-#pragma clang diagnostic ignored "-Wcast-function-type-mismatch"
-#pragma clang diagnostic ignored "-Wsuggest-destructor-override"
-#pragma clang diagnostic ignored "-Wnon-virtual-dtor"
-#pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
-#pragma clang diagnostic ignored "-Wunique-object-duplication"
-#pragma clang diagnostic ignored "-Wundefined-reinterpret-cast"
+#include "src/utils/assert.h"
+
 #include <v8.h>
 
 #include "libplatform/libplatform.h"
-#pragma clang diagnostic pop
 
 namespace dawn::node::standalone {
 
@@ -95,7 +86,7 @@ EventLoop::EventLoop(v8::Isolate* isolate, v8::Platform* platform)
 EventLoop::~EventLoop() = default;
 
 void EventLoop::AssertOnLoopThread() const {
-    assert(std::this_thread::get_id() == thread_id_);
+    DAWN_ASSERT(std::this_thread::get_id() == thread_id_);
 }
 
 void EventLoop::PostTask(Task task) {

@@ -108,7 +108,7 @@ template <typename PipelineType, typename CreatePipelineAsyncCallbackInfo>
 CreatePipelineAsyncEvent<PipelineType, CreatePipelineAsyncCallbackInfo>::CreatePipelineAsyncEvent(
     DeviceBase* device,
     const CreatePipelineAsyncCallbackInfo& callbackInfo,
-    std::unique_ptr<UnrecoverableError> error,
+    std::unique_ptr<UnknownError> error,
     StringView label)
     : TrackedEvent(static_cast<wgpu::CallbackMode>(callbackInfo.mode), Completed{}),
       mCallback(callbackInfo.callback),
@@ -135,7 +135,7 @@ void CreatePipelineAsyncEvent<PipelineType, CreatePipelineAsyncCallbackInfo>::In
     TRACE_EVENT(DAWN_TRACE_CATEGORY(), "CreatePipelineAsyncEvent::InitializeImpl", "label",
                 utils::GetLabelForTrace(mPipeline->GetLabel()));
 
-    MaybeError maybeError;
+    MaybeUnknownError maybeError;
     {
         SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(device->GetPlatform(), kDawnHistogramMetricsUS);
         maybeError = mPipeline->Initialize(std::move(mScopedUseShaderPrograms));
@@ -201,8 +201,8 @@ void CreatePipelineAsyncEvent<PipelineType, CreatePipelineAsyncCallbackInfo>::Co
                 const std::string& label = mPipeline->GetLabel();
                 mPipeline = PipelineType::MakeError(device.Get(), label.c_str());
             }
-            pipeline = std::move(mPipeline);
         } else if (mError != nullptr) {
+            mPipeline = nullptr;
             switch (mError->GetType()) {
                 case InternalErrorType::Validation:
                     status = WGPUCreatePipelineAsyncStatus_ValidationError;
@@ -214,8 +214,8 @@ void CreatePipelineAsyncEvent<PipelineType, CreatePipelineAsyncCallbackInfo>::Co
             message = mError->GetFormattedMessage();
         } else {
             AddOrGetCachedPipeline();
-            pipeline = std::move(mPipeline);
         }
+        pipeline = std::move(mPipeline);
     }
 
     if (mCallback) {

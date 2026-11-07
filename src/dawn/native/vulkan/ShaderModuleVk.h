@@ -32,6 +32,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -40,6 +41,7 @@
 #include "src/dawn/common/vulkan_platform.h"
 #include "src/dawn/native/Error.h"
 #include "src/dawn/native/ShaderModule.h"
+#include "src/dawn/native/vulkan/DeviceVk.h"
 
 namespace dawn::native {
 
@@ -57,15 +59,63 @@ class ShaderModule final : public ShaderModuleBase {
         const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
         const std::vector<tint::wgsl::Extension>& internalExtensions);
 
-    // Caller is responsible for destroying the `VkShaderModule` returned.
     struct ModuleAndSpirv {
-        VkShaderModule module;
+        VkShaderModule module = VK_NULL_HANDLE;
+        raw_ptr<Device> device = nullptr;
         // The null-terminated name the stage's entry point has in `spirv`, for pName.
         std::string_view entryPoint;
         std::vector<uint32_t> spirv;
         bool hasInputAttachment = false;
         Extent3D workgroupSize;
         std::optional<uint32_t> explicitSubgroupSize;
+
+        ModuleAndSpirv() = default;
+        ModuleAndSpirv(ModuleAndSpirv&& o)
+            : module(o.module),
+              device(o.device),
+              entryPoint(o.entryPoint),
+              spirv(std::move(o.spirv)),
+              hasInputAttachment(o.hasInputAttachment),
+              workgroupSize(o.workgroupSize),
+              explicitSubgroupSize(o.explicitSubgroupSize) {
+            o.module = VK_NULL_HANDLE;
+            o.device = nullptr;
+        }
+
+        ~ModuleAndSpirv() { CleanupVkModule(); }
+
+        ModuleAndSpirv& operator=(ModuleAndSpirv&& o) {
+            if (this == &o) {
+                return *this;
+            }
+
+            CleanupVkModule();
+
+            module = o.module;
+            o.module = VK_NULL_HANDLE;
+
+            device = o.device;
+            o.device = nullptr;
+
+            entryPoint = o.entryPoint;
+            spirv = std::move(o.spirv);
+            hasInputAttachment = o.hasInputAttachment;
+            workgroupSize = o.workgroupSize;
+            explicitSubgroupSize = o.explicitSubgroupSize;
+
+            return *this;
+        }
+
+        void CleanupVkModule() {
+            if (module != VK_NULL_HANDLE && device != nullptr) {
+                device->fn.DestroyShaderModule(device->GetVkDevice(), module, nullptr);
+            }
+            module = VK_NULL_HANDLE;
+            device = nullptr;
+        }
+
+        ModuleAndSpirv(const ModuleAndSpirv&) = delete;
+        ModuleAndSpirv& operator=(const ModuleAndSpirv&) = delete;
     };
     struct CompileParameters {
         // Kept without defaults as they must be provided.
@@ -80,7 +130,7 @@ class ShaderModule final : public ShaderModuleBase {
         bool needsMultisampledFramebufferFetch = false;
     };
 
-    ResultOrError<ModuleAndSpirv> GetHandleAndSpirv(const CompileParameters& in);
+    ResultOrUnknownError<ModuleAndSpirv> GetHandleAndSpirv(const CompileParameters& in);
 
   private:
     ShaderModule(Device* device,

@@ -33,6 +33,7 @@
 #include <utility>
 
 #include "src/tint/lang/core/constant/scalar.h"  // IWYU pragma: export
+#include "src/tint/lang/core/constant/string.h"
 #include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/fluent_types.h"
 #include "src/tint/lang/core/type/abstract_float.h"
@@ -52,6 +53,7 @@
 #include "src/tint/lang/core/type/sampled_texture.h"
 #include "src/tint/lang/core/type/sampler.h"
 #include "src/tint/lang/core/type/storage_texture.h"
+#include "src/tint/lang/core/type/string.h"
 #include "src/tint/lang/core/type/swizzle_view.h"
 #include "src/tint/lang/core/type/u16.h"
 #include "src/tint/lang/core/type/u8.h"
@@ -68,8 +70,10 @@
 #include "src/tint/lang/wgsl/ast/if_statement.h"
 #include "src/tint/lang/wgsl/ast/input_attachment_index_attribute.h"
 #include "src/tint/lang/wgsl/ast/interpolate_attribute.h"
+#include "src/tint/lang/wgsl/ast/interpolated_string_expression.h"
 #include "src/tint/lang/wgsl/ast/loop_statement.h"
 #include "src/tint/lang/wgsl/ast/return_statement.h"
+#include "src/tint/lang/wgsl/ast/string_literal_expression.h"
 #include "src/tint/lang/wgsl/ast/switch_statement.h"
 #include "src/tint/lang/wgsl/ast/traverse_expressions.h"
 #include "src/tint/lang/wgsl/ast/unary_op_expression.h"
@@ -156,8 +160,9 @@ bool Resolver::Resolve() {
 
     b.Sem().Reserve(b.LastAllocatedNodeID());
 
-    // Pre-allocate the marked bitset with the total number of AST nodes.
+    // Pre-allocate the marked and not_evaluated bitsets with the total number of AST nodes.
     marked_.Resize(b.ASTNodes().Count());
+    not_evaluated_.Resize(b.ASTNodes().Count());
 
     TINT_RET_IF(!DependencyGraph::Build(b.AST(), diagnostics_, dependencies_));
 
@@ -1284,6 +1289,7 @@ sem::Expression* Resolver::Expression(const ast::Expression* root) {
             [&](const ast::IdentifierExpression* ident) { return Identifier(ident); },
             [&](const ast::LiteralExpression* literal) { return Literal(literal); },
             [&](const ast::MemberAccessorExpression* member) { return MemberAccessor(member); },
+            [&](const ast::InterpolatedStringExpression* tmpl) { return InterpolatedString(tmpl); },
             [&](const ast::UnaryOpExpression* unary) { return UnaryOp(unary); },
             [&](const ast::PhonyExpression*) {
                 return b.create<sem::ValueExpression>(expr, b.create<core::type::Void>(),
@@ -1318,7 +1324,7 @@ sem::Expression* Resolver::Expression(const ast::Expression* root) {
                     // Mark entire expression tree to not const-evaluate
                     auto r = ast::TraverseExpressions(  //
                         (*binary)->rhs, [&](const ast::Expression* e) {
-                            not_evaluated_.Add(e);
+                            not_evaluated_[e->node_id.value] = true;
                             if (e->Is<ast::IdentifierExpression>()) {
                                 // Template arguments are still evaluated when the outer identifier
                                 // expression is skipped. This happens in expressions like:
@@ -1890,7 +1896,7 @@ const sem::ValueExpression* Resolver::Materialize(
     TINT_RET_IF(!validator_.Materialize(concrete_ty, src_ty, decl->source));
 
     const core::constant::Value* materialized_val = nullptr;
-    if (!not_evaluated_.Contains(decl)) {
+    if (!not_evaluated_[decl->node_id.value]) {
         auto expr_val = expr->ConstantValue();
         if (DAWN_UNLIKELY(!expr_val)) {
             ICE(decl->source) << "Materialize(" << decl->TypeInfo().name
@@ -2023,7 +2029,7 @@ sem::ValueExpression* Resolver::IndexAccessor(const ast::IndexAccessorExpression
 
     const core::constant::Value* val = nullptr;
     auto stage = core::EarliestStage(obj->Stage(), idx->Stage());
-    if (not_evaluated_.Contains(expr)) {
+    if (not_evaluated_[expr->node_id.value]) {
         stage = core::EvaluationStage::kNotEvaluated;
     } else {
         if (auto* idx_val = idx->ConstantValue()) {
@@ -2101,7 +2107,7 @@ sem::Call* Resolver::Call(const ast::CallExpression* expr) {
 
         const core::constant::Value* value = nullptr;
         auto stage = core::EarliestStage(overload_stage, args_stage);
-        if (not_evaluated_.Contains(expr)) {
+        if (not_evaluated_[expr->node_id.value]) {
             stage = core::EvaluationStage::kNotEvaluated;
         }
         if (stage == core::EvaluationStage::kConstant) {
@@ -2128,7 +2134,7 @@ sem::Call* Resolver::Call(const ast::CallExpression* expr) {
             // Composites that contain subgroup matrices cannot be evaluated until runtime.
             stage = core::EvaluationStage::kRuntime;
         }
-        if (not_evaluated_.Contains(expr)) {
+        if (not_evaluated_[expr->node_id.value]) {
             stage = core::EvaluationStage::kNotEvaluated;
         }
         if (stage == core::EvaluationStage::kConstant) {
@@ -2236,7 +2242,7 @@ sem::Call* Resolver::Call(const ast::CallExpression* expr) {
 
                 // Subgroup matrix constructors are never const-evaluated.
                 auto stage = core::EvaluationStage::kRuntime;
-                if (not_evaluated_.Contains(expr)) {
+                if (not_evaluated_[expr->node_id.value]) {
                     stage = core::EvaluationStage::kNotEvaluated;
                 }
 
@@ -2417,7 +2423,7 @@ sem::Call* Resolver::BuiltinCall(const ast::CallExpression* expr,
     // now.
     const core::constant::Value* value = nullptr;
     auto stage = core::EarliestStage(arg_stage, target->Stage());
-    if (not_evaluated_.Contains(expr)) {
+    if (not_evaluated_[expr->node_id.value]) {
         stage = core::EvaluationStage::kNotEvaluated;
     }
     if (stage == core::EvaluationStage::kConstant) {
@@ -3189,8 +3195,8 @@ sem::Call* Resolver::FunctionCall(const ast::CallExpression* expr,
     Vector<const sem::ValueExpression*, 8> args = std::move(args_in);
     TINT_RET_IF(!MaybeMaterializeArguments(args, target));
 
-    auto stage = not_evaluated_.Contains(expr) ? core::EvaluationStage::kNotEvaluated
-                                               : core::EvaluationStage::kRuntime;
+    auto stage = not_evaluated_[expr->node_id.value] ? core::EvaluationStage::kNotEvaluated
+                                                     : core::EvaluationStage::kRuntime;
 
     auto* call = b.create<sem::Call>(expr, target, stage, std::move(args), current_statement_,
                                      /* constant_value */ nullptr);
@@ -3231,6 +3237,10 @@ sem::Call* Resolver::FunctionCall(const ast::CallExpression* expr,
 sem::ValueExpression* Resolver::Literal(const ast::LiteralExpression* literal) {
     auto* ty = Switch(
         literal,
+        [&](const ast::StringLiteralExpression*) -> core::type::Type* {
+            TINT_RET_IF(!validator_.CheckChromiumPrintEnabled(literal->source));
+            return b.create<core::type::String>();
+        },
         [&](const ast::IntLiteralExpression* i) -> core::type::Type* {
             switch (i->suffix) {
                 case ast::IntLiteralExpression::Suffix::kNone:
@@ -3261,12 +3271,13 @@ sem::ValueExpression* Resolver::Literal(const ast::LiteralExpression* literal) {
 
     const core::constant::Value* val = nullptr;
     auto stage = core::EvaluationStage::kConstant;
-    if (not_evaluated_.Contains(literal)) {
+    if (not_evaluated_[literal->node_id.value]) {
         stage = core::EvaluationStage::kNotEvaluated;
     }
     if (stage == core::EvaluationStage::kConstant) {
         val = Switch(
             literal,
+            [&](const ast::StringLiteralExpression* lit) { return b.constants.Get(lit->value); },
             [&](const ast::BoolLiteralExpression* lit) { return b.constants.Get(lit->value); },
             [&](const ast::IntLiteralExpression* lit) -> const core::constant::Value* {
                 switch (lit->suffix) {
@@ -3294,6 +3305,22 @@ sem::ValueExpression* Resolver::Literal(const ast::LiteralExpression* literal) {
     return b.create<sem::ValueExpression>(literal, ty, stage, current_statement_, std::move(val));
 }
 
+sem::ValueExpression* Resolver::InterpolatedString(const ast::InterpolatedStringExpression* tmpl) {
+    TINT_RET_IF(!validator_.CheckChromiumPrintEnabled(tmpl->source));
+
+    for (auto* el : tmpl->elements) {
+        auto* sem_el = Load(Materialize(sem_.GetVal(el)));
+        TINT_RET_IF(DAWN_UNLIKELY(!sem_el));
+        TINT_RET_IF(!validator_.InterpolatedStringElement(sem_el));
+    }
+
+    auto stage = not_evaluated_[tmpl->node_id.value] ? core::EvaluationStage::kNotEvaluated
+                                                     : core::EvaluationStage::kRuntime;
+
+    return b.create<sem::ValueExpression>(tmpl, b.create<core::type::String>(), stage,
+                                          current_statement_, /* constant_value */ nullptr);
+}
+
 sem::Expression* Resolver::Identifier(const ast::IdentifierExpression* expr) {
     auto* ident = expr->identifier;
     Mark(ident);
@@ -3312,7 +3339,7 @@ sem::Expression* Resolver::Identifier(const ast::IdentifierExpression* expr) {
 
                 auto stage = variable->Stage();
                 const core::constant::Value* value = variable->ConstantValue();
-                if (not_evaluated_.Contains(expr)) {
+                if (not_evaluated_[expr->node_id.value]) {
                     // This expression is short-circuited by an ancestor expression.
                     // Do not const-eval.
                     stage = core::EvaluationStage::kNotEvaluated;
@@ -3629,7 +3656,7 @@ sem::ValueExpression* Resolver::Binary(const ast::BinaryExpression* expr) {
     TINT_RET_IF(!validator_.BinaryExpression(expr, expr->op, lhs, rhs));
 
     const core::constant::Value* value = nullptr;
-    if (not_evaluated_.Contains(expr)) {
+    if (not_evaluated_[expr->node_id.value]) {
         // This expression is short-circuited by an ancestor expression.
         // Do not const-eval.
         stage = core::EvaluationStage::kNotEvaluated;

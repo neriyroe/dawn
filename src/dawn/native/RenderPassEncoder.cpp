@@ -82,6 +82,7 @@ RenderPassEncoder::RenderPassEncoder(DeviceBase* device,
     : RenderEncoderBase(device,
                         descriptor->label,
                         encodingContext,
+                        std::move(usageTracker),
                         std::move(attachmentState),
                         depthReadOnly,
                         stencilReadOnly),
@@ -89,7 +90,6 @@ RenderPassEncoder::RenderPassEncoder(DeviceBase* device,
       mRenderArea(renderArea),
       mOcclusionQuerySet(descriptor->occlusionQuerySet),
       mEndCallback(std::move(endCallback)) {
-    mUsageTracker = std::move(usageTracker);
     if (auto* maxDrawCountInfo = descriptor.Get<RenderPassMaxDrawCount>()) {
         mMaxDrawCount = maxDrawCountInfo->maxDrawCount;
     }
@@ -167,7 +167,7 @@ void RenderPassEncoder::End() {
 
     mEncodingContext->TryEncode(
         this,
-        [&](CommandAllocator* allocator) -> MaybeValError {
+        [&](CommandAllocator* allocator) -> MaybeUnknownError {
             if (IsValidationEnabled()) {
                 DAWN_TRY(ValidateProgrammableEncoderEnd());
 
@@ -198,7 +198,7 @@ void RenderPassEncoder::End() {
 void RenderPassEncoder::APISetStencilReference(uint32_t reference) {
     mEncodingContext->TryEncode(
         this,
-        [&](CommandAllocator* allocator) -> MaybeError {
+        [&](CommandAllocator* allocator) -> MaybeValError {
             SetStencilReferenceCmd* cmd =
                 allocator->Allocate<SetStencilReferenceCmd>(Command::SetStencilReference);
             cmd->reference = reference & 255;
@@ -211,7 +211,7 @@ void RenderPassEncoder::APISetStencilReference(uint32_t reference) {
 void RenderPassEncoder::APISetBlendConstant(const Color* color) {
     mEncodingContext->TryEncode(
         this,
-        [&](CommandAllocator* allocator) -> MaybeError {
+        [&](CommandAllocator* allocator) -> MaybeValError {
             if (IsValidationEnabled()) {
                 DAWN_TRY(ValidateColor("color", *color));
             }
@@ -423,7 +423,6 @@ void RenderPassEncoder::APIExecuteBundles(Span<RenderBundleBase* const> renderBu
                     mUsageTracker.MarkFramebufferFetchUsed();
                 }
 
-                // Backend builtin-parameter duplication also needs the bundle's indirect records.
                 if (IsValidationEnabled() ||
                     GetDevice()->MayRequireDuplicationOfIndirectParameters()) {
                     mIndirectDrawMetadata.AddBundle(renderBundles[i]);
@@ -509,7 +508,7 @@ void RenderPassEncoder::APIWriteTimestamp(QuerySetBase* querySet, uint32_t query
 
     mEncodingContext->TryEncode(
         this,
-        [&](CommandAllocator* allocator) -> MaybeError {
+        [&](CommandAllocator* allocator) -> MaybeValError {
             if (IsValidationEnabled()) {
                 DAWN_TRY(ValidateTimestampQuery(
                     GetDevice(), querySet, queryIndex,

@@ -125,6 +125,7 @@ RenderBundleEncoder::RenderBundleEncoder(
     : RenderEncoderBase(device,
                         descriptor->label,
                         &mBundleEncodingContext,
+                        RenderPassResourceUsageTracker(device->GetNextPassTrackerID()),
                         device->GetOrCreateAttachmentState(descriptor),
                         descriptor->depthReadOnly,
                         descriptor->stencilReadOnly),
@@ -202,7 +203,7 @@ bool RenderBundleEncoder::UsesResourceTable() const {
     return mUsesResourceTable;
 }
 
-ResultOrError<Ref<RenderBundleBase>> RenderBundleEncoder::Finish(
+ResultOrUnknownError<Ref<RenderBundleBase>> RenderBundleEncoder::Finish(
     const RenderBundleDescriptor* descriptor) {
     mCommandBufferState.End();
     // Even if mBundleEncodingContext.Finish() validation fails, calling it will mutate the
@@ -215,11 +216,10 @@ ResultOrError<Ref<RenderBundleBase>> RenderBundleEncoder::Finish(
     if (IsValidationEnabled()) {
         DAWN_TRY(ValidateFinish(mUsages));
     }
-
     return GetDevice()->CreateRenderBundle(this, descriptor);
 }
 
-MaybeError RenderBundleEncoder::ValidateFinish(const RenderPassResourceUsage& usages) const {
+MaybeValError RenderBundleEncoder::ValidateFinish(const RenderPassResourceUsage& usages) const {
     TRACE_EVENT(DAWN_TRACE_CATEGORY("validation"), "RenderBundleEncoder::ValidateFinish");
     DAWN_TRY(GetDevice()->ValidateObject(this));
     DAWN_TRY(ValidateProgrammableEncoderEnd());

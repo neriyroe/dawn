@@ -45,7 +45,7 @@ class RenderPipeline;
 // Owns native object/mesh stage state and compiler-assigned resource bindings.
 class MeshPipeline {
   public:
-    ResultOrError<NSPRef<id<MTLRenderPipelineState>>> Initialize(
+    ResultOrUnknownError<NSPRef<id<MTLRenderPipelineState>>> Initialize(
         RenderPipeline* pipeline,
         MTLRenderPipelineDescriptor* rasterDescriptor);
     void ApplyBindings(id<MTLRenderCommandEncoder> encoder,

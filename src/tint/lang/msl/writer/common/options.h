@@ -31,10 +31,12 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "src/tint/api/common/binding_point.h"
 #include "src/tint/api/common/bindings.h"
 #include "src/tint/api/common/resource_table_config.h"
+#include "src/tint/api/common/resource_type.h"
 #include "src/tint/api/common/substitute_overrides_config.h"
 #include "src/tint/api/common/vertex_pulling_config.h"
 #include "src/tint/utils/reflection/reflection.h"
@@ -68,7 +70,25 @@ struct ArgumentBufferInfo {
     /// Dynamic offsets map. The map is BindingIndex -> dynamic offsets array index
     std::unordered_map<uint32_t, uint32_t> binding_info_to_offset_index{};
 
-    TINT_REFLECT(ArgumentBufferInfo, id, dynamic_buffer_id, binding_info_to_offset_index);
+    struct MemberInfo {
+        // [[id()]] annotation (matching MTLArgumentDescriptor.index)
+        uint32_t id = 0;
+        // Size of the binding_array (1 if not an array)
+        uint32_t array_size = 1;
+        // The type to use for the resource **if** not declared in the shader. Otherwise ignored.
+        tint::ResourceType placeholder_type = tint::ResourceType::kEmpty;
+
+        TINT_REFLECT(MemberInfo, id, array_size, placeholder_type);
+        TINT_REFLECT_HASH_CODE(MemberInfo);
+    };
+    /// Struct members in order. These come from the BindGroupLayout - they must match it exactly.
+    std::vector<MemberInfo> struct_members;
+
+    TINT_REFLECT(ArgumentBufferInfo,
+                 id,
+                 dynamic_buffer_id,
+                 binding_info_to_offset_index,
+                 struct_members);
     TINT_REFLECT_HASH_CODE(ArgumentBufferInfo);
 
     bool operator==(const ArgumentBufferInfo&) const = default;
@@ -230,8 +250,8 @@ struct Options {
     /// The optional vertex pulling configuration.
     std::optional<VertexPullingConfig> vertex_pulling_config = {};
 
-    /// Immediate binding point info
-    std::optional<BindingPoint> immediate_binding_point = {};
+    /// Binding index for immediates buffer (a Metal [[buffer(N)]] slot, not a WGSL BindingPoint).
+    std::optional<uint32_t> immediate_binding_point = {};
 
     /// Map of group id to argument buffer information
     std::unordered_map<uint32_t, ArgumentBufferInfo> group_to_argument_buffer_info;

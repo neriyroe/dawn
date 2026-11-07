@@ -191,7 +191,7 @@ class BufferBase : public SharedResource, public WeakRefSupport<BufferBase> {
     // Internal non-reentrant version of Unmap. This is used in workarounds or additional copies.
     // Note that this will fail if the map event is pending since that should never happen
     // internally.
-    MaybeValError Unmap(bool forDestroy = false);
+    MaybeUnknownError Unmap(bool forDestroy = false);
 
     void DumpMemoryStatistics(dawn::native::MemoryDump* dump, const char* prefix) const;
 
@@ -210,7 +210,7 @@ class BufferBase : public SharedResource, public WeakRefSupport<BufferBase> {
     wgpu::BufferMapState APIGetMapState() const;
     uint64_t APIGetSize() const;
 
-    ResultOrError<Ref<TexelBufferViewBase>> CreateTexelView(
+    ResultOrUnknownError<Ref<TexelBufferViewBase>> CreateTexelView(
         const TexelBufferViewDescriptor* descriptor);
     TexelBufferViewBase* APICreateTexelView(const TexelBufferViewDescriptor* descriptor);
 
@@ -271,7 +271,7 @@ class BufferBase : public SharedResource, public WeakRefSupport<BufferBase> {
                                                           bool writable);
     [[nodiscard]] Ref<MapAsyncEvent> UnmapEarly(BufferState newState,
                                                 std::string_view abortMessage);
-    MaybeError UnmapInternal(bool forDestroy);
+    MaybeUnknownError UnmapInternal(bool forDestroy);
 
     // Updates internal state to reflect that the buffer is now mapped.
     MaybeError FinalizeMap(BufferState newState);
