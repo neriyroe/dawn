@@ -54,6 +54,8 @@ class RingBufferAllocator {
     uint64_t GetSize() const;
     bool Empty() const;
     uint64_t GetUsedSize() const;
+    // The serial of the oldest request still in flight, or kMaxExecutionSerial when none is.
+    ExecutionSerial OldestSerial() const;
 
     static constexpr uint64_t kInvalidOffset = std::numeric_limits<uint64_t>::max();
 

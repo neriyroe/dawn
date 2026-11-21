@@ -440,5 +440,22 @@ TEST_F(MemoryInstrumentationTest, ComputeEstimatedMemoryUsageInDetails) {
     EXPECT_EQ(memInfo.largestMsaaTextureUsage, kMultisampleTextureSize2);
 }
 
+// Test that a 3D texture counts every slice of every mip level.
+TEST_F(MemoryInstrumentationTest, ComputeEstimatedMemoryUsageOf3DTexture) {
+    const wgpu::TextureDescriptor k3DTextureDesc = {
+        .usage = wgpu::TextureUsage::TextureBinding,
+        .dimension = wgpu::TextureDimension::e3D,
+        .size = {.width = 16, .height = 8, .depthOrArrayLayers = 4},
+        .format = wgpu::TextureFormat::RGBA8Unorm,
+        .mipLevelCount = 3,
+    };
+    wgpu::Texture volume = device.CreateTexture(&k3DTextureDesc);
+    EXPECT_TRUE(volume);
+
+    // Levels are 16x8x4, 8x4x2 and 4x2x1 at four bytes per texel.
+    constexpr uint64_t k3DTextureSize = ((16ULL * 8 * 4) + (8ULL * 4 * 2) + (4ULL * 2 * 1)) * 4;
+    EXPECT_EQ(ComputeEstimatedMemoryUsageInfo(device.Get()).texturesUsage, k3DTextureSize);
+}
+
 }  // namespace
 }  // namespace dawn::native

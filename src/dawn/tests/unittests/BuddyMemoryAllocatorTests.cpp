@@ -390,6 +390,30 @@ TEST(BuddyMemoryAllocatorTests, AllocationOverflow) {
     ASSERT_EQ(invalidAllocation.GetInfo().mMethod, AllocationMethod::kInvalid);
 }
 
+// Verify an allocation occupies its size rounded up to a power of two, and keeps its own size.
+TEST(BuddyMemoryAllocatorTests, BlockSize) {
+    PlaceholderResourceHeapAllocator heapAllocator;
+    BuddyMemoryAllocator allocator(512, 128, &heapAllocator);
+
+    EXPECT_EQ(allocator.GetBlockSize(0), 0u);
+    EXPECT_EQ(allocator.GetBlockSize(1), 1u);
+    EXPECT_EQ(allocator.GetBlockSize(65), 128u);
+    EXPECT_EQ(allocator.GetBlockSize(128), 128u);
+    EXPECT_EQ(allocator.GetBlockSize(129), 0u);
+    EXPECT_EQ(allocator.GetBlockSize((1ull << 63) + 1), 0u);
+
+    auto result = allocator.Allocate(65, 1, false);
+    ASSERT_TRUE(result.IsSuccess());
+    ResourceMemoryAllocation first = result.AcquireSuccess();
+    EXPECT_EQ(first.GetInfo().mRequestedSize, 65u);
+    result = allocator.Allocate(65, 1, false);
+    ASSERT_TRUE(result.IsSuccess());
+    ResourceMemoryAllocation second = result.AcquireSuccess();
+    EXPECT_EQ(second.GetInfo().mBlockOffset, 128u);
+    allocator.Deallocate(first);
+    allocator.Deallocate(second);
+}
+
 // Verify resource heaps will be reused from a pool.
 TEST(BuddyMemoryAllocatorTests, ReuseFreedHeaps) {
     constexpr uint64_t kHeapSize = 128;

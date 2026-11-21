@@ -284,6 +284,39 @@ bool ShouldAllocateAsCommittedResource(Device* device, bool forceAllocateAsCommi
            device->IsToggleEnabled(Toggle::DisableResourceSuballocation);
 }
 
+// The descriptor a committed resource is created from: MSAA takes 64 KiB alignment when allowed.
+D3D12_RESOURCE_DESC GetCommittedResourceDescriptor(Device* device,
+                                                   const D3D12_RESOURCE_DESC& resourceDescriptor) {
+    D3D12_RESOURCE_DESC committedDescriptor = resourceDescriptor;
+    if (resourceDescriptor.SampleDesc.Count > 1 &&
+        device->IsToggleEnabled(Toggle::D3D12Use64KBAlignedMSAATexture)) {
+        committedDescriptor.Alignment = D3D12_SMALL_MSAA_RESOURCE_PLACEMENT_ALIGNMENT;
+    }
+    return committedDescriptor;
+}
+
+// The least memory a committed resource occupies. Drivers may pack a committed buffer into 4 KiB
+// pages, which the 64 KiB alignment of a placed buffer never allows.
+uint64_t GetCommittedResourceFootprint(Device* device,
+                                       const D3D12_RESOURCE_DESC& resourceDescriptor) {
+    if (resourceDescriptor.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
+        return Align(resourceDescriptor.Width,
+                     D3D12_TIGHT_ALIGNMENT_MIN_COMMITTED_RESOURCE_ALIGNMENT);
+    }
+    const D3D12_RESOURCE_DESC committedDescriptor =
+        GetCommittedResourceDescriptor(device, resourceDescriptor);
+    return device->GetD3D12Device()
+        ->GetResourceAllocationInfo(0, 1, &committedDescriptor)
+        .SizeInBytes;
+}
+
+// Whether a power-of-two block wastes more than an eighth over what a committed resource occupies.
+bool PrefersCommittedResource(uint64_t blockSize, uint64_t committedFootprint) {
+    constexpr uint64_t kTolerableWasteDivisor = 8;
+    return blockSize > committedFootprint &&
+           blockSize - committedFootprint > committedFootprint / kTolerableWasteDivisor;
+}
+
 D3D12_HEAP_FLAGS GetHeapFlagsForCommittedResource(Device* device,
                                                   const D3D12_RESOURCE_DESC& resourceDescriptor) {
     if (!device->IsToggleEnabled(Toggle::D3D12CreateNotZeroedHeap)) {
@@ -386,11 +419,8 @@ ResultOrError<ResourceHeapAllocation> ResourceAllocatorManager::AllocateMemory(
         revisedDescriptor.DepthOrArraySize = checked_cast<UINT16>(depthOrArraySize);
     }
 
-    // TODO(crbug.com/dawn/849): Conditionally disable sub-allocation.
-    // For very large resources, there is no benefit to suballocate.
-    // For very small resources, it is inefficient to suballocate given the min. heap
-    // size could be much larger then the resource allocation.
-    // Attempt to satisfy the request using sub-allocation (placed resource in a heap).
+    // Attempt to satisfy the request using sub-allocation (placed resource in a heap), unless a
+    // committed resource needs meaningfully less memory.
     if (!ShouldAllocateAsCommittedResource(mDevice, forceAllocateAsCommittedResource)) {
         ResourceHeapAllocation subAllocation;
         DAWN_TRY_ASSIGN(subAllocation, CreatePlacedResource(resourceHeapKind, revisedDescriptor,
@@ -499,6 +529,13 @@ ResultOrError<ResourceHeapAllocation> ResourceAllocatorManager::CreatePlacedReso
     BuddyMemoryAllocator* allocator =
         mSubAllocatedResourceAllocators[static_cast<size_t>(resourceHeapKind)].get();
 
+    const uint64_t blockSize = allocator->GetBlockSize(resourceInfo.SizeInBytes);
+    if (blockSize == 0 ||
+        PrefersCommittedResource(
+            blockSize, GetCommittedResourceFootprint(mDevice, requestedResourceDescriptor))) {
+        return ResourceHeapAllocation{};  // invalid
+    }
+
     ResourceMemoryAllocation allocation;
     DAWN_TRY_ASSIGN(allocation,
                     allocator->Allocate(resourceInfo.SizeInBytes, resourceInfo.Alignment,
@@ -558,13 +595,15 @@ ResultOrError<ResourceHeapAllocation> ResourceAllocatorManager::CreateCommittedR
     const D3D12_CLEAR_VALUE* optimizedClearValue,
     D3D12_RESOURCE_STATES initialUsage) {
     D3D12_HEAP_PROPERTIES heapProperties = GetD3D12HeapProperties(resourceHeapKind);
+    const D3D12_RESOURCE_DESC committedDescriptor =
+        GetCommittedResourceDescriptor(mDevice, resourceDescriptor);
 
     // If d3d tells us the resource size is invalid, treat the error as OOM.
     // Otherwise, creating the resource could cause a device loss (too large).
     // This is because NextPowerOfTwo(UINT64_MAX) overflows and proceeds to
     // incorrectly allocate a mismatched size.
     D3D12_RESOURCE_ALLOCATION_INFO resourceInfo =
-        mDevice->GetD3D12Device()->GetResourceAllocationInfo(0, 1, &resourceDescriptor);
+        mDevice->GetD3D12Device()->GetResourceAllocationInfo(0, 1, &committedDescriptor);
 
     if (resourceInfo.SizeInBytes == 0 ||
         resourceInfo.SizeInBytes == std::numeric_limits<uint64_t>::max()) {
@@ -590,18 +629,11 @@ ResultOrError<ResourceHeapAllocation> ResourceAllocatorManager::CreateCommittedR
     // Note: Heap flags are inferred by the resource descriptor and do not need to be explicitly
     // provided to CreateCommittedResource.
     ComPtr<ID3D12Resource> committedResource;
-    D3D12_RESOURCE_DESC appliedResourceDescriptor = resourceDescriptor;
-    if (resourceDescriptor.SampleDesc.Count > 1 &&
-        mDevice->IsToggleEnabled(Toggle::D3D12Use64KBAlignedMSAATexture)) {
-        appliedResourceDescriptor.Alignment = D3D12_SMALL_MSAA_RESOURCE_PLACEMENT_ALIGNMENT;
-    }
-
-    D3D12_HEAP_FLAGS heapFlags =
-        GetHeapFlagsForCommittedResource(mDevice, appliedResourceDescriptor);
+    D3D12_HEAP_FLAGS heapFlags = GetHeapFlagsForCommittedResource(mDevice, committedDescriptor);
     DAWN_TRY(CheckOutOfMemoryHRESULT(
         mDevice->GetD3D12Device()->CreateCommittedResource(
-            &heapProperties, heapFlags, &appliedResourceDescriptor, initialUsage,
-            optimizedClearValue, IID_PPV_ARGS(&committedResource)),
+            &heapProperties, heapFlags, &committedDescriptor, initialUsage, optimizedClearValue,
+            IID_PPV_ARGS(&committedResource)),
         "ID3D12Device::CreateCommittedResource"));
 
     mAllocatedMemoryTracker->Increment(resourceInfo.SizeInBytes);
@@ -618,6 +650,11 @@ ResultOrError<ResourceHeapAllocation> ResourceAllocatorManager::CreateCommittedR
     // Calling CreateCommittedResource implicitly calls MakeResident on the resource. We must
     // track this to avoid calling MakeResident a second time.
     mDevice->GetResidencyManager()->TrackResidentAllocation(heap);
+    // A committed resource under one placement unit stays resident: evicting it frees too little to pay for the
+    // residency work every submit that uses it would otherwise do.
+    if (resourceInfo.SizeInBytes < D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT) {
+        DAWN_TRY_WITH_CLEANUP(mDevice->GetResidencyManager()->LockAllocation(heap), { delete heap; });
+    }
 
     AllocationInfo info;
     info.mMethod = AllocationMethod::kDirect;

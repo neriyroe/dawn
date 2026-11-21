@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <limits>
 #include <utility>
 
 #include "src/dawn/common/Math.h"
@@ -44,6 +45,8 @@ namespace {
 constexpr uint64_t kRingBufferSize = 16ULL * 1024 * 1024;
 // The most idle staging memory kept between load boundaries; a larger buffer is never kept.
 constexpr uint64_t kIdleStagingCap = 64ULL * 1024 * 1024;
+// The most staging copies in flight hold before a write waits: a driver keeps a freed staging buffer's pages resident.
+constexpr uint64_t kStagingInFlightCap = 64ULL * 1024 * 1024;
 
 // A size the pool can keep rounds up to its power of two, so later uploads of the class reuse it.
 uint64_t StagingSizeFor(uint64_t alignedSize) {
@@ -196,6 +199,33 @@ MaybeError DynamicUploader::MaybeSubmitPendingCommands() {
     QueueBase* queue = mDevice->GetQueue();
     queue->ForceEventualFlushOfCommands();
     return queue->SubmitPendingCommands();
+}
+
+MaybeError DynamicUploader::LimitStagingInFlight(uint64_t size) {
+    DAWN_ASSERT(mDevice->IsLockedByCurrentThreadIfNeeded());
+    QueueBase* queue = mDevice->GetQueue();
+    while (mStagingBytes - mIdleStagingBytes + size > kStagingInFlightCap) {
+        const ExecutionSerial oldest = OldestStagingSerial();
+        if (oldest == kMaxExecutionSerial) {
+            return {};
+        }
+        DAWN_TRY(queue->WaitForQueueSerial(oldest, std::numeric_limits<Nanoseconds>::max()));
+        // A lost device completes nothing more; the write then fails on its own.
+        if (queue->GetCompletedCommandSerial() < oldest) {
+            return {};
+        }
+        Deallocate(queue->GetCompletedCommandSerial());
+    }
+    return {};
+}
+
+ExecutionSerial DynamicUploader::OldestStagingSerial() const {
+    ExecutionSerial oldest =
+        mStagingInFlight.Empty() ? kMaxExecutionSerial : mStagingInFlight.FirstSerial();
+    for (const auto& ring : mRingBuffers) {
+        oldest = std::min(oldest, ring->mAllocator.OldestSerial());
+    }
+    return oldest;
 }
 
 void DynamicUploader::Deallocate(ExecutionSerial lastCompletedSerial, bool freeAll) {

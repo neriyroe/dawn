@@ -65,6 +65,9 @@ class BuddyMemoryAllocator {
 
     uint64_t GetMemoryBlockSize() const;
 
+    // The power-of-two block an allocation of this size occupies, or 0 when no block can hold it.
+    uint64_t GetBlockSize(uint64_t allocationSize) const;
+
     // For testing purposes.
     uint64_t ComputeTotalNumOfHeapsForTesting() const;
 

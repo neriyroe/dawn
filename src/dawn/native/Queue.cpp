@@ -317,6 +317,7 @@ void QueueBase::APIWriteBuffer(BufferBase* buffer,
                                uint64_t bufferOffset,
                                Span<const std::byte> data) {
     auto writeBuffer = [&]() -> MaybeUnknownError {
+        DAWN_TRY(GetDevice()->GetDynamicUploader()->LimitStagingInFlight(data.size()));
         DAWN_TRY(WriteBuffer(buffer, bufferOffset, data));
         DAWN_TRY(GetDevice()->GetDynamicUploader()->MaybeSubmitPendingCommands());
         return {};
@@ -349,6 +350,7 @@ void QueueBase::APIWriteTexture(const TexelCopyTextureInfo* destination,
                                 const TexelCopyBufferLayout* dataLayout,
                                 const Extent3D* writeSize) {
     auto writeTexture = [&]() -> MaybeUnknownError {
+        DAWN_TRY(GetDevice()->GetDynamicUploader()->LimitStagingInFlight(data.size()));
         DAWN_TRY(WriteTextureInternal(destination, data, *dataLayout, writeSize));
         DAWN_TRY(GetDevice()->GetDynamicUploader()->MaybeSubmitPendingCommands());
         return {};

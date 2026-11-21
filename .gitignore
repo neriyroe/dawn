@@ -201,3 +201,4 @@ GEMINI.md
 
 ### fuzz --triage outputs
 clusterfuzz-testcase-minimized-*
+/tools/android/build

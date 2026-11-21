@@ -79,6 +79,10 @@ class DynamicUploader : NonMovable {
     // This will lock the device mutex if a queue submit is necessary (and mutex exists).
     MaybeError MaybeSubmitPendingCommands();
 
+    // Before a queue write stages `size` bytes, waits for the oldest copies while staging in flight would pass its
+    // cap, so a burst of writes reuses staging instead of growing the driver's pool. Only call it between commands.
+    MaybeError LimitStagingInFlight(uint64_t size);
+
     void Deallocate(ExecutionSerial lastCompletedSerial, bool freeAll = false);
 
     // Staging bytes held now, the idle pooled share of them, and the most of each since the last free-all.
@@ -97,6 +101,8 @@ class DynamicUploader : NonMovable {
     ResultOrError<Ref<BufferBase>> AcquireStaging(uint64_t size);
     // Keeps a staging buffer no copy still reads for reuse, while the idle ones stay within their cap.
     void Recycle(Ref<BufferBase> buffer);
+    // The serial of the oldest copy still reading staging, or kMaxExecutionSerial when none is.
+    ExecutionSerial OldestStagingSerial() const;
 
     // Checks if a submit happened and resets memory to be freed pending submit if so.
     void UpdateMemoryPendingSubmit();

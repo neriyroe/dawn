@@ -79,6 +79,10 @@ bool RingBufferAllocator::Empty() const {
     return mInflightRequests.Empty();
 }
 
+ExecutionSerial RingBufferAllocator::OldestSerial() const {
+    return mInflightRequests.Empty() ? kMaxExecutionSerial : mInflightRequests.FirstSerial();
+}
+
 // Sub-allocate the ring-buffer by requesting a chunk of the specified size.
 // This is a serial-based resource scheme, the life-span of resources (and the allocations) get
 // tracked by GPU progress via serials. Memory can be reused by determining if the GPU has

@@ -60,26 +60,13 @@ ResultOrError<ResourceMemoryAllocation> BuddyMemoryAllocator::Allocate(uint64_t 
                                                                        bool isLazyMemoryType) {
     ResourceMemoryAllocation invalidAllocation = ResourceMemoryAllocation{};
 
-    if (allocationSize == 0) {
-        return std::move(invalidAllocation);
-    }
-
-    // Check the unaligned size to avoid overflowing NextPowerOfTwo.
-    if (allocationSize > mMemoryBlockSize) {
-        return std::move(invalidAllocation);
-    }
-
-    uint64_t originalAllocationSize = allocationSize;
-    // Round allocation size to nearest power-of-two.
-    allocationSize = NextPowerOfTwo(allocationSize);
-
-    // Allocation cannot exceed the memory size.
-    if (allocationSize > mMemoryBlockSize) {
+    const uint64_t blockSize = GetBlockSize(allocationSize);
+    if (blockSize == 0) {
         return std::move(invalidAllocation);
     }
 
     // Attempt to sub-allocate a block of the requested size.
-    const uint64_t blockOffset = mBuddyBlockAllocator.Allocate(allocationSize, alignment);
+    const uint64_t blockOffset = mBuddyBlockAllocator.Allocate(blockSize, alignment);
     if (blockOffset == BuddyAllocator::kInvalidOffset) {
         return std::move(invalidAllocation);
     }
@@ -97,7 +84,7 @@ ResultOrError<ResourceMemoryAllocation> BuddyMemoryAllocator::Allocate(uint64_t 
 
     AllocationInfo info;
     info.mBlockOffset = blockOffset;
-    info.mRequestedSize = originalAllocationSize;
+    info.mRequestedSize = allocationSize;
     info.mMethod = AllocationMethod::kSubAllocated;
     info.mIsLazyAllocated = isLazyMemoryType;
 
@@ -128,6 +115,14 @@ void BuddyMemoryAllocator::Deallocate(const ResourceMemoryAllocation& allocation
 
 uint64_t BuddyMemoryAllocator::GetMemoryBlockSize() const {
     return mMemoryBlockSize;
+}
+
+uint64_t BuddyMemoryAllocator::GetBlockSize(uint64_t allocationSize) const {
+    // The unrounded size is checked first so NextPowerOfTwo cannot overflow.
+    if (allocationSize == 0 || allocationSize > mMemoryBlockSize) {
+        return 0;
+    }
+    return NextPowerOfTwo(allocationSize);
 }
 
 uint64_t BuddyMemoryAllocator::ComputeTotalNumOfHeapsForTesting() const {

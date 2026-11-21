@@ -137,6 +137,10 @@ MaybeError CommandRecordingContext::ExecuteCommandList(Device* device,
 }
 
 void CommandRecordingContext::TrackHeapUsage(Heap* heap, ExecutionSerial serial) {
+    // A heap locked resident takes no part in residency at submit, so it is not tracked at all.
+    if (heap->IsResidencyLocked()) {
+        return;
+    }
     // Before tracking the heap, check the last serial it was recorded on to ensure we aren't
     // tracking it more than once.
     if (heap->GetLastUsage() < serial) {
