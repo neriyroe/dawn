@@ -886,7 +886,7 @@ class MultiGeneratorFromDawnJSON(Generator):
     def add_commandline_arguments(self, parser):
         allowed_targets = [
             'dawn_headers', 'cpp_headers', 'cpp', 'proc', 'mock_api', 'wire',
-            'native_utils', 'kotlin'
+            'native_utils', 'kotlin', 'js_enum_tables'
         ]
 
         parser.add_argument('--dawn-json',
@@ -1164,6 +1164,20 @@ class MultiGeneratorFromDawnJSON(Generator):
                     'emdawnwebgpu/library_webgpu_generated_sig_info.js',
                     'src/emdawnwebgpu/library_webgpu_generated_sig_info.js',
                     [RENDER_PARAMS_BASE, params_emscripten]))
+
+        # The string <-> enum tables a JS host over the native API converts through: standard enums from the
+        # upstream view, spelt as emdawnwebgpu spells them, and bitmasks from the native view.
+        if 'js_enum_tables' in targets:
+            params_upstream = parse_json(loaded_json,
+                                         enabled_tags=['native'],
+                                         disabled_tags=['dawn'])
+            renders.append(
+                FileRender('api_js_enum_tables.h',
+                           'include/dawn/' + api + '_js_enum_tables.h', [
+                               RENDER_PARAMS_BASE, params_all, {
+                                   'upstream': params_upstream,
+                               }
+                           ]))
 
         if 'emdawnwebgpu_link_test_cpp' in targets:
             assert api == 'webgpu'
